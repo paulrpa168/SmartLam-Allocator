@@ -1,0 +1,2021 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Two Excel Lookup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6f8;
+      --ink: #17212b;
+      --muted: #5b6874;
+      --line: #d4dce3;
+      --panel: #ffffff;
+      --soft: #edf3f6;
+      --accent: #1f7a8c;
+      --accent-dark: #155c6b;
+      --ok: #187348;
+      --warn: #b42318;
+      --shadow: 0 14px 34px rgba(23, 33, 43, 0.10);
+      --focus: rgba(31, 122, 140, 0.24);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.45 "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 18px clamp(16px, 4vw, 42px);
+    }
+
+    .topbar,
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(22px, 3vw, 34px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .status {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: var(--soft);
+      white-space: nowrap;
+    }
+
+    main {
+      width: 100%;
+      padding: 22px clamp(16px, 4vw, 42px) 38px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .step-pill {
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--panel);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 800;
+    }
+
+    .step-pill span {
+      width: 26px;
+      height: 26px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--soft);
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+
+    .step-pill .pill-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .step-pill .pill-progress {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.2);
+      overflow: hidden;
+    }
+
+    .step-pill .pill-progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8, #6366f1);
+      transition: width 0.3s ease;
+    }
+
+    .column-preview {
+      font-size: 13px;
+      color: var(--muted);
+      background: var(--soft);
+      border-radius: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+    }
+
+    .step-pill.active {
+      color: var(--ink);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--focus);
+    }
+
+    .step-pill.active span {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    section {
+      display: none;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    section.active {
+      display: block;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    .section-body {
+      padding: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(250px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    label,
+    .label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      min-width: 0;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--soft);
+    }
+
+    textarea,
+    select,
+    input[type="date"] {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    textarea:focus,
+    select:focus,
+    input[type="date"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--focus);
+    }
+
+    textarea {
+      min-height: 230px;
+      resize: vertical;
+      padding: 11px 12px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      tab-size: 2;
+    }
+
+    select,
+    input[type="date"] {
+      min-height: 40px;
+      padding: 8px 10px;
+    }
+
+    select[multiple] {
+      min-height: 170px;
+      padding: 7px;
+    }
+
+    .toolbar,
+    .form-grid,
+    .toggle-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .form-grid .field {
+      flex: 1 1 220px;
+    }
+
+    button {
+      min-height: 40px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.14s ease, transform 0.14s ease;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+
+    button.secondary:hover {
+      background: var(--soft);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      font-weight: 600;
+      color: var(--ink);
+      user-select: none;
+    }
+
+    .check input {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--accent);
+    }
+
+    .message {
+      min-height: 22px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .message.ok {
+      color: var(--ok);
+      font-weight: 700;
+    }
+
+    .message.error {
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .sample {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .result-band {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+      background: #f8fbfc;
+    }
+
+    .metric .label {
+      display: block;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      min-height: 33px;
+      font-size: clamp(24px, 4vw, 36px);
+      line-height: 1.1;
+    }
+
+    .table-wrap {
+      max-height: 460px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      max-width: 280px;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #eaf1f4;
+      color: #20313b;
+      font-weight: 800;
+    }
+
+    tr.no-match td {
+      background: #fff6f5;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(23, 33, 43, 0.32);
+      z-index: 10;
+    }
+
+    .overlay.active {
+      display: flex;
+    }
+
+    .progress-panel {
+      width: min(460px, 100%);
+      border-radius: 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .progress-title {
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 12px;
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.18s ease;
+    }
+
+    /* ── output column checklist ── */
+    .col-check-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      min-height: 56px;
+    }
+
+    .col-check-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px 5px 9px;
+      border-radius: 99px;
+      border: 1.5px solid var(--line);
+      background: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.13s, background 0.13s, color 0.13s, box-shadow 0.13s;
+    }
+
+    .col-check-item:hover {
+      border-color: var(--accent);
+      color: var(--ink);
+      box-shadow: 0 0 0 3px var(--focus);
+    }
+
+    .col-check-item .chk-icon {
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 10px;
+      transition: background 0.13s, border-color 0.13s;
+    }
+
+    .col-check-item.checked {
+      border-color: var(--accent);
+      background: rgba(31,122,140,0.09);
+      color: var(--accent-dark);
+    }
+
+    .col-check-item.checked .chk-icon {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .col-check-item .chk-source {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      opacity: 0.65;
+      text-transform: uppercase;
+    }
+
+    .col-check-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    @media (max-width: 920px) {
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .status {
+        white-space: normal;
+      }
+
+      .stepper,
+      .two-col,
+      .three-col,
+      .result-band {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <h1 data-i18n="appTitle">Two Excel Lookup</h1>
+      <div class="top-actions">
+        <select id="languageSelect" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+        <div class="status" id="statusText">Ready</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="stepper" aria-label="Steps">
+      <div class="step-pill active" data-step-pill="1">
+        <span>1</span>
+        <div class="pill-content">
+          <b data-i18n="step1">Import files</b>
+          <div class="pill-progress" aria-hidden="true"><div class="pill-progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="step-pill" data-step-pill="2">
+        <span>2</span>
+        <div class="pill-content">
+          <b data-i18n="step2">Choose columns</b>
+          <div class="pill-progress" aria-hidden="true"><div class="pill-progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="step-pill" data-step-pill="3">
+        <span>3</span>
+        <div class="pill-content">
+          <b data-i18n="step3">Date filter</b>
+          <div class="pill-progress" aria-hidden="true"><div class="pill-progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="step-pill" data-step-pill="4">
+        <span>4</span>
+        <div class="pill-content">
+          <b data-i18n="step4">Result export</b>
+          <div class="pill-progress" aria-hidden="true"><div class="pill-progress-fill"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="active" data-step="1">
+      <div class="section-head">
+        <h2 data-i18n="importTitle">Step 1: Import Excel files</h2>
+        <span class="sample" id="importSummary">0 / 3</span>
+      </div>
+      <div class="section-body stack">
+        <div class="three-col">
+          <div class="stack">
+            <div class="section-head">
+              <h2 data-i18n="excel1">Excel 1</h2>
+              <span class="sample" id="leftCount">0 rows</span>
+            </div>
+            <div class="field">
+              <label for="leftFile" data-i18n="uploadFile">Upload file</label>
+              <input id="leftFile" type="file" accept=".xlsx,.csv,.tsv,.txt">
+            </div>
+            <div class="field">
+              <label for="leftData" data-i18n="pasteExcel">Or paste from Excel</label>
+              <textarea id="leftData" spellcheck="false"></textarea>
+            </div>
+            <div class="toolbar">
+              <button type="button" id="loadSample" data-i18n="sampleData">Sample data</button>
+              <button type="button" class="secondary" data-clear="left" data-i18n="clearExcel1">Clear Excel 1</button>
+            </div>
+            <div class="message" id="leftMessage"></div>
+          </div>
+
+          <div class="stack">
+            <div class="section-head">
+              <h2 data-i18n="excel2">Excel 2</h2>
+              <span class="sample" id="rightCount">0 rows</span>
+            </div>
+            <div class="field">
+              <label for="rightFile" data-i18n="uploadFile">Upload file</label>
+              <input id="rightFile" type="file" accept=".xlsx,.csv,.tsv,.txt">
+            </div>
+            <div class="field">
+              <label for="rightData" data-i18n="pasteExcel">Or paste from Excel</label>
+              <textarea id="rightData" spellcheck="false"></textarea>
+            </div>
+            <div class="toolbar">
+              <button type="button" class="secondary" data-clear="right" data-i18n="clearExcel2">Clear Excel 2</button>
+            </div>
+            <div class="message" id="rightMessage"></div>
+          </div>
+
+          <div class="stack">
+            <div class="section-head">
+              <h2 data-i18n="excel3">Excel 3</h2>
+              <span class="sample" id="thirdCount">0 rows</span>
+            </div>
+            <div class="field">
+              <label for="thirdFile" data-i18n="uploadFile">Upload file</label>
+              <input id="thirdFile" type="file" accept=".xlsx,.csv,.tsv,.txt">
+            </div>
+            <div class="field">
+              <label for="thirdData" data-i18n="pasteExcel">Or paste from Excel</label>
+              <textarea id="thirdData" spellcheck="false"></textarea>
+            </div>
+            <div class="toolbar">
+              <button type="button" class="secondary" data-clear="third" data-i18n="clearExcel3">Clear Excel 3</button>
+            </div>
+            <div class="message" id="thirdMessage"></div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button type="button" data-next-step data-i18n="nextChoose">Next: choose columns</button>
+        </div>
+      </div>
+    </section>
+
+    <section data-step="2">
+      <div class="section-head">
+        <h2 data-i18n="columnsTitle">Step 2: Choose lookup columns</h2>
+        <span class="sample" data-i18n="vlookupStyle">VLOOKUP style</span>
+      </div>
+      <div class="section-body stack">
+        <h3 style="margin: 0; font-size: 15px;" data-i18n="lookup1and2Title">Lookup 1: Excel 1 and Excel 2</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="leftKey" data-i18n="leftKey">Excel 1 lookup column</label>
+            <select id="leftKey"></select>
+          </div>
+          <div class="field">
+            <label for="rightKey" data-i18n="rightKey">Excel 2 lookup column</label>
+            <select id="rightKey"></select>
+          </div>
+          <div class="field">
+            <label for="returnColumns" data-i18n="returnColumns">Columns to return from Excel 2</label>
+            <select id="returnColumns" multiple></select>
+          </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--line); margin: 10px 0;">
+
+        <h3 style="margin: 0; font-size: 15px;" data-i18n="lookup3Title">Lookup 2: Result of (1 & 2) and Excel 3</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="resultKey" data-i18n="resultKey">Result lookup column</label>
+            <select id="resultKey"></select>
+          </div>
+          <div class="field">
+            <label for="thirdKey" data-i18n="thirdKey">Excel 3 lookup column</label>
+            <select id="thirdKey"></select>
+          </div>
+          <div class="field">
+            <label for="returnColumnsThird" data-i18n="returnColumnsThird">Columns to return from Excel 3</label>
+            <select id="returnColumnsThird" multiple></select>
+          </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--line); margin: 10px 0;">
+
+        <h3 style="margin: 0; font-size: 15px;" data-i18n="outputColumnsTitle">Final Columns: Choose output columns</h3>
+        <div class="field">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label data-i18n="outputColumns">Columns to include in final result</label>
+            <div class="col-check-toolbar">
+              <button type="button" class="secondary" id="selectAllOutput" data-i18n="selectAll" style="min-height:30px; padding:4px 10px; font-size:12px;">Select all</button>
+              <button type="button" class="secondary" id="deselectAllOutput" data-i18n="deselectAll" style="min-height:30px; padding:4px 10px; font-size:12px;">Deselect all</button>
+            </div>
+          </div>
+          <div id="outputColumns" class="col-check-list" aria-label="Output columns"></div>
+        </div>
+
+        <div class="toggle-row">
+          <label class="check" for="caseSensitive">
+            <input id="caseSensitive" type="checkbox">
+            <span data-i18n="caseSensitive">Case sensitive</span>
+          </label>
+          <label class="check" for="firstOnly">
+            <input id="firstOnly" type="checkbox" checked>
+            <span data-i18n="firstOnly">Use first match only</span>
+          </label>
+        </div>
+        <div class="column-preview" id="columnPreview" aria-live="polite"></div>
+        <div class="toolbar">
+          <button type="button" class="secondary" data-prev-step data-i18n="back">Back</button>
+          <button type="button" data-next-step data-i18n="nextDate">Next: date filter</button>
+        </div>
+      </div>
+    </section>
+
+    <section data-step="3">
+      <div class="section-head">
+        <h2 data-i18n="dateTitle">Step 3: Filter by date</h2>
+        <span class="sample" data-i18n="optional">Optional</span>
+      </div>
+      <div class="section-body stack">
+        <div class="form-grid">
+          <div class="field">
+            <label for="dateColumn" data-i18n="dateColumn">Date filter column from Excel 1</label>
+            <select id="dateColumn"></select>
+          </div>
+          <div class="field">
+            <label for="dateFrom" data-i18n="dateFrom">From date</label>
+            <input id="dateFrom" type="date">
+          </div>
+          <div class="field">
+            <label for="dateTo" data-i18n="dateTo">To date</label>
+            <input id="dateTo" type="date">
+          </div>
+        </div>
+        <div class="message" id="dateMessage" data-i18n="dateHelp">Leave dates blank if you do not want to filter by date.</div>
+        <div class="toolbar">
+          <button type="button" class="secondary" data-prev-step data-i18n="back">Back</button>
+          <button type="button" id="runLookup" data-i18n="buildResult">Build result</button>
+        </div>
+      </div>
+    </section>
+
+    <section data-step="4">
+      <div class="section-head">
+        <h2 data-i18n="resultTitle">Step 4: Result and export</h2>
+        <span class="sample" data-i18n="previewLimit">Preview shows first 300 rows</span>
+      </div>
+      <div class="section-body stack">
+        <div class="result-band">
+          <div class="metric">
+            <span class="label" data-i18n="rowsExported">Rows exported</span>
+            <strong id="rowsMetric">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label" data-i18n="excel2Matched">Excel 2 Matched</span>
+            <strong id="matchedMetric">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label" data-i18n="excel3Matched">Excel 3 Matched</span>
+            <strong id="missingMetric">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label" data-i18n="dateSkipped">Date skipped</span>
+            <strong id="filteredMetric">0</strong>
+          </div>
+        </div>
+        <div class="message" id="resultMessage" data-i18n="resultEmpty">Build the result to preview and export.</div>
+        <div class="toolbar">
+          <button type="button" class="secondary" data-prev-step data-i18n="back">Back</button>
+          <button type="button" id="exportCsv" disabled data-i18n="exportCsv">Export CSV</button>
+          <button type="button" id="exportXlsx" disabled data-i18n="exportExcel">Export Excel</button>
+          <button type="button" id="copyTable" class="secondary" disabled data-i18n="copyTable">Copy table</button>
+        </div>
+        <div class="table-wrap" aria-label="Result preview">
+          <table>
+            <thead id="resultHead"></thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="overlay" id="progressOverlay" role="status" aria-live="polite">
+    <div class="progress-panel">
+      <div class="progress-title" id="progressTitle">Loading</div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="message" id="progressMessage">Please wait...</div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-0BGBfwAPFtN6LleklcvqC3JO52UHrbbOfS2jfWSaf1wOGhzRCEjp3aby87vYVwOv0K+fgUlH6LeJFaX9TVMa0w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const sampleLeft = `Item,Order Date,Quantity,Requested By
+A100,2026-06-20,4,May
+C310,2026-06-22,2,Noah
+X999,2026-06-25,1,June
+B220,2026-06-27,8,Lin`;
+
+    const sampleRight = `Item,Description,Price,Owner
+A100,Keyboard,45,May
+B220,Mouse,18,Lin
+C310,Monitor,210,Noah
+D410,USB Cable,7,Ava`;
+
+    const sampleThird = `Owner,Department,Region
+May,IT,US
+Noah,HR,EU
+Lin,Sales,APAC
+Ava,Finance,US`;
+
+    const translations = {
+      en: {
+        appTitle: "Three Excel Lookup",
+        ready: "Ready",
+        step1: "Import files",
+        step2: "Choose columns",
+        step3: "Date filter",
+        step4: "Result export",
+        importTitle: "Step 1: Import Excel files",
+        excel1: "Excel 1",
+        excel2: "Excel 2",
+        excel3: "Excel 3",
+        uploadFile: "Upload file",
+        pasteExcel: "Or paste from Excel",
+        sampleData: "Sample data",
+        clearExcel1: "Clear Excel 1",
+        clearExcel2: "Clear Excel 2",
+        clearExcel3: "Clear Excel 3",
+        nextChoose: "Next: choose columns",
+        columnsTitle: "Step 2: Choose lookup columns",
+        vlookupStyle: "VLOOKUP style",
+        lookup1and2Title: "Lookup 1: Excel 1 and Excel 2",
+        leftKey: "Excel 1 lookup column",
+        rightKey: "Excel 2 lookup column",
+        returnColumns: "Columns to return from Excel 2",
+        lookup3Title: "Lookup 2: Result of (1 & 2) and Excel 3",
+        resultKey: "Result lookup column",
+        thirdKey: "Excel 3 lookup column",
+        returnColumnsThird: "Columns to return from Excel 3",
+        outputColumnsTitle: "Final Columns: Choose output columns",
+        outputColumns: "Columns to include in final result",
+        needOutputColumn: "Please select at least one column to include in the final result.",
+        selectAll: "Select all",
+        deselectAll: "Deselect all",
+        caseSensitive: "Case sensitive",
+        firstOnly: "Use first match only",
+        back: "Back",
+        nextDate: "Next: date filter",
+        dateTitle: "Step 3: Filter by date",
+        optional: "Optional",
+        dateColumn: "Date filter column from Excel 1",
+        dateFrom: "From date",
+        dateTo: "To date",
+        dateHelp: "Leave dates blank if you do not want to filter by date.",
+        buildResult: "Build result",
+        resultTitle: "Step 4: Result and export",
+        previewLimit: "Preview shows first 300 rows",
+        rowsExported: "Rows exported",
+        excel2Matched: "Excel 2 Matched",
+        excel3Matched: "Excel 3 Matched",
+        dateSkipped: "Date skipped",
+        resultEmpty: "Build the result to preview and export.",
+        exportCsv: "Export CSV",
+        copyTable: "Copy table",
+        noDateFilter: "No date filter",
+        loading: "Loading",
+        importing: "Importing file",
+        readingFile: "Reading file...",
+        parsingFile: "Parsing table...",
+        updatingPage: "Updating columns...",
+        processing: "Processing result",
+        indexing: "Indexing Excel 2 & 3...",
+        matching: "Matching Excel rows...",
+        rendering: "Rendering preview...",
+        loaded: "Loaded {rows} rows and {cols} columns.",
+        noColumns: "No columns found.",
+        importError: "Could not read file: {message}",
+        needBoth: "Please load Excel 1, Excel 2, and Excel 3 first.",
+        chooseDateColumn: "Choose a date column before using From date or To date.",
+        invalidFrom: "From date is not valid.",
+        invalidTo: "To date is not valid.",
+        invalidRange: "From date must be before or equal to To date.",
+        built: "Built {rows} export rows.",
+        builtWithDate: "Built {rows} export rows and skipped {filtered} by date.",
+        exported: "CSV exported",
+        copied: "Table copied",
+        copyUnavailable: "Copy unavailable",
+        exportExcel: "Export Excel",
+        exportedExcel: "Excel exported",
+        columnPreviewDefault: "Select lookup and result columns to preview.",
+        columnPreviewNeedReturn: "Lookup columns configured. Choose result columns to preview.",
+        columnPreviewSummary: "VLOOKUP 1: {lookup1} -> {returns1}; VLOOKUP 2: {lookup2} -> {returns2}",
+        importedSummary: "{count} / 3 files ready",
+        rowsLabel: "{rows} rows",
+        workbookUnsupported: "This browser cannot read .xlsx files. Save as CSV or paste data instead.",
+        statusMatched: "Matched All",
+        statusExcel2Only: "Excel 2 Matched, Excel 3 No Match",
+        statusExcel3Only: "Excel 2 No Match, Excel 3 Matched",
+        statusNoMatch: "No Match"
+      },
+      zh: {
+        appTitle: "三个 Excel 查找",
+        ready: "就绪",
+        step1: "导入文件",
+        step2: "选择列",
+        step3: "日期筛选",
+        step4: "结果导出",
+        importTitle: "第 1 步：导入 Excel 文件",
+        excel1: "Excel 1",
+        excel2: "Excel 2",
+        excel3: "Excel 3",
+        uploadFile: "上传文件",
+        pasteExcel: "或从 Excel 粘贴",
+        sampleData: "示例数据",
+        clearExcel1: "清除 Excel 1",
+        clearExcel2: "清除 Excel 2",
+        clearExcel3: "清除 Excel 3",
+        nextChoose: "下一步：选择列",
+        columnsTitle: "第 2 步：选择查找列",
+        vlookupStyle: "类似 VLOOKUP",
+        lookup1and2Title: "查找 1：Excel 1 和 Excel 2",
+        leftKey: "Excel 1 查找列",
+        rightKey: "Excel 2 匹配列",
+        returnColumns: "从 Excel 2 返回的列",
+        lookup3Title: "查找 2：（1 和 2）的结果与 Excel 3",
+        resultKey: "结果查找列",
+        thirdKey: "Excel 3 匹配列",
+        returnColumnsThird: "从 Excel 3 返回的列",
+        outputColumnsTitle: "最终列：选择输出列",
+        outputColumns: "包含在最终结果中的列",
+        needOutputColumn: "请至少选择一列以包含在最终结果中。",
+        selectAll: "全选",
+        deselectAll: "全不选",
+        caseSensitive: "区分大小写",
+        firstOnly: "只使用第一个匹配",
+        back: "返回",
+        nextDate: "下一步：日期筛选",
+        dateTitle: "第 3 步：按日期筛选",
+        optional: "可选",
+        dateColumn: "Excel 1 日期筛选列",
+        dateFrom: "开始日期",
+        dateTo: "结束日期",
+        dateHelp: "如果不需要日期筛选，请留空日期。",
+        buildResult: "生成结果",
+        resultTitle: "第 4 步：结果和导出",
+        previewLimit: "预览显示前 300 行",
+        rowsExported: "导出行数",
+        excel2Matched: "Excel 2 已匹配",
+        excel3Matched: "Excel 3 已匹配",
+        dateSkipped: "日期跳过",
+        resultEmpty: "生成结果后可以预览和导出。",
+        exportCsv: "导出 CSV",
+        copyTable: "复制表格",
+        noDateFilter: "不使用日期筛选",
+        loading: "加载中",
+        importing: "正在导入文件",
+        readingFile: "正在读取文件...",
+        parsingFile: "正在解析表格...",
+        updatingPage: "正在更新列...",
+        processing: "正在处理结果",
+        indexing: "正在索引 Excel 2 & 3...",
+        matching: "正在匹配 Excel 行...",
+        rendering: "正在生成预览...",
+        loaded: "已加载 {rows} 行和 {cols} 列。",
+        noColumns: "没有找到列。",
+        importError: "无法读取文件：{message}",
+        needBoth: "请先加载 Excel 1、Excel 2 和 Excel 3。",
+        chooseDateColumn: "使用开始日期或结束日期前，请选择日期列。",
+        invalidFrom: "开始日期无效。",
+        invalidTo: "结束日期无效。",
+        invalidRange: "开始日期必须早于或等于结束日期。",
+        built: "已生成 {rows} 行导出结果。",
+        builtWithDate: "已生成 {rows} 行导出结果，并按日期跳过 {filtered} 行。",
+        exported: "CSV 已导出",
+        copied: "表格已复制",
+        copyUnavailable: "无法复制",
+        exportExcel: "导出 Excel",
+        exportedExcel: "Excel 已导出",
+        columnPreviewDefault: "选择查找和结果列以预览",
+        columnPreviewNeedReturn: "已配置查找列。请选择结果列以预览",
+        columnPreviewSummary: "VLOOKUP 1: {lookup1} -> {returns1}；VLOOKUP 2: {lookup2} -> {returns2}",
+        importedSummary: "{count} / 3 个文件已准备",
+        rowsLabel: "{rows} 行",
+        workbookUnsupported: "此浏览器无法读取 .xlsx 文件。请另存为 CSV 或粘贴数据。",
+        statusMatched: "全部已匹配",
+        statusExcel2Only: "Excel 2 已匹配，Excel 3 未匹配",
+        statusExcel3Only: "Excel 2 未匹配，Excel 3 已匹配",
+        statusNoMatch: "未匹配"
+      }
+    };
+
+    const state = {
+      lang: "en",
+      step: 1,
+      left: { headers: [], rows: [] },
+      right: { headers: [], rows: [] },
+      third: { headers: [], rows: [] },
+      resultHeaders: [],
+      resultRows: [],
+      deselectedColumns: new Set()
+    };
+
+    const elements = {
+      languageSelect: document.getElementById("languageSelect"),
+      statusText: document.getElementById("statusText"),
+      progressOverlay: document.getElementById("progressOverlay"),
+      progressTitle: document.getElementById("progressTitle"),
+      progressFill: document.getElementById("progressFill"),
+      progressMessage: document.getElementById("progressMessage"),
+      importSummary: document.getElementById("importSummary"),
+      leftFile: document.getElementById("leftFile"),
+      rightFile: document.getElementById("rightFile"),
+      thirdFile: document.getElementById("thirdFile"),
+      leftData: document.getElementById("leftData"),
+      rightData: document.getElementById("rightData"),
+      thirdData: document.getElementById("thirdData"),
+      leftKey: document.getElementById("leftKey"),
+      rightKey: document.getElementById("rightKey"),
+      returnColumns: document.getElementById("returnColumns"),
+      resultKey: document.getElementById("resultKey"),
+      thirdKey: document.getElementById("thirdKey"),
+      returnColumnsThird: document.getElementById("returnColumnsThird"),
+      dateColumn: document.getElementById("dateColumn"),
+      dateFrom: document.getElementById("dateFrom"),
+      dateTo: document.getElementById("dateTo"),
+      caseSensitive: document.getElementById("caseSensitive"),
+      firstOnly: document.getElementById("firstOnly"),
+      leftMessage: document.getElementById("leftMessage"),
+      rightMessage: document.getElementById("rightMessage"),
+      thirdMessage: document.getElementById("thirdMessage"),
+      dateMessage: document.getElementById("dateMessage"),
+      resultMessage: document.getElementById("resultMessage"),
+      leftCount: document.getElementById("leftCount"),
+      rightCount: document.getElementById("rightCount"),
+      thirdCount: document.getElementById("thirdCount"),
+      rowsMetric: document.getElementById("rowsMetric"),
+      matchedMetric: document.getElementById("matchedMetric"),
+      missingMetric: document.getElementById("missingMetric"),
+      filteredMetric: document.getElementById("filteredMetric"),
+      resultHead: document.getElementById("resultHead"),
+      resultBody: document.getElementById("resultBody"),
+      exportCsv: document.getElementById("exportCsv"),
+      exportXlsx: document.getElementById("exportXlsx"),
+      copyTable: document.getElementById("copyTable"),
+      columnPreview: document.getElementById("columnPreview"),
+      outputColumns: document.getElementById("outputColumns")
+    };
+    const stepperPillFills = Array.from(document.querySelectorAll(".step-pill .pill-progress-fill"));
+
+
+    function t(key, values = {}) {
+      let text = translations[state.lang][key] || translations.en[key] || key;
+      Object.keys(values).forEach(name => {
+        text = text.replace(`{${name}}`, values[name]);
+      });
+      return text;
+    }
+
+    function applyLanguage() {
+      document.documentElement.lang = state.lang === "zh" ? "zh" : "en";
+      document.title = t("appTitle");
+      document.querySelectorAll("[data-i18n]").forEach(node => {
+        node.textContent = t(node.dataset.i18n);
+      });
+      elements.statusText.textContent = t("ready");
+      refreshSelectors();
+      updateCounts();
+      if (!state.resultRows.length) elements.resultMessage.textContent = t("resultEmpty");
+      updateStepperProgress();
+    }
+
+    function setStep(step) {
+      state.step = Math.min(Math.max(step, 1), 4);
+      document.querySelectorAll("[data-step]").forEach(section => {
+        section.classList.toggle("active", Number(section.dataset.step) === state.step);
+      });
+      document.querySelectorAll("[data-step-pill]").forEach(pill => {
+        pill.classList.toggle("active", Number(pill.dataset.stepPill) === state.step);
+      });
+      updateStepperProgress();
+    }
+
+    function updateStepperProgress() {
+      stepperPillFills.forEach((fill, index) => {
+        const stepNumber = index + 1;
+        let width = "0%";
+        if (stepNumber < state.step) width = "100%";
+        else if (stepNumber === state.step) width = "65%";
+        fill.style.width = width;
+      });
+    }
+
+    function setMessage(element, text, type = "") {
+      element.textContent = text;
+      element.className = `message ${type}`.trim();
+      elements.statusText.textContent = text || t("ready");
+    }
+
+    function showProgress(title, message, percent = 10) {
+      elements.progressTitle.textContent = title;
+      elements.progressMessage.textContent = message;
+      elements.progressFill.style.width = `${percent}%`;
+      elements.progressOverlay.classList.add("active");
+    }
+
+    function updateProgress(message, percent) {
+      elements.progressMessage.textContent = message;
+      elements.progressFill.style.width = `${percent}%`;
+    }
+
+    async function finishProgress(message) {
+      updateProgress(message, 100);
+      await waitFrame();
+      elements.progressOverlay.classList.remove("active");
+      elements.progressFill.style.width = "0%";
+    }
+
+    function waitFrame() {
+      return new Promise(resolve => setTimeout(resolve, 120));
+    }
+
+    function splitLine(line, delimiter) {
+      const cells = [];
+      let value = "";
+      let quoted = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const next = line[i + 1];
+        if (char === '"' && quoted && next === '"') {
+          value += '"';
+          i++;
+        } else if (char === '"') {
+          quoted = !quoted;
+        } else if (char === delimiter && !quoted) {
+          cells.push(value);
+          value = "";
+        } else {
+          value += char;
+        }
+      }
+      cells.push(value);
+      return cells.map(cell => cell.trim());
+    }
+
+    function detectDelimiter(text) {
+      const firstLine = text.split(/\r?\n/).find(line => line.trim()) || "";
+      const candidates = [",", "\t", ";", "|"];
+      return candidates.map(delimiter => ({
+        delimiter,
+        count: splitLine(firstLine, delimiter).length
+      })).sort((a, b) => b.count - a.count)[0].delimiter;
+    }
+
+    function parseTextTable(text) {
+      const cleanLines = text.replace(/\uFEFF/g, "").split(/\r?\n/).filter(line => line.trim().length > 0);
+      if (!cleanLines.length) return { headers: [], rows: [] };
+      const delimiter = detectDelimiter(text);
+      const headers = splitLine(cleanLines[0], delimiter).map((header, index) => header || `Column ${index + 1}`);
+      const rows = cleanLines.slice(1).map(line => {
+        const cells = splitLine(line, delimiter);
+        while (cells.length < headers.length) cells.push("");
+        return cells.slice(0, headers.length);
+      });
+      return { headers, rows };
+    }
+
+    function columnLetter(number) {
+      let letter = "";
+      while (number > 0) {
+        const mod = (number - 1) % 26;
+        letter = String.fromCharCode(65 + mod) + letter;
+        number = Math.floor((number - mod) / 26);
+      }
+      return letter;
+    }
+
+    function optionLabel(header, index) {
+      return `${columnLetter(index + 1)} - ${header}`;
+    }
+
+    function fillSelect(select, headers, multiple, blankLabel = "") {
+      const previousValue = select.value;
+      const selectedValues = Array.from(select.selectedOptions || []).map(option => option.value);
+      select.innerHTML = "";
+      if (blankLabel) select.appendChild(new Option(blankLabel, ""));
+      headers.forEach((header, index) => select.appendChild(new Option(optionLabel(header, index), String(index))));
+      select.disabled = headers.length === 0 && !blankLabel;
+      if (multiple) {
+        select.size = Math.min(Math.max(headers.length, 4), 8);
+        Array.from(select.options).forEach(option => {
+          option.selected = selectedValues.includes(option.value);
+        });
+      } else if (previousValue && Number(previousValue) < headers.length) {
+        select.value = previousValue;
+      }
+    }
+
+    function restoreDateSelect() {
+      if (!state.left.headers.length) return;
+      if (elements.dateColumn.value) return;
+      const guessed = state.left.headers.findIndex(header => /date|day|time|日期|时间/i.test(header));
+      elements.dateColumn.value = guessed >= 0 ? String(guessed) : "";
+    }
+
+    function getMerged1and2Headers() {
+      if (!state.left.headers.length) return [];
+      const returns = selectedReturnIndexes();
+      const addedHeaders = returns.map(index => `${t("excel2")} ${state.right.headers[index]}`);
+      return [...state.left.headers, ...addedHeaders];
+    }
+
+    function updateResultKeySelect() {
+      const previousValue = elements.resultKey.value;
+      elements.resultKey.innerHTML = "";
+      
+      const mergedHeaders = getMerged1and2Headers();
+      mergedHeaders.forEach((header, index) => {
+        elements.resultKey.appendChild(new Option(optionLabel(header, index), String(index)));
+      });
+      elements.resultKey.disabled = mergedHeaders.length === 0;
+      
+      if (previousValue && Number(previousValue) < mergedHeaders.length) {
+        elements.resultKey.value = previousValue;
+      } else if (mergedHeaders.length > 0) {
+        elements.resultKey.value = "0";
+      }
+    }
+
+    function getOutputColumnCandidates() {
+      const candidates = [];
+      state.left.headers.forEach((h, i) => {
+        candidates.push({ text: h, label: h, source: 'left', index: i, prefix: t("excel1") });
+      });
+      const returns = selectedReturnIndexes();
+      returns.forEach(index => {
+        const h = state.right.headers[index] || `Column ${index + 1}`;
+        candidates.push({ text: `${t("excel2")} - ${h}`, label: h, source: 'right', index: index, prefix: t("excel2") });
+      });
+      const returnsThird = selectedReturnIndexesThird();
+      returnsThird.forEach(index => {
+        const h = state.third.headers[index] || `Column ${index + 1}`;
+        candidates.push({ text: `${t("excel3")} - ${h}`, label: h, source: 'third', index: index, prefix: t("excel3") });
+      });
+      candidates.push({ text: "Lookup Status", label: "Lookup Status", source: 'status', index: 0, prefix: "" });
+      return candidates;
+    }
+
+    function getSelectedOutputIndices() {
+      return Array.from(elements.outputColumns.querySelectorAll(".col-check-item.checked"))
+        .map(el => Number(el.dataset.idx));
+    }
+
+    function updateOutputColumnsSelect() {
+      const container = elements.outputColumns;
+      container.innerHTML = "";
+
+      const candidates = getOutputColumnCandidates();
+      candidates.forEach((cand, i) => {
+        const isChecked = !state.deselectedColumns.has(cand.text);
+        const pill = document.createElement("div");
+        pill.className = "col-check-item" + (isChecked ? " checked" : "");
+        pill.dataset.idx = String(i);
+        pill.dataset.key = cand.text;
+        pill.title = cand.text;
+
+        const icon = document.createElement("span");
+        icon.className = "chk-icon";
+        icon.textContent = isChecked ? "\u2714" : "";
+
+        const srcBadge = document.createElement("span");
+        srcBadge.className = "chk-source";
+        srcBadge.textContent = cand.prefix;
+
+        const labelSpan = document.createElement("span");
+        labelSpan.textContent = cand.label;
+
+        if (cand.prefix) pill.appendChild(srcBadge);
+        pill.appendChild(icon);
+        pill.appendChild(labelSpan);
+
+        pill.addEventListener("click", () => handleOutputPillClick(pill, cand.text));
+        container.appendChild(pill);
+      });
+    }
+
+    function handleOutputPillClick(pill, key) {
+      const isNowChecked = !pill.classList.contains("checked");
+      pill.classList.toggle("checked", isNowChecked);
+      const icon = pill.querySelector(".chk-icon");
+      if (icon) icon.textContent = isNowChecked ? "\u2714" : "";
+      if (isNowChecked) {
+        state.deselectedColumns.delete(key);
+      } else {
+        state.deselectedColumns.add(key);
+      }
+      updateColumnPreview();
+    }
+
+    function handleOutputColumnsChange() {
+      // legacy stub — not used by pill UI but kept for safety
+      updateColumnPreview();
+    }
+
+    function refreshSelectors() {
+      fillSelect(elements.leftKey, state.left.headers, false);
+      fillSelect(elements.dateColumn, state.left.headers, false, t("noDateFilter"));
+      fillSelect(elements.rightKey, state.right.headers, false);
+      fillSelect(elements.returnColumns, state.right.headers, true);
+      
+      fillSelect(elements.thirdKey, state.third.headers, false);
+      fillSelect(elements.returnColumnsThird, state.third.headers, true);
+      
+      restoreDateSelect();
+      
+      if (state.left.headers.length && !elements.leftKey.value) elements.leftKey.value = "0";
+      if (state.right.headers.length && !elements.rightKey.value) elements.rightKey.value = "0";
+      if (state.right.headers.length && !selectedReturnIndexes().length) {
+        defaultReturnIndexes().forEach(index => {
+          const option = elements.returnColumns.querySelector(`option[value="${index}"]`);
+          if (option) option.selected = true;
+        });
+      }
+      
+      if (state.third.headers.length && !elements.thirdKey.value) elements.thirdKey.value = "0";
+      if (state.third.headers.length && !selectedReturnIndexesThird().length) {
+        defaultReturnIndexesThird().forEach(index => {
+          const option = elements.returnColumnsThird.querySelector(`option[value="${index}"]`);
+          if (option) option.selected = true;
+        });
+      }
+      
+      updateResultKeySelect();
+      updateOutputColumnsSelect();
+      updateCounts();
+      updateColumnPreview();
+    }
+
+    function updateCounts() {
+      elements.leftCount.textContent = t("rowsLabel", { rows: state.left.rows.length });
+      elements.rightCount.textContent = t("rowsLabel", { rows: state.right.rows.length });
+      elements.thirdCount.textContent = t("rowsLabel", { rows: state.third.rows.length });
+      const readyCount = Number(state.left.headers.length > 0) + Number(state.right.headers.length > 0) + Number(state.third.headers.length > 0);
+      elements.importSummary.textContent = t("importedSummary", { count: readyCount });
+    }
+
+    function defaultReturnIndexes() {
+      if (state.right.headers.length <= 1) return [0];
+      return state.right.headers.map((_, index) => index).filter(index => index !== Number(elements.rightKey.value));
+    }
+
+    function selectedReturnIndexes() {
+      return Array.from(elements.returnColumns.selectedOptions).map(option => Number(option.value));
+    }
+
+    function defaultReturnIndexesThird() {
+      if (state.third.headers.length <= 1) return [0];
+      return state.third.headers.map((_, index) => index).filter(index => index !== Number(elements.thirdKey.value));
+    }
+
+    function selectedReturnIndexesThird() {
+      return Array.from(elements.returnColumnsThird.selectedOptions).map(option => Number(option.value));
+    }
+
+    function updateColumnPreview() {
+      if (!state.left.headers.length || !state.right.headers.length || !state.third.headers.length) {
+        elements.columnPreview.textContent = t("columnPreviewDefault");
+        return;
+      }
+      const leftIndex = Number(elements.leftKey.value);
+      const rightIndex = Number(elements.rightKey.value);
+      const thirdIndex = Number(elements.thirdKey.value);
+      const resultKeyIndex = Number(elements.resultKey.value);
+      if (Number.isNaN(leftIndex) || Number.isNaN(rightIndex) || Number.isNaN(thirdIndex) || Number.isNaN(resultKeyIndex)) {
+        elements.columnPreview.textContent = t("columnPreviewDefault");
+        return;
+      }
+      
+      const leftHeader = state.left.headers[leftIndex] || `Column ${leftIndex + 1}`;
+      const leftLabel = optionLabel(leftHeader, leftIndex);
+      const returns1 = selectedReturnIndexes();
+      const returnLabels1 = returns1.map(index => state.right.headers[index] || `Column ${index + 1}`).join(", ") || "None";
+      
+      const mergedHeaders = getMerged1and2Headers();
+      const resultHeader = mergedHeaders[resultKeyIndex] || `Column ${resultKeyIndex + 1}`;
+      const resultLabel = optionLabel(resultHeader, resultKeyIndex);
+      const returns2 = selectedReturnIndexesThird();
+      const returnLabels2 = returns2.map(index => state.third.headers[index] || `Column ${index + 1}`).join(", ") || "None";
+      
+      elements.columnPreview.textContent = t("columnPreviewSummary", {
+        lookup1: leftLabel,
+        returns1: returnLabels1,
+        lookup2: resultLabel,
+        returns2: returnLabels2
+      });
+    }
+
+    function normalize(value) {
+      const text = String(value ?? "").trim();
+      return elements.caseSensitive.checked ? text : text.toLowerCase();
+    }
+
+    async function loadFile(side, file) {
+      if (!file) return;
+      const lowerName = file.name.toLowerCase();
+      let messageTarget = elements.leftMessage;
+      if (side === "right") messageTarget = elements.rightMessage;
+      if (side === "third") messageTarget = elements.thirdMessage;
+      showProgress(t("importing"), t("readingFile"), 12);
+      try {
+        await waitFrame();
+        let parsed;
+        if (lowerName.endsWith(".xlsx")) {
+          const buffer = await file.arrayBuffer();
+          updateProgress(t("parsingFile"), 46);
+          await waitFrame();
+          parsed = await parseXlsx(buffer);
+        } else {
+          const text = await file.text();
+          document.getElementById(`${side}Data`).value = text;
+          updateProgress(t("parsingFile"), 56);
+          await waitFrame();
+          parsed = parseTextTable(text);
+        }
+        updateProgress(t("updatingPage"), 84);
+        setSideData(side, parsed);
+        await finishProgress(t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }));
+      } catch (error) {
+        elements.progressOverlay.classList.remove("active");
+        setMessage(messageTarget, t("importError", { message: error.message }), "error");
+      }
+    }
+
+    function setSideData(side, parsed) {
+      state[side] = parsed;
+      refreshSelectors();
+      clearResult();
+      let messageTarget = elements.leftMessage;
+      if (side === "right") messageTarget = elements.rightMessage;
+      if (side === "third") messageTarget = elements.thirdMessage;
+      if (!parsed.headers.length) {
+        setMessage(messageTarget, t("noColumns"), "error");
+      } else {
+        setMessage(messageTarget, t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }), "ok");
+      }
+    }
+
+    function refreshFromText(side) {
+      const text = document.getElementById(`${side}Data`).value;
+      setSideData(side, parseTextTable(text));
+    }
+
+    function clearResult() {
+      state.resultHeaders = [];
+      state.resultRows = [];
+      elements.resultHead.innerHTML = "";
+      elements.resultBody.innerHTML = "";
+      elements.rowsMetric.textContent = "0";
+      elements.matchedMetric.textContent = "0";
+      elements.missingMetric.textContent = "0";
+      elements.filteredMetric.textContent = "0";
+      elements.exportCsv.disabled = true;
+      elements.exportXlsx.disabled = true;
+      elements.copyTable.disabled = true;
+      elements.resultMessage.textContent = t("resultEmpty");
+      elements.columnPreview.textContent = t("columnPreviewDefault");
+    }
+
+    async function buildResult() {
+      if (!state.left.headers.length || !state.right.headers.length || !state.third.headers.length) {
+        setMessage(elements.resultMessage, t("needBoth"), "error");
+        setStep(1);
+        return;
+      }
+      const dateFilter = readDateFilter();
+      if (!dateFilter.valid) {
+        setMessage(elements.dateMessage, dateFilter.message, "error");
+        setStep(3);
+        return;
+      }
+
+      showProgress(t("processing"), t("indexing"), 14);
+      await waitFrame();
+
+      const leftKeyIndex = Number(elements.leftKey.value);
+      const rightKeyIndex = Number(elements.rightKey.value);
+      const thirdKeyIndex = Number(elements.thirdKey.value);
+      const resultKeyIndex = Number(elements.resultKey.value);
+
+      let returns = selectedReturnIndexes();
+      if (!returns.length) {
+        returns = defaultReturnIndexes();
+        for (const option of elements.returnColumns.options) option.selected = returns.includes(Number(option.value));
+      }
+
+      let returnsThird = selectedReturnIndexesThird();
+      if (!returnsThird.length) {
+        returnsThird = defaultReturnIndexesThird();
+        for (const option of elements.returnColumnsThird.options) option.selected = returnsThird.includes(Number(option.value));
+      }
+
+      const rightLookup = new Map();
+      for (const row of state.right.rows) {
+        const key = normalize(row[rightKeyIndex]);
+        if (!rightLookup.has(key)) rightLookup.set(key, []);
+        rightLookup.get(key).push(row);
+      }
+
+      const thirdLookup = new Map();
+      for (const row of state.third.rows) {
+        const key = normalize(row[thirdKeyIndex]);
+        if (!thirdLookup.has(key)) thirdLookup.set(key, []);
+        thirdLookup.get(key).push(row);
+      }
+
+      updateProgress(t("matching"), 48);
+      await waitFrame();
+
+      const addedHeadersRight = returns.map(index => `${t("excel2")} ${state.right.headers[index]}`);
+      const addedHeadersThird = returnsThird.map(index => `${t("excel3")} ${state.third.headers[index]}`);
+      
+      const resultHeaders = [...state.left.headers, ...addedHeadersRight, ...addedHeadersThird, "Lookup Status"];
+      const resultRows = [];
+      
+      let matched2 = 0;
+      let matched3 = 0;
+      let filtered = 0;
+
+      for (const leftRow of state.left.rows) {
+        if (dateFilter.enabled && !rowPassesDateFilter(leftRow, dateFilter)) {
+          filtered++;
+          continue;
+        }
+        
+        // 1. Perform VLOOKUP 1 against Excel 2
+        const key2 = normalize(leftRow[leftKeyIndex]);
+        const matches2 = rightLookup.get(key2) || [];
+        const isMatched2 = matches2.length > 0;
+        if (isMatched2) {
+          matched2++;
+        }
+
+        // Generate intermediate rows for the first lookup
+        const intermediateRows = [];
+        if (!isMatched2) {
+          const intRow = [...leftRow, ...returns.map(() => "")];
+          intermediateRows.push({
+            row: intRow,
+            excel2Row: null,
+            isMatch2: false
+          });
+        } else {
+          const rowsToUse2 = elements.firstOnly.checked ? [matches2[0]] : matches2;
+          rowsToUse2.forEach(rightRow => {
+            const intRow = [...leftRow, ...returns.map(returnIndex => rightRow[returnIndex] ?? "")];
+            intermediateRows.push({
+              row: intRow,
+              excel2Row: rightRow,
+              isMatch2: true
+            });
+          });
+        }
+
+        // 2. Perform VLOOKUP 2 against Excel 3
+        let leftRowOutputCount = 0;
+        
+        intermediateRows.forEach((intObj) => {
+          const intRow = intObj.row;
+          const key3Val = intRow[resultKeyIndex];
+          const key3 = normalize(key3Val);
+          const matches3 = thirdLookup.get(key3) || [];
+          const isMatched3 = matches3.length > 0;
+          
+          let rightRowOutputCount = 0;
+          
+          const statusStr = (intObj.isMatch2 && isMatched3) ? t("statusMatched") :
+                            (intObj.isMatch2 && !isMatched3) ? t("statusExcel2Only") :
+                            (!intObj.isMatch2 && isMatched3) ? t("statusExcel3Only") :
+                            t("statusNoMatch");
+
+          if (isMatched3) {
+            matched3++;
+            const rowsToUse3 = elements.firstOnly.checked ? [matches3[0]] : matches3;
+            rowsToUse3.forEach(thirdRow => {
+              let leftBase = leftRow;
+              let rightBase = returns.map(returnIndex => intObj.excel2Row ? intObj.excel2Row[returnIndex] ?? "" : "");
+              
+              if (leftRowOutputCount > 0) {
+                leftBase = leftRow.map(() => "");
+              }
+              if (rightRowOutputCount > 0) {
+                rightBase = returns.map(() => "");
+              }
+              
+              const finalRow = [
+                ...leftBase,
+                ...rightBase,
+                ...returnsThird.map(returnIndex => thirdRow[returnIndex] ?? ""),
+                statusStr
+              ];
+              resultRows.push(finalRow);
+              
+              leftRowOutputCount++;
+              rightRowOutputCount++;
+            });
+          } else {
+            let leftBase = leftRow;
+            let rightBase = returns.map(returnIndex => intObj.excel2Row ? intObj.excel2Row[returnIndex] ?? "" : "");
+            
+            if (leftRowOutputCount > 0) {
+              leftBase = leftRow.map(() => "");
+            }
+            if (rightRowOutputCount > 0) {
+              rightBase = returns.map(() => "");
+            }
+            
+            const finalRow = [
+              ...leftBase,
+              ...rightBase,
+              ...returnsThird.map(() => ""),
+              statusStr
+            ];
+            resultRows.push(finalRow);
+            
+            leftRowOutputCount++;
+            rightRowOutputCount++;
+          }
+        });
+      }
+
+      const candidates = getOutputColumnCandidates();
+      const selectedIndices = getSelectedOutputIndices();
+
+      if (selectedIndices.length === 0) {
+        setMessage(elements.resultMessage, t("needOutputColumn"), "error");
+        setStep(2);
+        elements.progressOverlay.classList.remove("active");
+        return;
+      }
+
+      const filteredHeaders = selectedIndices.map(idx => {
+        const cand = candidates[idx];
+        if (cand.source === 'left') return state.left.headers[cand.index];
+        if (cand.source === 'right') return `${t("excel2")} ${state.right.headers[cand.index]}`;
+        if (cand.source === 'third') return `${t("excel3")} ${state.third.headers[cand.index]}`;
+        return "Lookup Status";
+      });
+
+      const filteredRows = resultRows.map(row => {
+        return selectedIndices.map(idx => row[idx] ?? "");
+      });
+
+      updateProgress(t("rendering"), 82);
+      await waitFrame();
+
+      state.resultHeaders = filteredHeaders;
+      state.resultRows = filteredRows;
+      renderResult(filteredHeaders, filteredRows);
+      elements.rowsMetric.textContent = String(filteredRows.length);
+      elements.matchedMetric.textContent = String(matched2);
+      elements.missingMetric.textContent = String(matched3);
+      elements.filteredMetric.textContent = String(filtered);
+      elements.exportCsv.disabled = false;
+      elements.copyTable.disabled = false;
+      const message = dateFilter.enabled ? t("builtWithDate", { rows: filteredRows.length, filtered }) : t("built", { rows: filteredRows.length });
+      setMessage(elements.resultMessage, message, "ok");
+      setStep(4);
+      await finishProgress(message);
+    }
+
+    function readDateFilter() {
+      const columnValue = elements.dateColumn.value;
+      const from = parseDateInput(elements.dateFrom.value);
+      const to = parseDateInput(elements.dateTo.value);
+      const hasRange = Boolean(elements.dateFrom.value || elements.dateTo.value);
+      if (!hasRange) return { enabled: false, valid: true };
+      if (!columnValue) return { enabled: false, valid: false, message: t("chooseDateColumn") };
+      if (elements.dateFrom.value && !from) return { enabled: false, valid: false, message: t("invalidFrom") };
+      if (elements.dateTo.value && !to) return { enabled: false, valid: false, message: t("invalidTo") };
+      if (from && to && from > to) return { enabled: false, valid: false, message: t("invalidRange") };
+      return { columnIndex: Number(columnValue), enabled: true, from, to, valid: true };
+    }
+
+    function rowPassesDateFilter(row, filter) {
+      const value = parseDateInput(row[filter.columnIndex]);
+      if (!value) return false;
+      if (filter.from && value < filter.from) return false;
+      if (filter.to && value > filter.to) return false;
+      return true;
+    }
+
+    function parseDateInput(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return null;
+      const serial = Number(text);
+      if (Number.isFinite(serial) && serial > 0) {
+        const date = new Date(Date.UTC(1899, 11, 30 + serial));
+        return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+      }
+      const iso = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+      if (iso) return makeDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+      const local = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+      if (local) {
+        const first = Number(local[1]);
+        const second = Number(local[2]);
+        const year = normalizeYear(Number(local[3]));
+        if (first > 12) return makeDate(year, second, first);
+        if (second > 12) return makeDate(year, first, second);
+        return makeDate(year, second, first);
+      }
+      const parsed = new Date(text);
+      if (!Number.isNaN(parsed.getTime())) return Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+      return null;
+    }
+
+    function normalizeYear(year) {
+      return year < 100 ? 2000 + year : year;
+    }
+
+    function makeDate(year, month, day) {
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      const value = Date.UTC(year, month - 1, day);
+      const date = new Date(value);
+      if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+      return value;
+    }
+
+    function renderResult(headers, rows) {
+      elements.resultHead.innerHTML = "";
+      elements.resultBody.innerHTML = "";
+      const headRow = document.createElement("tr");
+      headers.forEach(header => {
+        const th = document.createElement("th");
+        th.textContent = header;
+        headRow.appendChild(th);
+      });
+      elements.resultHead.appendChild(headRow);
+      rows.slice(0, 300).forEach(row => {
+        const tr = document.createElement("tr");
+        if (row[row.length - 1] === t("statusNoMatch")) tr.className = "no-match";
+        row.forEach(cell => {
+          const td = document.createElement("td");
+          td.textContent = cell;
+          tr.appendChild(td);
+        });
+        elements.resultBody.appendChild(tr);
+      });
+    }
+
+    function csvEscape(value) {
+      const text = String(value ?? "");
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function resultToCsv() {
+      return [state.resultHeaders, ...state.resultRows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+    }
+
+    function downloadCsv() {
+      if (!state.resultRows.length) return;
+      const blob = new Blob([resultToCsv()], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "lookup-result.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      elements.statusText.textContent = t("exported");
+    }
+
+    async function copyTable() {
+      if (!state.resultRows.length) return;
+      const text = [state.resultHeaders, ...state.resultRows].map(row => row.join("\t")).join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        elements.statusText.textContent = t("copied");
+      } catch {
+        elements.statusText.textContent = t("copyUnavailable");
+      }
+    }
+
+    function xmlText(node) {
+      return node ? node.textContent || "" : "";
+    }
+
+    function colIndexFromCell(cellRef) {
+      const letters = String(cellRef || "").replace(/[0-9]/g, "");
+      let number = 0;
+      for (const letter of letters) number = number * 26 + letter.charCodeAt(0) - 64;
+      return Math.max(number - 1, 0);
+    }
+
+    async function parseXlsx(arrayBuffer) {
+      const entries = await unzipEntries(arrayBuffer);
+      const workbookXml = textDecoder(entries.get("xl/workbook.xml"));
+      const workbookDoc = new DOMParser().parseFromString(workbookXml, "application/xml");
+      const firstSheet = workbookDoc.querySelector("sheet");
+      if (!firstSheet) throw new Error("No worksheet found");
+      const relId = firstSheet.getAttribute("r:id");
+      const relsXml = textDecoder(entries.get("xl/_rels/workbook.xml.rels"));
+      const relsDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+      const rel = Array.from(relsDoc.querySelectorAll("Relationship")).find(item => item.getAttribute("Id") === relId);
+      if (!rel) throw new Error("Worksheet relationship not found");
+      const sheetPath = normalizeZipPath(`xl/${rel.getAttribute("Target")}`);
+      const sheetXml = textDecoder(entries.get(sheetPath));
+      const sharedStrings = entries.has("xl/sharedStrings.xml") ? parseSharedStrings(textDecoder(entries.get("xl/sharedStrings.xml"))) : [];
+      return parseSheet(sheetXml, sharedStrings);
+    }
+
+    function parseSharedStrings(xml) {
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      return Array.from(doc.querySelectorAll("si")).map(item => Array.from(item.querySelectorAll("t")).map(xmlText).join(""));
+    }
+
+    function parseSheet(xml, sharedStrings) {
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      const rows = Array.from(doc.querySelectorAll("sheetData row")).map(rowNode => {
+        const cells = [];
+        Array.from(rowNode.querySelectorAll("c")).forEach(cell => {
+          const index = colIndexFromCell(cell.getAttribute("r"));
+          const type = cell.getAttribute("t");
+          let value = xmlText(cell.querySelector("v"));
+          if (type === "s") value = sharedStrings[Number(value)] || "";
+          if (type === "inlineStr") value = Array.from(cell.querySelectorAll("t")).map(xmlText).join("");
+          cells[index] = value;
+        });
+        return cells.map(cell => cell ?? "");
+      }).filter(row => row.some(cell => String(cell).trim()));
+      if (!rows.length) return { headers: [], rows: [] };
+      const width = Math.max(...rows.map(row => row.length));
+      const headers = normalizeRow(rows[0], width).map((header, index) => String(header || `Column ${index + 1}`));
+      const dataRows = rows.slice(1).map(row => normalizeRow(row, width).slice(0, headers.length));
+      return { headers, rows: dataRows };
+    }
+
+    function normalizeRow(row, width) {
+      const next = [...row];
+      while (next.length < width) next.push("");
+      return next;
+    }
+
+    function textDecoder(bytes) {
+      if (!bytes) throw new Error("Workbook part missing");
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+
+    function normalizeZipPath(path) {
+      const parts = [];
+      path.split("/").forEach(part => {
+        if (!part || part === ".") return;
+        if (part === "..") parts.pop();
+        else parts.push(part);
+      });
+      return parts.join("/");
+    }
+
+    async function unzipEntries(arrayBuffer) {
+      const bytes = new Uint8Array(arrayBuffer);
+      const entries = new Map();
+      const view = new DataView(arrayBuffer);
+      for (let offset = 0; offset < bytes.length - 4;) {
+        if (view.getUint32(offset, true) !== 0x04034b50) {
+          offset++;
+          continue;
+        }
+        const method = view.getUint16(offset + 8, true);
+        const compressedSize = view.getUint32(offset + 18, true);
+        const fileNameLength = view.getUint16(offset + 26, true);
+        const extraLength = view.getUint16(offset + 28, true);
+        const nameStart = offset + 30;
+        const dataStart = nameStart + fileNameLength + extraLength;
+        const name = new TextDecoder("utf-8").decode(bytes.slice(nameStart, nameStart + fileNameLength));
+        const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+        if (!name.endsWith("/")) entries.set(name, await inflateZipEntry(compressed, method));
+        offset = dataStart + compressedSize;
+      }
+      return entries;
+    }
+
+    async function inflateZipEntry(compressed, method) {
+      if (method === 0) return compressed;
+      if (method !== 8) throw new Error("Unsupported Excel compression");
+      if (!("DecompressionStream" in window)) throw new Error(t("workbookUnsupported"));
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      const buffer = await new Response(stream).arrayBuffer();
+      return new Uint8Array(buffer);
+    }
+
+    document.getElementById("loadSample").addEventListener("click", async () => {
+      showProgress(t("loading"), t("parsingFile"), 30);
+      await waitFrame();
+      elements.leftData.value = sampleLeft;
+      elements.rightData.value = sampleRight;
+      elements.thirdData.value = sampleThird;
+      state.left = parseTextTable(sampleLeft);
+      state.right = parseTextTable(sampleRight);
+      state.third = parseTextTable(sampleThird);
+      refreshSelectors();
+      clearResult();
+      setMessage(elements.leftMessage, t("loaded", { rows: state.left.rows.length, cols: state.left.headers.length }), "ok");
+      setMessage(elements.rightMessage, t("loaded", { rows: state.right.rows.length, cols: state.right.headers.length }), "ok");
+      setMessage(elements.thirdMessage, t("loaded", { rows: state.third.rows.length, cols: state.third.headers.length }), "ok");
+      await finishProgress(t("ready"));
+    });
+
+    document.querySelectorAll("[data-clear]").forEach(button => {
+      button.addEventListener("click", () => {
+        const side = button.dataset.clear;
+        document.getElementById(`${side}Data`).value = "";
+        document.getElementById(`${side}File`).value = "";
+        setSideData(side, { headers: [], rows: [] });
+      });
+    });
+
+    elements.languageSelect.addEventListener("change", () => {
+      state.lang = elements.languageSelect.value;
+      applyLanguage();
+      renderResult(state.resultHeaders, state.resultRows);
+    });
+    elements.leftFile.addEventListener("change", () => loadFile("left", elements.leftFile.files[0]));
+    elements.rightFile.addEventListener("change", () => loadFile("right", elements.rightFile.files[0]));
+    elements.thirdFile.addEventListener("change", () => loadFile("third", elements.thirdFile.files[0]));
+    elements.leftData.addEventListener("input", () => refreshFromText("left"));
+    elements.rightData.addEventListener("input", () => refreshFromText("right"));
+    elements.thirdData.addEventListener("input", () => refreshFromText("third"));
+    
+    elements.leftKey.addEventListener("change", refreshSelectors);
+    elements.rightKey.addEventListener("change", refreshSelectors);
+    elements.returnColumns.addEventListener("change", refreshSelectors);
+    elements.resultKey.addEventListener("change", refreshSelectors);
+    elements.thirdKey.addEventListener("change", refreshSelectors);
+    elements.returnColumnsThird.addEventListener("change", refreshSelectors);
+    // outputColumns uses pill click listeners set up in updateOutputColumnsSelect
+
+    document.getElementById("selectAllOutput").addEventListener("click", () => {
+      state.deselectedColumns.clear();
+      updateOutputColumnsSelect();
+      updateColumnPreview();
+    });
+    document.getElementById("deselectAllOutput").addEventListener("click", () => {
+      const candidates = getOutputColumnCandidates();
+      candidates.forEach(c => state.deselectedColumns.add(c.text));
+      updateOutputColumnsSelect();
+      updateColumnPreview();
+    });
+    
+    elements.dateColumn.addEventListener("change", clearResult);
+    elements.dateFrom.addEventListener("change", clearResult);
+    elements.dateTo.addEventListener("change", clearResult);
+    document.querySelectorAll("[data-next-step]").forEach(button => button.addEventListener("click", () => setStep(state.step + 1)));
+    document.querySelectorAll("[data-prev-step]").forEach(button => button.addEventListener("click", () => setStep(state.step - 1)));
+    document.getElementById("runLookup").addEventListener("click", buildResult);
+    elements.exportCsv.addEventListener("click", downloadCsv);
+    elements.copyTable.addEventListener("click", copyTable);
+
+    elements.leftData.value = sampleLeft;
+    elements.rightData.value = sampleRight;
+    elements.thirdData.value = sampleThird;
+    state.left = parseTextTable(sampleLeft);
+    state.right = parseTextTable(sampleRight);
+    state.third = parseTextTable(sampleThird);
+    applyLanguage();
+    refreshSelectors();
+    clearResult();
+    setMessage(elements.leftMessage, t("loaded", { rows: state.left.rows.length, cols: state.left.headers.length }), "ok");
+    setMessage(elements.rightMessage, t("loaded", { rows: state.right.rows.length, cols: state.right.headers.length }), "ok");
+    setMessage(elements.thirdMessage, t("loaded", { rows: state.third.rows.length, cols: state.third.headers.length }), "ok");
+  </script>
+</body>
+</html>

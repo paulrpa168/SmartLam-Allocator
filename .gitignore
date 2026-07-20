@@ -1,0 +1,27 @@
+# Real business source files (local acceptance only; never commit)
+/1.xlsx
+/2.xlsx
+/3.xlsx
+/New Microsoft Word Document.docx
+/New Microsoft Word Document.pdf
+~$*.xlsx
+~$*.docx
+*.png
+
+# Local test outputs and temporary data
+/.review_cache/
+/tmp/
+/output/
+/outputs/
+/qa-screenshots/
+/lookup-result.csv
+/lookup-result.xlsx
+/allocation-result.csv
+/allocation-result.xlsx
+*.log
+
+# Operating-system and tool artifacts
+Thumbs.db
+.DS_Store
+node_modules/
+coverage/

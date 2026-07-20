@@ -1,0 +1,2418 @@
+<!doctype html>
+<!--
+  RAW MAT Allocation Engine
+  Version: 2.0.0
+  Product direction: inventory allocation (supersedes two-stage VLOOKUP)
+  Spec: docs/06-allocation-engine-spec.md
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAW MAT Allocation Engine</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6f8;
+      --ink: #17212b;
+      --muted: #5b6874;
+      --line: #d4dce3;
+      --panel: #ffffff;
+      --soft: #edf3f6;
+      --accent: #1f7a8c;
+      --accent-dark: #155c6b;
+      --ok: #187348;
+      --warn: #b42318;
+      --shadow: 0 14px 34px rgba(23, 33, 43, 0.10);
+      --focus: rgba(31, 122, 140, 0.24);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.45 "Segoe UI", Arial, "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+    }
+
+    button, input, select, textarea { font: inherit; }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 18px clamp(16px, 4vw, 42px);
+    }
+
+    .topbar, main {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1.15;
+    }
+
+    .status {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: var(--soft);
+    }
+
+    main {
+      width: 100%;
+      padding: 22px clamp(16px, 4vw, 42px) 38px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .step-pill {
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--panel);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .step-pill:hover {
+      border-color: var(--accent);
+    }
+
+    .step-pill span {
+      width: 26px;
+      height: 26px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--soft);
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+
+    .step-pill.active {
+      color: var(--ink);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--focus);
+    }
+
+    .step-pill.active span {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    section {
+      display: block;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: visible;
+      scroll-margin-top: 12px;
+    }
+
+    section.active {
+      outline: 2px solid rgba(31, 122, 140, 0.28);
+    }
+
+    .filter-panel {
+      position: sticky;
+      top: 8px;
+      z-index: 6;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 8px 20px rgba(23, 33, 43, 0.08);
+      display: grid;
+      gap: 10px;
+    }
+
+    .combo {
+      position: relative;
+    }
+
+    .suggest-list {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      margin: 0;
+      padding: 4px 0;
+      list-style: none;
+      max-height: 220px;
+      overflow: auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      z-index: 8;
+    }
+
+    .suggest-list[hidden] { display: none; }
+
+    .suggest-list li {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .suggest-list li:hover,
+    .suggest-list li.active {
+      background: var(--soft);
+      color: var(--accent-dark);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .section-body { padding: 16px; display: grid; gap: 14px; }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 10px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    input[type="file"],
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 14px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--accent-dark); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .message {
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--soft);
+      color: var(--muted);
+      border: 1px solid var(--line);
+      white-space: pre-wrap;
+    }
+
+    .message.ok {
+      color: var(--ok);
+      border-color: #b7e0c5;
+      background: #edf9f1;
+    }
+
+    .message.error {
+      color: var(--warn);
+      border-color: #f0c2c2;
+      background: #fff1f1;
+    }
+
+    .sample {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      background: var(--soft);
+      border: 1px solid var(--line);
+    }
+
+    .mapping-grid {
+      display: grid;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .mapping-grid table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .mapping-grid th,
+    .mapping-grid td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    .mapping-grid th { background: var(--soft); }
+
+    .result-band {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--soft);
+    }
+
+    .stat .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .stat b {
+      font-size: 20px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      max-height: 520px;
+    }
+
+    table.result {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    table.result th,
+    table.result td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    table.result th {
+      position: sticky;
+      top: 0;
+      background: #f8fafb;
+      z-index: 1;
+    }
+
+    table.result tr.so-even td { background: #f3f5f7; }
+    table.result tr.so-odd td { background: #ffffff; }
+    table.result tr.group-break td { box-shadow: inset 0 2px 0 #94a3b8; }
+
+    .filter-bar {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .filter-bar .field,
+    .check-row {
+      display: grid;
+      gap: 4px;
+    }
+
+    .check-row {
+      grid-template-columns: 1fr;
+      align-content: end;
+    }
+
+    .check-row label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .conv-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--soft);
+      display: grid;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .conv-box table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    .conv-box th,
+    .conv-box td {
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    .conv-box select,
+    .conv-box input[type="number"] {
+      width: 100%;
+      min-height: 32px;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(23, 33, 43, 0.35);
+      z-index: 50;
+      padding: 16px;
+    }
+
+    .modal-overlay.show { display: grid; }
+
+    .modal-card {
+      width: min(720px, 100%);
+      max-height: min(80vh, 640px);
+      overflow: auto;
+      background: #fff;
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 12px;
+    }
+
+    .modal-card pre {
+      white-space: pre-wrap;
+      font-size: 13px;
+      background: #fff5f5;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 0;
+      color: #7f1d1d;
+    }
+
+    .progress-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(23, 33, 43, 0.28);
+      z-index: 40;
+    }
+
+    .progress-overlay.show { display: grid; }
+
+    .progress-card {
+      width: min(420px, calc(100vw - 32px));
+      background: #fff;
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 10px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      overflow: hidden;
+    }
+
+    .progress-bar > i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #38bdf8, #1f7a8c);
+      transition: width 0.25s ease;
+    }
+
+    @media (max-width: 920px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .stepper, .three-col, .result-band { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
+      <div class="top-actions">
+        <select id="languageSelect" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh">繁體中文</option>
+        </select>
+        <div class="status" id="statusText">Ready</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="stepper" aria-label="Sections">
+      <div class="step-pill active" data-step-pill="1" data-scroll-to="step1"><span>1</span><b data-i18n="step1">Import files</b></div>
+      <div class="step-pill" data-step-pill="2" data-scroll-to="step2"><span>2</span><b data-i18n="step2">Mapping & run</b></div>
+      <div class="step-pill" data-step-pill="3" data-scroll-to="step3"><span>3</span><b data-i18n="step3">Filter & preview</b></div>
+    </div>
+
+    <section class="active" id="step1">
+      <div class="section-head">
+        <h2 data-i18n="importTitle">Step 1: Import Excel files</h2>
+        <span class="sample">v2.1.1</span>
+      </div>
+      <div class="section-body">
+        <div class="message" data-i18n="importHelp">Upload schedule (Excel1), COIS demand (Excel2), and ZRMm BOM/stock (Excel3). Column mapping is fixed by business rules.</div>
+        <div class="three-col">
+          <div class="card">
+            <h3 data-i18n="excel1">Excel 1 — Schedule</h3>
+            <label for="leftFile" data-i18n="uploadFile">Upload file</label>
+            <input id="leftFile" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="leftData" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="leftData" spellcheck="false"></textarea>
+            <div class="actions">
+              <button type="button" id="loadSample" data-i18n="sampleData">Sample data</button>
+              <button type="button" class="secondary" data-clear="left" data-i18n="clearExcel1">Clear Excel 1</button>
+            </div>
+            <div class="message" id="leftMessage"></div>
+          </div>
+          <div class="card">
+            <h3 data-i18n="excel2">Excel 2 — Demand (COIS)</h3>
+            <label for="rightFile" data-i18n="uploadFile">Upload file</label>
+            <input id="rightFile" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="rightData" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="rightData" spellcheck="false"></textarea>
+            <div class="actions">
+              <button type="button" class="secondary" data-clear="right" data-i18n="clearExcel2">Clear Excel 2</button>
+            </div>
+            <div class="message" id="rightMessage"></div>
+          </div>
+          <div class="card">
+            <h3 data-i18n="excel3">Excel 3 — BOM / Stock</h3>
+            <label for="thirdFile" data-i18n="uploadFile">Upload file</label>
+            <input id="thirdFile" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="thirdData" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="thirdData" spellcheck="false"></textarea>
+            <div class="actions">
+              <button type="button" class="secondary" data-clear="third" data-i18n="clearExcel3">Clear Excel 3</button>
+            </div>
+            <div class="message" id="thirdMessage"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" data-scroll-to="step2" data-i18n="nextMapping">Next: mapping & run</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="step2">
+      <div class="section-head">
+        <h2 data-i18n="mappingTitle">Step 2: Fixed mapping & allocate</h2>
+        <span class="sample" data-i18n="fixedMapping">Fixed mapping</span>
+      </div>
+      <div class="section-body">
+        <div class="mapping-grid">
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="mapSource">Source</th>
+                <th data-i18n="mapColumn">Column</th>
+                <th data-i18n="mapMeaning">Meaning</th>
+                <th data-i18n="mapDetected">Detected header</th>
+              </tr>
+            </thead>
+            <tbody id="mappingBody"></tbody>
+          </table>
+        </div>
+        <div class="message" id="mappingMessage" data-i18n="mappingHelp">Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; else use conversion table (default M↔YD). Missing rule blocks run.</div>
+
+        <div class="conv-box">
+          <strong data-i18n="convTitle">Unit conversion whitelist</strong>
+          <div class="message" data-i18n="convHelp">Mother unit × ratio = child demand. Defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always use 1:1.</div>
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="convMotherUnit">Mother unit (2.R)</th>
+                <th data-i18n="convChildUnit">Child unit (3.M)</th>
+                <th data-i18n="convRatio">Ratio</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="convBody"></tbody>
+          </table>
+          <div class="actions">
+            <button type="button" class="secondary" id="addConvRow" data-i18n="convAdd">Add conversion</button>
+            <button type="button" class="secondary" id="resetConv" data-i18n="convReset">Reset defaults</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="secondary" data-scroll-to="step1" data-i18n="back">Back to import</button>
+          <button type="button" id="runAllocate" data-i18n="runAllocate">Run allocation</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="step3" class="active">
+      <div class="section-head">
+        <h2 data-i18n="resultTitle">Filter, preview and export</h2>
+        <span class="sample" data-i18n="previewLimit">Preview shows first 300 rows · filters update live</span>
+      </div>
+      <div class="section-body">
+        <div class="filter-panel">
+          <div class="message" data-i18n="filterLiveHelp">Filters stay on this page. Changing any filter instantly refreshes the preview and export set.</div>
+          <div class="filter-bar">
+            <div class="field">
+              <label for="filterSo" data-i18n="filterSo">Filter SO</label>
+              <div class="combo" id="soCombo">
+                <input id="filterSo" type="text" autocomplete="off" placeholder="Type prefix, e.g. 10106" aria-autocomplete="list" aria-controls="soSuggest">
+                <ul id="soSuggest" class="suggest-list" hidden role="listbox"></ul>
+              </div>
+            </div>
+            <div class="field">
+              <label for="filterCuttingFrom" data-i18n="filterCutting">Cutting from / to</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <input id="filterCuttingFrom" type="date">
+                <input id="filterCuttingTo" type="date">
+              </div>
+            </div>
+            <div class="field">
+              <label for="filterMother" data-i18n="filterMother">Filter mother</label>
+              <div class="combo" id="motherCombo">
+                <input id="filterMother" type="text" autocomplete="off" placeholder="Type prefix" aria-autocomplete="list" aria-controls="motherSuggest">
+                <ul id="motherSuggest" class="suggest-list" hidden role="listbox"></ul>
+              </div>
+            </div>
+          </div>
+          <div class="check-row">
+            <label><input id="hideSoAllZero" type="checkbox"> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
+            <label><input id="hideRowZero" type="checkbox"> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
+          </div>
+        </div>
+        <div class="result-band">
+          <div class="stat"><span class="label" data-i18n="rowsExported">Rows exported</span><b id="statRows">0</b></div>
+          <div class="stat"><span class="label" data-i18n="demandKeys">Demand keys kept</span><b id="statDemand">0</b></div>
+          <div class="stat"><span class="label" data-i18n="mothersMatched">Mothers matched</span><b id="statMothers">0</b></div>
+          <div class="stat"><span class="label" data-i18n="shortageRows">Shortage rows</span><b id="statShortage">0</b></div>
+        </div>
+        <div class="message" id="resultMessage" data-i18n="resultEmpty">Run allocation to preview and export.</div>
+        <div class="table-wrap">
+          <table class="result">
+            <thead><tr id="resultHead"></tr></thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button type="button" class="secondary" data-scroll-to="step2" data-i18n="back">Back to mapping</button>
+          <button type="button" id="exportCsv" disabled data-i18n="exportCsv">Export CSV</button>
+          <button type="button" id="exportXlsx" disabled data-i18n="exportExcel">Export Excel</button>
+          <button type="button" id="copyTable" class="secondary" disabled data-i18n="copyTable">Copy table</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-overlay" id="errorModal">
+    <div class="modal-card">
+      <strong id="errorModalTitle">Error</strong>
+      <pre id="errorModalBody"></pre>
+      <div class="actions">
+        <button type="button" id="errorModalClose" data-i18n="errorClose">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress-overlay" id="progressOverlay">
+    <div class="progress-card">
+      <strong id="progressTitle">Working</strong>
+      <div id="progressMessage">Please wait…</div>
+      <div class="progress-bar"><i id="progressFill"></i></div>
+    </div>
+  </div>
+
+  <script>
+    const APP_VERSION = "2.1.1";
+    const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
+
+    // Fixed 0-based column indexes per locked business rules
+    const COL = {
+      excel1: { so: 0, cutting: 1 },
+      excel2: { so: 1, mother: 5, qty: 16, unitR: 17 },
+      excel3: { mother: 4, child: 8, stock: 10, unitH: 7, unitM: 12 }
+    };
+
+    // Output indexes used by filters / Y flag
+    const OUT = {
+      cutting: 0,
+      so: 1,
+      mother: 2,
+      motherUnit: 3,
+      child: 4,
+      childUnit: 5,
+      demand: 6,
+      provided: 7,
+      remaining: 8,
+      flagY: 9
+    };
+
+    const DEFAULT_CONVERSION_RULES = [
+      { motherUnit: "M", childUnit: "YD", ratio: 1.0936 },
+      { motherUnit: "YD", childUnit: "M", ratio: 0.9144 }
+    ];
+
+    const OUTPUT_HEADERS_EN = [
+      "cutting",
+      "so",
+      "mother material",
+      "mother unit (2.R)",
+      "child material",
+      "child unit (3.M)",
+      "demand qty",
+      "provided qty",
+      "remaining stock after this row",
+      "allocated (Y)"
+    ];
+
+    const OUTPUT_HEADERS_ZH = [
+      "cutting（生產日）",
+      "so（訂單）",
+      "母材料",
+      "母單位（2.R）",
+      "子材料",
+      "子單位（3.M）",
+      "需求數量",
+      "能提供數量",
+      "扣減後剩餘",
+      "已配發（Y）"
+    ];
+
+    function padHeaders(base, width) {
+      const headers = [];
+      for (let i = 0; i < width; i++) {
+        headers.push(base[i] || `Column ${i + 1}`);
+      }
+      return headers;
+    }
+
+    function padRow(cells, width) {
+      const row = [];
+      for (let i = 0; i < width; i++) row.push(cells[i] ?? "");
+      return row;
+    }
+
+    function sheetToTsv(headers, rows) {
+      return [headers, ...rows].map(row => row.map(cell => String(cell ?? "")).join("\t")).join("\n");
+    }
+
+    // Sample: enough columns for fixed letter indexes; sanitized demo data
+    const sample1Headers = padHeaders(["so", "cutting"], 2);
+    const sample1Rows = [
+      ["SO-A", "2026-07-01"],
+      ["SO-B", "2026-07-03"],
+      ["SO-A", "2026-07-10"]
+    ];
+
+    const sample2Headers = padHeaders([
+      "A", "SD Document", "C", "D", "E", "Material", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Open Quantity", "Base Unit of Measure"
+    ], 18);
+    const sample2Rows = [
+      padRow(["", "SO-A", "", "", "", "MOTHER-1", "", "", "", "", "", "", "", "", "", "", "8", "M"], 18),
+      padRow(["", "SO-A", "", "", "", "MOTHER-1", "", "", "", "", "", "", "", "", "", "", "2", "M"], 18),
+      padRow(["", "SO-B", "", "", "", "MOTHER-1", "", "", "", "", "", "", "", "", "", "", "5", "M"], 18),
+      padRow(["", "SO-B", "", "", "", "MOTHER-X", "", "", "", "", "", "", "", "", "", "", "3", "M"], 18)
+    ];
+
+    const sample3Headers = padHeaders([
+      "A", "B", "C", "D", "Material", "F", "G", "OUn", "Article(Com.)", "J", "Unrestricted", "K2", "BUn"
+    ], 13);
+    const sample3Rows = [
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "", "7", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "", "20", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "", "12", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "", "4", "", "YD"], 13)
+    ];
+
+    const sampleLeft = sheetToTsv(sample1Headers, sample1Rows);
+    const sampleRight = sheetToTsv(sample2Headers, sample2Rows);
+    const sampleThird = sheetToTsv(sample3Headers, sample3Rows);
+
+    const translations = {
+      en: {
+        appTitle: "RAW MAT Allocation Engine",
+        ready: "Ready",
+        step1: "Import files",
+        step2: "Mapping & run",
+        step3: "Filter & preview",
+        importTitle: "Step 1: Import Excel files",
+        importHelp: "Upload schedule (Excel1), COIS demand (Excel2), and ZRMm BOM/stock (Excel3). Column mapping is fixed by business rules.",
+        excel1: "Excel 1 — Schedule",
+        excel2: "Excel 2 — Demand (COIS)",
+        excel3: "Excel 3 — BOM / Stock",
+        uploadFile: "Upload file",
+        pasteExcel: "Or paste from Excel",
+        sampleData: "Sample data",
+        clearExcel1: "Clear Excel 1",
+        clearExcel2: "Clear Excel 2",
+        clearExcel3: "Clear Excel 3",
+        nextMapping: "Next: mapping & run",
+        mappingTitle: "Step 2: Fixed mapping & allocate",
+        fixedMapping: "Fixed mapping",
+        mapSource: "Source",
+        mapColumn: "Column",
+        mapMeaning: "Meaning",
+        mapDetected: "Detected header",
+        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; else use conversion table (default M↔YD). Missing rule blocks run.",
+        back: "Back",
+        runAllocate: "Run allocation",
+        resultTitle: "Filter, preview and export",
+        previewLimit: "Preview shows first 300 rows · filters update live",
+        filterLiveHelp: "Filters stay on this page. Changing any filter instantly refreshes the preview and export set.",
+        rowsExported: "Rows exported",
+        demandKeys: "Demand keys kept",
+        mothersMatched: "Mothers matched",
+        shortageRows: "Shortage rows",
+        resultEmpty: "Run allocation to preview and export.",
+        exportCsv: "Export CSV",
+        exportExcel: "Export Excel",
+        copyTable: "Copy table",
+        loading: "Loading",
+        importing: "Importing file",
+        readingFile: "Reading file...",
+        parsingFile: "Parsing table...",
+        processing: "Running allocation",
+        expanding: "Building demand rows...",
+        allocating: "Allocating stock...",
+        rendering: "Rendering preview...",
+        loaded: "Loaded {rows} rows and {cols} columns.",
+        importError: "Could not read file: {message}",
+        needBoth: "Please load Excel 1, Excel 2, and Excel 3 first.",
+        built: "Allocated {rows} rows (showing {shown}). Shortage rows: {shortage}.",
+        exported: "CSV exported",
+        exportedExcel: "Excel exported",
+        excelExportFailed: "Excel export failed: {message}",
+        copied: "Table copied",
+        copyUnavailable: "Copy unavailable",
+        resultStale: "Inputs changed. Run allocation again before exporting.",
+        workbookUnsupported: "This browser cannot read .xlsx files. Save as CSV or paste data instead.",
+        missingHeader: "(index {index}, header missing)",
+        mapSo: "Sales order",
+        mapCutting: "Production / cutting date",
+        mapSd: "SO (SD Document)",
+        mapMother2: "Mother material",
+        mapQty: "Open Quantity (demand)",
+        mapUnitR: "Mother unit (2.R)",
+        mapMother3: "Mother material",
+        mapUnitH: "Mother unit check (3.H OUn)",
+        mapChild: "Child Article(Com.)",
+        mapUnitM: "Child unit (3.M BUn)",
+        mapStock: "Unrestricted (MAX for init stock)",
+        convTitle: "Unit conversion whitelist",
+        convHelp: "Mother unit × ratio = child demand. Defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always use 1:1.",
+        convMotherUnit: "Mother unit (2.R)",
+        convChildUnit: "Child unit (3.M)",
+        convRatio: "Ratio",
+        convAdd: "Add conversion",
+        convReset: "Reset defaults",
+        convRemove: "Remove",
+        filterSo: "Filter SO",
+        filterCutting: "Cutting from / to",
+        filterMother: "Filter mother",
+        hideSoAllZero: "Hide SO when all demand qty = 0",
+        hideRowZero: "Hide rows where demand qty = 0",
+        errorClose: "OK",
+        errorPrecheckTitle: "Unit pre-check failed (2.R vs 3.H)",
+        errorConvTitle: "Missing conversion rules (2.R vs 3.M)",
+        errorPrecheckIntro: "Same mother material must have matching units. Fix source data then re-run.",
+        errorConvIntro: "Add the missing mother→child unit ratios in the conversion table, then re-run."
+      },
+      zh: {
+        appTitle: "RAW MAT 庫存配發引擎",
+        ready: "就緒",
+        step1: "匯入檔案",
+        step2: "對應與執行",
+        step3: "篩選與預覽",
+        importTitle: "第 1 步：匯入 Excel 檔案",
+        importHelp: "請上傳排程（Excel1）、COIS 需求（Excel2）與 ZRMm BOM／庫存（Excel3）。欄位對應依業務規則固定。",
+        excel1: "Excel 1 — 排程",
+        excel2: "Excel 2 — 需求（COIS）",
+        excel3: "Excel 3 — BOM／庫存",
+        uploadFile: "上傳檔案",
+        pasteExcel: "或從 Excel 貼上",
+        sampleData: "範例資料",
+        clearExcel1: "清除 Excel 1",
+        clearExcel2: "清除 Excel 2",
+        clearExcel3: "清除 Excel 3",
+        nextMapping: "下一步：對應與執行",
+        mappingTitle: "第 2 步：固定對應與配發",
+        fixedMapping: "固定對應",
+        mapSource: "來源",
+        mapColumn: "欄位",
+        mapMeaning: "語意",
+        mapDetected: "偵測到的表頭",
+        mappingHelp: "事前檢查：同母料 Excel2.R 必須等於 Excel3.H。換算：2.R=3.M 則 1:1；否則查換算表（預設 M↔YD）。缺規則則停止。",
+        back: "返回",
+        runAllocate: "執行配發",
+        resultTitle: "篩選、預覽與匯出",
+        previewLimit: "預覽顯示前 300 列 · 篩選即時更新",
+        filterLiveHelp: "篩選條件與預覽在同一頁。變更任一條件會立即更新預覽與匯出內容。",
+        rowsExported: "匯出列數",
+        demandKeys: "保留需求鍵數",
+        mothersMatched: "匹配母料數",
+        shortageRows: "短缺列數",
+        resultEmpty: "執行配發後可預覽與匯出。",
+        exportCsv: "匯出 CSV",
+        exportExcel: "匯出 Excel",
+        copyTable: "複製表格",
+        loading: "載入中",
+        importing: "正在匯入檔案",
+        readingFile: "正在讀取檔案…",
+        parsingFile: "正在解析表格…",
+        processing: "正在執行配發",
+        expanding: "正在展開需求列…",
+        allocating: "正在配發庫存…",
+        rendering: "正在產生預覽…",
+        loaded: "已載入 {rows} 列、{cols} 欄。",
+        importError: "無法讀取檔案：{message}",
+        needBoth: "請先載入 Excel 1、Excel 2 與 Excel 3。",
+        built: "已配發 {rows} 列（目前顯示 {shown}）。短缺列：{shortage}。",
+        exported: "CSV 已匯出",
+        exportedExcel: "Excel 已匯出",
+        excelExportFailed: "Excel 匯出失敗：{message}",
+        copied: "表格已複製",
+        copyUnavailable: "無法複製",
+        resultStale: "輸入已變更。請重新執行配發後再匯出。",
+        workbookUnsupported: "此瀏覽器無法讀取 .xlsx。請另存為 CSV 或貼上資料。",
+        missingHeader: "（索引 {index}，表頭缺失）",
+        mapSo: "訂單",
+        mapCutting: "排程生產日 cutting",
+        mapSd: "訂單（SD Document）",
+        mapMother2: "母材料",
+        mapQty: "Open Quantity（需求）",
+        mapUnitR: "母單位（2.R）",
+        mapMother3: "母材料",
+        mapUnitH: "母單位檢查（3.H OUn）",
+        mapChild: "子材料 Article(Com.)",
+        mapUnitM: "子單位（3.M BUn）",
+        mapStock: "Unrestricted（初始庫存取 MAX）",
+        convTitle: "單位換算白名單",
+        convHelp: "母單位 × 乘數 = 子料 Demand。預設（可改）：M→YD=1.0936、YD→M=0.9144。單位相同一律 1:1。",
+        convMotherUnit: "母單位（2.R）",
+        convChildUnit: "子單位（3.M）",
+        convRatio: "換算乘數",
+        convAdd: "新增換算",
+        convReset: "還原預設",
+        convRemove: "刪除",
+        filterSo: "篩選 SO",
+        filterCutting: "Cutting 起迄",
+        filterMother: "篩選母材料",
+        hideSoAllZero: "隱藏：整張 SO 需求皆為 0",
+        hideRowZero: "隱藏：單列需求 = 0",
+        errorClose: "確定",
+        errorPrecheckTitle: "單位事前檢查失敗（2.R vs 3.H）",
+        errorConvTitle: "缺少換算規則（2.R vs 3.M）",
+        errorPrecheckIntro: "同母料單位必須一致。請修正原始資料後重跑。",
+        errorConvIntro: "請在換算表補上缺少的母→子單位乘數後再執行。"
+      }
+    };
+
+    function cloneDefaultConversionRules() {
+      return DEFAULT_CONVERSION_RULES.map(rule => ({ ...rule }));
+    }
+
+    function loadConversionRules() {
+      try {
+        const raw = localStorage.getItem(CONV_STORAGE_KEY);
+        if (!raw) return cloneDefaultConversionRules();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return cloneDefaultConversionRules();
+        return parsed.map(rule => ({
+          motherUnit: String(rule.motherUnit || "").trim().toUpperCase(),
+          childUnit: String(rule.childUnit || "").trim().toUpperCase(),
+          ratio: Number(rule.ratio) || 0
+        })).filter(rule => rule.motherUnit && rule.childUnit && rule.ratio > 0);
+      } catch {
+        return cloneDefaultConversionRules();
+      }
+    }
+
+    function saveConversionRules(rules) {
+      localStorage.setItem(CONV_STORAGE_KEY, JSON.stringify(rules));
+    }
+
+    const state = {
+      lang: "en",
+      step: 1,
+      left: { headers: [], rows: [] },
+      right: { headers: [], rows: [] },
+      third: { headers: [], rows: [] },
+      resultHeaders: [],
+      resultRows: [],
+      allResultRows: [],
+      conversionRules: loadConversionRules(),
+      stats: { demandKeys: 0, mothers: 0, shortage: 0 }
+    };
+
+    const elements = {
+      languageSelect: document.getElementById("languageSelect"),
+      statusText: document.getElementById("statusText"),
+      leftFile: document.getElementById("leftFile"),
+      rightFile: document.getElementById("rightFile"),
+      thirdFile: document.getElementById("thirdFile"),
+      leftData: document.getElementById("leftData"),
+      rightData: document.getElementById("rightData"),
+      thirdData: document.getElementById("thirdData"),
+      leftMessage: document.getElementById("leftMessage"),
+      rightMessage: document.getElementById("rightMessage"),
+      thirdMessage: document.getElementById("thirdMessage"),
+      mappingBody: document.getElementById("mappingBody"),
+      mappingMessage: document.getElementById("mappingMessage"),
+      convBody: document.getElementById("convBody"),
+      resultMessage: document.getElementById("resultMessage"),
+      resultHead: document.getElementById("resultHead"),
+      resultBody: document.getElementById("resultBody"),
+      exportCsv: document.getElementById("exportCsv"),
+      exportXlsx: document.getElementById("exportXlsx"),
+      copyTable: document.getElementById("copyTable"),
+      filterSo: document.getElementById("filterSo"),
+      soSuggest: document.getElementById("soSuggest"),
+      filterCuttingFrom: document.getElementById("filterCuttingFrom"),
+      filterCuttingTo: document.getElementById("filterCuttingTo"),
+      filterMother: document.getElementById("filterMother"),
+      motherSuggest: document.getElementById("motherSuggest"),
+      hideSoAllZero: document.getElementById("hideSoAllZero"),
+      hideRowZero: document.getElementById("hideRowZero"),
+      errorModal: document.getElementById("errorModal"),
+      errorModalTitle: document.getElementById("errorModalTitle"),
+      errorModalBody: document.getElementById("errorModalBody"),
+      errorModalClose: document.getElementById("errorModalClose"),
+      statRows: document.getElementById("statRows"),
+      statDemand: document.getElementById("statDemand"),
+      statMothers: document.getElementById("statMothers"),
+      statShortage: document.getElementById("statShortage"),
+      progressOverlay: document.getElementById("progressOverlay"),
+      progressTitle: document.getElementById("progressTitle"),
+      progressMessage: document.getElementById("progressMessage"),
+      progressFill: document.getElementById("progressFill")
+    };
+
+    function t(key, values = {}) {
+      const table = translations[state.lang] || translations.en;
+      let text = table[key] || translations.en[key] || key;
+      for (const [name, value] of Object.entries(values)) {
+        text = text.replaceAll(`{${name}}`, String(value));
+      }
+      return text;
+    }
+
+    function applyLanguage() {
+      document.documentElement.lang = state.lang === "zh" ? "zh-Hant" : "en";
+      document.querySelectorAll("[data-i18n]").forEach(node => {
+        node.textContent = t(node.dataset.i18n);
+      });
+      elements.statusText.textContent = t("ready");
+      refreshMappingTable();
+      if (state.allResultRows.length) {
+        state.resultHeaders = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
+        applyViewFilters();
+      }
+      renderConversionTable();
+      document.title = t("appTitle");
+    }
+
+    function setStep(step, scroll = true) {
+      state.step = Math.max(1, Math.min(3, step));
+      document.querySelectorAll("section").forEach((section, index) => {
+        section.classList.toggle("active", index + 1 === state.step);
+      });
+      document.querySelectorAll("[data-step-pill]").forEach(pill => {
+        pill.classList.toggle("active", Number(pill.dataset.stepPill) === state.step);
+      });
+      if (state.step === 2) refreshMappingTable();
+      if (scroll) {
+        const target = document.getElementById(`step${state.step}`);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function scrollToSection(id) {
+      const map = { step1: 1, step2: 2, step3: 3 };
+      if (map[id]) setStep(map[id], true);
+      else {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function collectDistinctValues(source) {
+      const values = new Set();
+      if (source === "so") {
+        for (const row of state.left.rows) {
+          const so = normalize(row[COL.excel1.so]);
+          if (so) values.add(so);
+        }
+        for (const row of state.allResultRows) {
+          const so = normalize(row[OUT.so]);
+          if (so) values.add(so);
+        }
+      } else if (source === "mother") {
+        for (const row of state.right.rows) {
+          const mother = normalize(row[COL.excel2.mother]);
+          if (mother) values.add(mother);
+        }
+        for (const row of state.allResultRows) {
+          const mother = normalize(row[OUT.mother]);
+          if (mother) values.add(mother);
+        }
+      }
+      return [...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+
+    function splitFilterTokens(text) {
+      const raw = String(text ?? "");
+      const parts = raw.split(/[,;]/);
+      const complete = parts.slice(0, -1).map(part => part.trim()).filter(Boolean);
+      const current = (parts[parts.length - 1] || "").trim();
+      const suffix = /[,;]\s*$/.test(raw) ? "" : current;
+      return { complete, current: suffix, endsWithSeparator: /[,;]\s*$/.test(raw) };
+    }
+
+    function renderSuggestList(listEl, matches, activeIndex = -1) {
+      if (!listEl) return;
+      if (!matches.length) {
+        listEl.hidden = true;
+        listEl.innerHTML = "";
+        return;
+      }
+      listEl.hidden = false;
+      listEl.innerHTML = matches.map((value, index) =>
+        `<li role="option" data-value="${escapeHtml(value)}" class="${index === activeIndex ? "active" : ""}">${escapeHtml(value)}</li>`
+      ).join("");
+    }
+
+    function bindPrefixSuggest(inputEl, listEl, source) {
+      let activeIndex = -1;
+      let matches = [];
+
+      const selectedSet = (complete) => new Set(complete.map(v => v.toLowerCase()));
+
+      const refresh = () => {
+        const { complete, current, endsWithSeparator } = splitFilterTokens(inputEl.value);
+        if (endsWithSeparator || !current) {
+          matches = [];
+          activeIndex = -1;
+          renderSuggestList(listEl, matches, activeIndex);
+          return;
+        }
+        const selected = selectedSet(complete);
+        const prefix = current.toLowerCase();
+        matches = collectDistinctValues(source)
+          .filter(value => {
+            const lower = value.toLowerCase();
+            if (selected.has(lower)) return false;
+            return lower.startsWith(prefix);
+          })
+          .slice(0, 30);
+        activeIndex = matches.length ? 0 : -1;
+        renderSuggestList(listEl, matches, activeIndex);
+      };
+
+      const pick = (value) => {
+        const { complete } = splitFilterTokens(inputEl.value);
+        const selected = selectedSet(complete);
+        if (selected.has(String(value).toLowerCase())) {
+          matches = [];
+          activeIndex = -1;
+          renderSuggestList(listEl, matches, activeIndex);
+          return;
+        }
+        const next = [...complete, value];
+        inputEl.value = `${next.join(", ")}, `;
+        matches = [];
+        activeIndex = -1;
+        renderSuggestList(listEl, matches, activeIndex);
+        applyViewFilters();
+        inputEl.focus();
+      };
+
+      inputEl.addEventListener("input", () => {
+        refresh();
+        applyViewFilters();
+      });
+      inputEl.addEventListener("keydown", (event) => {
+        if (listEl.hidden || !matches.length) return;
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          activeIndex = (activeIndex + 1) % matches.length;
+          renderSuggestList(listEl, matches, activeIndex);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          activeIndex = (activeIndex - 1 + matches.length) % matches.length;
+          renderSuggestList(listEl, matches, activeIndex);
+        } else if (event.key === "Enter" && activeIndex >= 0) {
+          event.preventDefault();
+          pick(matches[activeIndex]);
+        } else if (event.key === "Escape") {
+          listEl.hidden = true;
+        }
+      });
+      listEl.addEventListener("mousedown", (event) => {
+        const li = event.target.closest("li[data-value]");
+        if (!li) return;
+        event.preventDefault();
+        pick(li.dataset.value);
+      });
+      inputEl.addEventListener("blur", () => {
+        setTimeout(() => { listEl.hidden = true; }, 150);
+      });
+      inputEl.addEventListener("focus", refresh);
+    }
+
+    function setMessage(element, text, type = "") {
+      element.textContent = text;
+      element.className = type ? `message ${type}` : "message";
+    }
+
+    function showProgress(title, message, percent = 10) {
+      elements.progressOverlay.classList.add("show");
+      elements.progressTitle.textContent = title;
+      elements.progressMessage.textContent = message;
+      elements.progressFill.style.width = `${percent}%`;
+    }
+
+    function updateProgress(message, percent) {
+      elements.progressMessage.textContent = message;
+      elements.progressFill.style.width = `${percent}%`;
+    }
+
+    async function finishProgress(message) {
+      updateProgress(message, 100);
+      await waitFrame();
+      await new Promise(resolve => setTimeout(resolve, 180));
+      elements.progressOverlay.classList.remove("show");
+      elements.statusText.textContent = message;
+    }
+
+    function waitFrame() {
+      return new Promise(resolve => requestAnimationFrame(() => resolve()));
+    }
+
+    function splitLine(line, delimiter) {
+      const cells = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+        if (!inQuotes && ch === delimiter) {
+          cells.push(current);
+          current = "";
+          continue;
+        }
+        current += ch;
+      }
+      cells.push(current);
+      return cells;
+    }
+
+    function detectDelimiter(text) {
+      const first = text.split(/\r?\n/).find(line => line.trim()) || "";
+      const commas = (first.match(/,/g) || []).length;
+      const tabs = (first.match(/\t/g) || []).length;
+      const semis = (first.match(/;/g) || []).length;
+      if (tabs >= commas && tabs >= semis && tabs > 0) return "\t";
+      if (semis > commas) return ";";
+      return ",";
+    }
+
+    function parseTextTable(text) {
+      const trimmed = String(text || "").replace(/^\uFEFF/, "").trim();
+      if (!trimmed) return { headers: [], rows: [] };
+      const delimiter = detectDelimiter(trimmed);
+      const lines = trimmed.split(/\r?\n/).filter(line => line.length);
+      const rows = lines.map(line => splitLine(line, delimiter));
+      const width = Math.max(...rows.map(row => row.length));
+      const headers = normalizeRow(rows[0], width).map((header, index) => String(header || `Column ${index + 1}`));
+      const dataRows = rows.slice(1).map(row => normalizeRow(row, width).slice(0, headers.length));
+      return { headers, rows: dataRows };
+    }
+
+    function normalize(value) {
+      return String(value ?? "").trim();
+    }
+
+    function parseNumber(value) {
+      const text = normalize(value).replace(/,/g, "");
+      if (!text) return 0;
+      const num = Number(text);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function formatCellDate(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "";
+      const serial = Number(text);
+      if (Number.isFinite(serial) && serial >= 20000 && serial < 100000) {
+        const whole = Math.floor(serial);
+        const fraction = serial - whole;
+        const date = new Date(Date.UTC(1899, 11, 30 + whole));
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(date.getUTCDate()).padStart(2, "0");
+        if (fraction < 1e-10) return `${y}-${m}-${d}`;
+        const totalSeconds = Math.round(fraction * 86400);
+        const hh = String(Math.floor(totalSeconds / 3600) % 24).padStart(2, "0");
+        const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+        const ss = String(totalSeconds % 60).padStart(2, "0");
+        return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+      }
+      return text;
+    }
+
+    function cuttingSortKey(value) {
+      const formatted = formatCellDate(value);
+      const serial = Number(String(value ?? "").trim());
+      if (Number.isFinite(serial) && serial >= 20000 && serial < 100000) {
+        return String(serial).padStart(12, "0");
+      }
+      return formatted || String(value ?? "");
+    }
+
+    function headerAt(side, index) {
+      const headers = state[side].headers;
+      if (index < headers.length && normalize(headers[index])) return headers[index];
+      return t("missingHeader", { index });
+    }
+
+    function refreshMappingTable() {
+      const rows = [
+        ["Excel1", "A", t("mapSo"), headerAt("left", COL.excel1.so)],
+        ["Excel1", "B", t("mapCutting"), headerAt("left", COL.excel1.cutting)],
+        ["Excel2", "B", t("mapSd"), headerAt("right", COL.excel2.so)],
+        ["Excel2", "F", t("mapMother2"), headerAt("right", COL.excel2.mother)],
+        ["Excel2", "Q", t("mapQty"), headerAt("right", COL.excel2.qty)],
+        ["Excel2", "R", t("mapUnitR"), headerAt("right", COL.excel2.unitR)],
+        ["Excel3", "E", t("mapMother3"), headerAt("third", COL.excel3.mother)],
+        ["Excel3", "H", t("mapUnitH"), headerAt("third", COL.excel3.unitH)],
+        ["Excel3", "I", t("mapChild"), headerAt("third", COL.excel3.child)],
+        ["Excel3", "M", t("mapUnitM"), headerAt("third", COL.excel3.unitM)],
+        ["Excel3", "K", t("mapStock"), headerAt("third", COL.excel3.stock)]
+      ];
+      elements.mappingBody.innerHTML = rows.map(([source, col, meaning, detected]) =>
+        `<tr><td>${source}</td><td>${col}</td><td>${meaning}</td><td>${detected}</td></tr>`
+      ).join("");
+      renderConversionTable();
+    }
+
+    function collectUnitOptions() {
+      const units = new Set(["M", "YD"]);
+      for (const row of state.right.rows) {
+        const u = normalize(row[COL.excel2.unitR]).toUpperCase();
+        if (u) units.add(u);
+      }
+      for (const row of state.third.rows) {
+        const u = normalize(row[COL.excel3.unitM]).toUpperCase();
+        if (u) units.add(u);
+      }
+      return [...units].sort();
+    }
+
+    function renderConversionTable() {
+      if (!elements.convBody) return;
+      const options = collectUnitOptions();
+      elements.convBody.innerHTML = "";
+      state.conversionRules.forEach((rule, index) => {
+        const tr = document.createElement("tr");
+        const motherSelect = document.createElement("select");
+        const childSelect = document.createElement("select");
+        const ratioInput = document.createElement("input");
+        ratioInput.type = "number";
+        ratioInput.step = "any";
+        ratioInput.min = "0";
+        ratioInput.value = String(rule.ratio);
+        for (const unit of options) {
+          motherSelect.appendChild(new Option(unit, unit, false, unit === rule.motherUnit));
+          childSelect.appendChild(new Option(unit, unit, false, unit === rule.childUnit));
+        }
+        if (!options.includes(rule.motherUnit) && rule.motherUnit) {
+          motherSelect.appendChild(new Option(rule.motherUnit, rule.motherUnit, true, true));
+        }
+        if (!options.includes(rule.childUnit) && rule.childUnit) {
+          childSelect.appendChild(new Option(rule.childUnit, rule.childUnit, true, true));
+        }
+        const sync = () => {
+          state.conversionRules[index] = {
+            motherUnit: motherSelect.value,
+            childUnit: childSelect.value,
+            ratio: Number(ratioInput.value) || 0
+          };
+          saveConversionRules(state.conversionRules);
+          markResultDirty();
+        };
+        motherSelect.addEventListener("change", sync);
+        childSelect.addEventListener("change", sync);
+        ratioInput.addEventListener("change", sync);
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "secondary";
+        removeBtn.textContent = t("convRemove");
+        removeBtn.addEventListener("click", () => {
+          state.conversionRules.splice(index, 1);
+          saveConversionRules(state.conversionRules);
+          renderConversionTable();
+          markResultDirty();
+        });
+        tr.appendChild(document.createElement("td")).appendChild(motherSelect);
+        tr.appendChild(document.createElement("td")).appendChild(childSelect);
+        tr.appendChild(document.createElement("td")).appendChild(ratioInput);
+        tr.appendChild(document.createElement("td")).appendChild(removeBtn);
+        elements.convBody.appendChild(tr);
+      });
+    }
+
+    function showErrorModal(title, body) {
+      elements.errorModalTitle.textContent = title;
+      elements.errorModalBody.textContent = body;
+      elements.errorModal.classList.add("show");
+    }
+
+    function hideErrorModal() {
+      elements.errorModal.classList.remove("show");
+    }
+
+    function conversionRatio(motherUnit, childUnit, rules) {
+      const m = normalize(motherUnit).toUpperCase();
+      const c = normalize(childUnit).toUpperCase();
+      if (!m || !c) return { ok: false, ratio: 0, reason: "blank-unit" };
+      if (m === c) return { ok: true, ratio: 1 };
+      const hit = rules.find(rule => rule.motherUnit === m && rule.childUnit === c && rule.ratio > 0);
+      if (!hit) return { ok: false, ratio: 0, reason: "missing" };
+      return { ok: true, ratio: hit.ratio };
+    }
+
+    function formatQty(value) {
+      if (!Number.isFinite(value)) return "0";
+      if (Math.abs(value - Math.round(value)) < 1e-9) return String(Math.round(value));
+      return String(Number(value.toFixed(6)));
+    }
+
+    async function loadFile(side, file) {
+      if (!file) return;
+      const messageEl = elements[`${side}Message`];
+      try {
+        showProgress(t("importing"), t("readingFile"), 20);
+        await waitFrame();
+        const name = file.name.toLowerCase();
+        let parsed;
+        if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) {
+          const buffer = await file.arrayBuffer();
+          updateProgress(t("parsingFile"), 55);
+          parsed = await parseXlsx(buffer);
+        } else {
+          const text = await file.text();
+          updateProgress(t("parsingFile"), 55);
+          parsed = parseTextTable(text);
+        }
+        setSideData(side, parsed);
+        document.getElementById(`${side}Data`).value = sheetToTsv(parsed.headers, parsed.rows.slice(0, 80));
+        setMessage(messageEl, t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }), "ok");
+        await finishProgress(t("ready"));
+      } catch (error) {
+        elements.progressOverlay.classList.remove("show");
+        setMessage(messageEl, t("importError", { message: error.message || String(error) }), "error");
+      }
+    }
+
+    function setSideData(side, parsed) {
+      state[side] = {
+        headers: parsed.headers || [],
+        rows: parsed.rows || []
+      };
+      markResultDirty();
+      refreshMappingTable();
+    }
+
+    function refreshFromText(side) {
+      const parsed = parseTextTable(document.getElementById(`${side}Data`).value);
+      setSideData(side, parsed);
+      const messageEl = elements[`${side}Message`];
+      if (parsed.headers.length) {
+        setMessage(messageEl, t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }), "ok");
+      } else {
+        setMessage(messageEl, "", "");
+      }
+    }
+
+    function clearResult() {
+      state.resultHeaders = [];
+      state.resultRows = [];
+      state.allResultRows = [];
+      state.stats = { demandKeys: 0, mothers: 0, shortage: 0 };
+      elements.resultHead.innerHTML = "";
+      elements.resultBody.innerHTML = "";
+      elements.statRows.textContent = "0";
+      elements.statDemand.textContent = "0";
+      elements.statMothers.textContent = "0";
+      elements.statShortage.textContent = "0";
+      elements.exportCsv.disabled = true;
+      elements.exportXlsx.disabled = true;
+      elements.copyTable.disabled = true;
+      elements.resultMessage.textContent = t("resultEmpty");
+      elements.resultMessage.className = "message";
+    }
+
+    function markResultDirty() {
+      const hadResult = state.allResultRows.length > 0 || state.resultRows.length > 0;
+      clearResult();
+      if (hadResult) {
+        setMessage(elements.resultMessage, t("resultStale"), "error");
+      }
+    }
+
+    /**
+     * Pre-check Excel2.R vs Excel3.H for same mother (2.F = 3.E).
+     * @returns {string[]} error lines
+     */
+    function precheckUnitRH(excel2, excel3) {
+      const errors = [];
+      const rByMother = new Map();
+      excel2.rows.forEach((row, idx) => {
+        const mother = normalize(row[COL.excel2.mother]);
+        if (!mother) return;
+        const unitR = normalize(row[COL.excel2.unitR]).toUpperCase();
+        const line = idx + 2;
+        if (!rByMother.has(mother)) rByMother.set(mother, new Map());
+        const unitMap = rByMother.get(mother);
+        if (!unitMap.has(unitR)) unitMap.set(unitR, []);
+        unitMap.get(unitR).push(line);
+      });
+
+      const hByMother = new Map();
+      excel3.rows.forEach((row, idx) => {
+        const mother = normalize(row[COL.excel3.mother]);
+        if (!mother) return;
+        const unitH = normalize(row[COL.excel3.unitH]).toUpperCase();
+        const line = idx + 2;
+        if (!hByMother.has(mother)) hByMother.set(mother, new Map());
+        const unitMap = hByMother.get(mother);
+        if (!unitMap.has(unitH)) unitMap.set(unitH, []);
+        unitMap.get(unitH).push(line);
+      });
+
+      for (const [mother, unitMap] of rByMother.entries()) {
+        if (unitMap.size > 1) {
+          const detail = [...unitMap.entries()].map(([u, lines]) =>
+            `R=${u || "(blank)"} 列 ${lines.slice(0, 5).join(",")}${lines.length > 5 ? "…" : ""}`
+          ).join("; ");
+          errors.push(`Excel2 母料 ${mother}：2.R 單位不一致 — ${detail}`);
+        }
+      }
+
+      const mothers = new Set([...rByMother.keys(), ...hByMother.keys()]);
+      for (const mother of mothers) {
+        if (!rByMother.has(mother) || !hByMother.has(mother)) continue;
+        const rUnits = [...rByMother.get(mother).keys()];
+        const hUnits = [...hByMother.get(mother).keys()];
+        if (hUnits.length > 1) {
+          const detail = [...hByMother.get(mother).entries()].map(([u, lines]) =>
+            `H=${u || "(blank)"} 列 ${lines.slice(0, 5).join(",")}${lines.length > 5 ? "…" : ""}`
+          ).join("; ");
+          errors.push(`Excel3 母料 ${mother}：3.H 單位不一致 — ${detail}`);
+          continue;
+        }
+        const r = rUnits[0] || "";
+        const h = hUnits[0] || "";
+        if (r !== h) {
+          const rLines = rByMother.get(mother).get(r) || [];
+          const hLines = hByMother.get(mother).get(h) || [];
+          errors.push(
+            `Excel2 第 ${rLines[0] || "?"} 列：母料 ${mother}，R=${r || "(空白)"}\n` +
+            `Excel3 第 ${hLines[0] || "?"} 列：母料 ${mother}，H=${h || "(空白)"}\n` +
+            `→ 同料號單位不一致（R 應等於 H）`
+          );
+        }
+      }
+      return errors;
+    }
+
+    /**
+     * Core allocation engine v2.1.
+     * @returns {{ok: boolean, headers?: string[], rows?: string[][], stats?: object, errorTitle?: string, errorBody?: string}}
+     */
+    function runAllocationEngine(excel1, excel2, excel3, conversionRules) {
+      const preErrors = precheckUnitRH(excel2, excel3);
+      if (preErrors.length) {
+        return {
+          ok: false,
+          errorTitle: t("errorPrecheckTitle"),
+          errorBody: `${t("errorPrecheckIntro")}\n\n${preErrors.slice(0, 80).join("\n")}${preErrors.length > 80 ? `\n… (+${preErrors.length - 80})` : ""}`
+        };
+      }
+
+      const schedule = new Map();
+      for (const row of excel1.rows) {
+        const so = normalize(row[COL.excel1.so]);
+        if (!so) continue;
+        const cuttingRaw = row[COL.excel1.cutting] ?? "";
+        const cuttingDisplay = formatCellDate(cuttingRaw);
+        const sortKey = cuttingSortKey(cuttingRaw);
+        const prev = schedule.get(so);
+        if (!prev || sortKey < prev.sortKey) {
+          schedule.set(so, { cutting: cuttingDisplay, sortKey, cuttingRaw });
+        }
+      }
+
+      const mothersInBom = new Set();
+      const childrenByMother = new Map();
+      const stockMax = new Map();
+      const motherUnitH = new Map();
+      const childUnitM = new Map();
+      const childUnitConflicts = [];
+
+      excel3.rows.forEach((row, idx) => {
+        const mother = normalize(row[COL.excel3.mother]);
+        const child = normalize(row[COL.excel3.child]);
+        if (!mother) return;
+        mothersInBom.add(mother);
+        const unitH = normalize(row[COL.excel3.unitH]).toUpperCase();
+        if (!motherUnitH.has(mother) && unitH) motherUnitH.set(mother, unitH);
+        if (!child) return;
+        if (!childrenByMother.has(mother)) childrenByMother.set(mother, new Set());
+        childrenByMother.get(mother).add(child);
+        const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
+        const pairKey = `${mother}\u0000${child}`;
+        if (!childUnitM.has(pairKey)) childUnitM.set(pairKey, unitM);
+        else if (childUnitM.get(pairKey) !== unitM) {
+          childUnitConflicts.push(`Excel3 row ${idx + 2}: mother ${mother} child ${child} has conflicting 3.M (${childUnitM.get(pairKey)} vs ${unitM})`);
+        }
+        const k = parseNumber(row[COL.excel3.stock]);
+        const prev = stockMax.has(child) ? stockMax.get(child) : -Infinity;
+        if (k > prev) stockMax.set(child, k);
+      });
+
+      if (childUnitConflicts.length) {
+        return {
+          ok: false,
+          errorTitle: t("errorPrecheckTitle"),
+          errorBody: `${t("errorPrecheckIntro")}\n\n${childUnitConflicts.slice(0, 80).join("\n")}`
+        };
+      }
+
+      const demand = new Map();
+      const motherUnitR = new Map();
+      for (const row of excel2.rows) {
+        const so = normalize(row[COL.excel2.so]);
+        const mother = normalize(row[COL.excel2.mother]);
+        if (!so || !mother) continue;
+        if (!mothersInBom.has(mother)) continue;
+        const key = `${so}\u0000${mother}`;
+        demand.set(key, (demand.get(key) || 0) + parseNumber(row[COL.excel2.qty]));
+        const unitR = normalize(row[COL.excel2.unitR]).toUpperCase();
+        if (!motherUnitR.has(mother) && unitR) motherUnitR.set(mother, unitR);
+      }
+
+      const missingRules = [];
+      const expanded = [];
+      for (const [key, qty] of demand.entries()) {
+        const [so, mother] = key.split("\u0000");
+        const sched = schedule.get(so);
+        const cutting = sched ? sched.cutting : "";
+        const sortCutting = sched ? sched.sortKey : "\uffff";
+        const motherUnit = motherUnitR.get(mother) || "";
+        const children = [...(childrenByMother.get(mother) || [])].sort();
+        for (const child of children) {
+          const childUnit = childUnitM.get(`${mother}\u0000${child}`) || "";
+          const conv = conversionRatio(motherUnit, childUnit, conversionRules);
+          if (!conv.ok) {
+            missingRules.push(`Mother ${mother} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`);
+            continue;
+          }
+          expanded.push({
+            cutting,
+            sortCutting,
+            so,
+            mother,
+            motherUnit,
+            child,
+            childUnit,
+            need: qty * conv.ratio
+          });
+        }
+      }
+
+      if (missingRules.length) {
+        const unique = [...new Set(missingRules)];
+        return {
+          ok: false,
+          errorTitle: t("errorConvTitle"),
+          errorBody: `${t("errorConvIntro")}\n\n${unique.slice(0, 80).join("\n")}${unique.length > 80 ? `\n… (+${unique.length - 80})` : ""}`
+        };
+      }
+
+      expanded.sort((a, b) => {
+        if (a.sortCutting !== b.sortCutting) return a.sortCutting < b.sortCutting ? -1 : 1;
+        if (a.so !== b.so) return a.so < b.so ? -1 : 1;
+        if (a.mother !== b.mother) return a.mother < b.mother ? -1 : 1;
+        if (a.child !== b.child) return a.child < b.child ? -1 : 1;
+        return 0;
+      });
+
+      const remaining = new Map();
+      for (const [child, maxK] of stockMax.entries()) {
+        remaining.set(child, maxK === -Infinity ? 0 : maxK);
+      }
+
+      const outRows = [];
+      let shortage = 0;
+      for (const item of expanded) {
+        const rem = remaining.has(item.child) ? remaining.get(item.child) : 0;
+        const provide = Math.min(item.need, rem);
+        const nextRem = rem - provide;
+        remaining.set(item.child, nextRem);
+        if (provide < item.need - 1e-9) shortage += 1;
+        outRows.push([
+          item.cutting,
+          item.so,
+          item.mother,
+          item.motherUnit,
+          item.child,
+          item.childUnit,
+          formatQty(item.need),
+          formatQty(provide),
+          formatQty(nextRem),
+          provide > 0 ? "Y" : ""
+        ]);
+      }
+
+      const headers = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
+      return {
+        ok: true,
+        headers,
+        rows: outRows,
+        stats: {
+          demandKeys: demand.size,
+          mothers: childrenByMother.size,
+          shortage
+        }
+      };
+    }
+
+    function parseFilterList(text) {
+      return new Set(
+        normalize(text)
+          .split(/[,;\s]+/)
+          .map(part => part.trim())
+          .filter(Boolean)
+      );
+    }
+
+    function cuttingDateOnly(value) {
+      const text = normalize(value);
+      const m = text.match(/^(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : text.slice(0, 10);
+    }
+
+    function getFilteredRows() {
+      let rows = state.allResultRows.slice();
+      const soFilter = parseFilterList(elements.filterSo.value);
+      const motherFilter = parseFilterList(elements.filterMother.value);
+      const from = elements.filterCuttingFrom.value;
+      const to = elements.filterCuttingTo.value;
+
+      if (soFilter.size) {
+        const tokens = [...soFilter];
+        rows = rows.filter(row => {
+          const so = normalize(row[OUT.so]);
+          return tokens.some(token => so === token || so.toLowerCase().startsWith(token.toLowerCase()));
+        });
+      }
+      if (motherFilter.size) {
+        const tokens = [...motherFilter];
+        rows = rows.filter(row => {
+          const mother = normalize(row[OUT.mother]);
+          return tokens.some(token => mother === token || mother.toLowerCase().startsWith(token.toLowerCase()));
+        });
+      }
+      if (from) {
+        rows = rows.filter(row => cuttingDateOnly(row[OUT.cutting]) >= from);
+      }
+      if (to) {
+        rows = rows.filter(row => cuttingDateOnly(row[OUT.cutting]) <= to);
+      }
+      if (elements.hideRowZero.checked) {
+        rows = rows.filter(row => parseNumber(row[OUT.demand]) !== 0);
+      }
+      if (elements.hideSoAllZero.checked) {
+        const demandBySo = new Map();
+        for (const row of rows) {
+          const so = normalize(row[OUT.so]);
+          demandBySo.set(so, (demandBySo.get(so) || 0) + Math.abs(parseNumber(row[OUT.demand])));
+        }
+        rows = rows.filter(row => (demandBySo.get(normalize(row[OUT.so])) || 0) > 0);
+      }
+      return rows;
+    }
+
+    function applyViewFilters() {
+      if (!state.allResultRows.length) return;
+      state.resultRows = getFilteredRows();
+      renderResult(state.resultHeaders, state.resultRows);
+      elements.statRows.textContent = String(state.resultRows.length);
+      elements.exportCsv.disabled = state.resultRows.length === 0;
+      elements.exportXlsx.disabled = state.resultRows.length === 0;
+      elements.copyTable.disabled = state.resultRows.length === 0;
+      setMessage(elements.resultMessage, t("built", {
+        rows: state.allResultRows.length,
+        shown: state.resultRows.length,
+        shortage: state.stats.shortage
+      }), "ok");
+    }
+
+    async function buildResult() {
+      if (!state.left.headers.length || !state.right.headers.length || !state.third.headers.length) {
+        setMessage(elements.resultMessage, t("needBoth"), "error");
+        setStep(1);
+        return;
+      }
+
+      showProgress(t("processing"), t("expanding"), 20);
+      await waitFrame();
+
+      updateProgress(t("allocating"), 60);
+      await waitFrame();
+      const result = runAllocationEngine(state.left, state.right, state.third, state.conversionRules);
+      if (!result.ok) {
+        elements.progressOverlay.classList.remove("show");
+        showErrorModal(result.errorTitle, result.errorBody);
+        return;
+      }
+
+      updateProgress(t("rendering"), 85);
+      await waitFrame();
+
+      state.resultHeaders = result.headers;
+      state.allResultRows = result.rows;
+      state.stats = result.stats;
+      state.resultRows = getFilteredRows();
+      renderResult(state.resultHeaders, state.resultRows);
+      elements.statRows.textContent = String(state.resultRows.length);
+      elements.statDemand.textContent = String(result.stats.demandKeys);
+      elements.statMothers.textContent = String(result.stats.mothers);
+      elements.statShortage.textContent = String(result.stats.shortage);
+      elements.exportCsv.disabled = state.resultRows.length === 0;
+      elements.exportXlsx.disabled = state.resultRows.length === 0;
+      elements.copyTable.disabled = state.resultRows.length === 0;
+      setMessage(elements.resultMessage, t("built", {
+        rows: result.rows.length,
+        shown: state.resultRows.length,
+        shortage: result.stats.shortage
+      }), "ok");
+      setStep(3);
+      await finishProgress(t("ready"));
+    }
+
+    function renderResult(headers, rows) {
+      elements.resultHead.innerHTML = headers.map(h => `<th>${escapeHtml(h)}</th>`).join("");
+      elements.resultBody.innerHTML = "";
+      const preview = rows.slice(0, 300);
+      let prevSo = null;
+      let prevMother = null;
+      let soTone = 0;
+      const soToneMap = new Map();
+      for (const row of preview) {
+        const so = normalize(row[OUT.so]);
+        const mother = normalize(row[OUT.mother]);
+        if (!soToneMap.has(so)) {
+          soToneMap.set(so, soTone % 2);
+          soTone += 1;
+        }
+        const tr = document.createElement("tr");
+        tr.classList.add(soToneMap.get(so) === 0 ? "so-even" : "so-odd");
+        if (prevSo !== null && (so !== prevSo || mother !== prevMother)) {
+          tr.classList.add("group-break");
+        }
+        for (const cell of row) {
+          const td = document.createElement("td");
+          td.textContent = cell;
+          tr.appendChild(td);
+        }
+        elements.resultBody.appendChild(tr);
+        prevSo = so;
+        prevMother = mother;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function csvEscape(value) {
+      let text = String(value ?? "");
+      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function resultToCsv() {
+      return [state.resultHeaders, ...state.resultRows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+    }
+
+    function downloadCsv() {
+      if (!state.resultRows.length) return;
+      const blob = new Blob([`\uFEFF${resultToCsv()}`], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "allocation-result.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      elements.statusText.textContent = t("exported");
+    }
+
+    function xmlEscape(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function crc32(bytes) {
+      let crc = 0xffffffff;
+      for (let i = 0; i < bytes.length; i++) {
+        crc ^= bytes[i];
+        for (let j = 0; j < 8; j++) {
+          crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+        }
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function u16(value) {
+      const out = new Uint8Array(2);
+      new DataView(out.buffer).setUint16(0, value, true);
+      return out;
+    }
+
+    function u32(value) {
+      const out = new Uint8Array(4);
+      new DataView(out.buffer).setUint32(0, value, true);
+      return out;
+    }
+
+    function concatBytes(chunks) {
+      const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return out;
+    }
+
+    function buildStoreZip(files) {
+      const encoder = new TextEncoder();
+      const localParts = [];
+      const centralParts = [];
+      let offset = 0;
+      for (const file of files) {
+        const nameBytes = encoder.encode(file.name);
+        const data = file.data;
+        const crc = crc32(data);
+        const localHeader = concatBytes([
+          u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(data.length), u32(data.length),
+          u16(nameBytes.length), u16(0), nameBytes
+        ]);
+        localParts.push(localHeader, data);
+        const centralHeader = concatBytes([
+          u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(data.length), u32(data.length),
+          u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes
+        ]);
+        centralParts.push(centralHeader);
+        offset += localHeader.length + data.length;
+      }
+      const central = concatBytes(centralParts);
+      const end = concatBytes([
+        u32(0x06054b50), u16(0), u16(0),
+        u16(files.length), u16(files.length),
+        u32(central.length), u32(offset), u16(0)
+      ]);
+      return concatBytes([...localParts, central, end]);
+    }
+
+    function colLetter(index) {
+      let n = index + 1;
+      let text = "";
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        text = String.fromCharCode(65 + rem) + text;
+        n = Math.floor((n - 1) / 26);
+      }
+      return text;
+    }
+
+    function buildSheetXml(headers, rows) {
+      const soToneMap = new Map();
+      let soTone = 0;
+      let prevSo = null;
+      let prevMother = null;
+      const rowXml = [];
+      // header style 0
+      {
+        const cells = headers.map((value, colIndex) => {
+          const ref = `${colLetter(colIndex)}1`;
+          return `<c r="${ref}" s="0" t="inlineStr"><is><t>${xmlEscape(value)}</t></is></c>`;
+        }).join("");
+        rowXml.push(`<row r="1">${cells}</row>`);
+      }
+      rows.forEach((row, idx) => {
+        const so = normalize(row[OUT.so]);
+        const mother = normalize(row[OUT.mother]);
+        if (!soToneMap.has(so)) {
+          soToneMap.set(so, soTone % 2);
+          soTone += 1;
+        }
+        // styles: 1=even, 2=odd, 3=even+break, 4=odd+break
+        let style = soToneMap.get(so) === 0 ? 1 : 2;
+        if (prevSo !== null && (so !== prevSo || mother !== prevMother)) {
+          style = soToneMap.get(so) === 0 ? 3 : 4;
+        }
+        const rowIndex = idx + 2;
+        const cells = row.map((value, colIndex) => {
+          const ref = `${colLetter(colIndex)}${rowIndex}`;
+          const text = String(value ?? "");
+          if (text !== "" && Number.isFinite(Number(text)) && !/^0\d+/.test(text) && !/[eE]/.test(text) && /^-?\d+(\.\d+)?$/.test(text)) {
+            return `<c r="${ref}" s="${style}"><v>${text}</v></c>`;
+          }
+          return `<c r="${ref}" s="${style}" t="inlineStr"><is><t>${xmlEscape(text)}</t></is></c>`;
+        }).join("");
+        rowXml.push(`<row r="${rowIndex}">${cells}</row>`);
+        prevSo = so;
+        prevMother = mother;
+      });
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+        `<sheetData>${rowXml.join("")}</sheetData></worksheet>`;
+    }
+
+    function buildStylesXml() {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+        `<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>` +
+        `<fills count="4">` +
+        `<fill><patternFill patternType="none"/></fill>` +
+        `<fill><patternFill patternType="gray125"/></fill>` +
+        `<fill><patternFill patternType="solid"><fgColor rgb="FFF3F5F7"/></patternFill></fill>` +
+        `<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill>` +
+        `</fills>` +
+        `<borders count="2">` +
+        `<border><left/><right/><top/><bottom/><diagonal/></border>` +
+        `<border><left/><right/><top style="medium"><color rgb="FF94A3B8"/></top><bottom/><diagonal/></border>` +
+        `</borders>` +
+        `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
+        `<cellXfs count="5">` +
+        `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
+        `<xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/>` +
+        `<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>` +
+        `<xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>` +
+        `<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>` +
+        `</cellXfs>` +
+        `</styleSheet>`;
+    }
+
+    function buildXlsxBytes(headers, rows) {
+      const encoder = new TextEncoder();
+      const files = [
+        {
+          name: "[Content_Types].xml",
+          data: encoder.encode(
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+            `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+            `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+            `<Default Extension="xml" ContentType="application/xml"/>` +
+            `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
+            `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+            `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+            `</Types>`
+          )
+        },
+        {
+          name: "_rels/.rels",
+          data: encoder.encode(
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+            `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+            `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>` +
+            `</Relationships>`
+          )
+        },
+        {
+          name: "xl/workbook.xml",
+          data: encoder.encode(
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+            `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
+            `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+            `<sheets><sheet name="Allocation" sheetId="1" r:id="rId1"/></sheets></workbook>`
+          )
+        },
+        {
+          name: "xl/_rels/workbook.xml.rels",
+          data: encoder.encode(
+            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+            `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+            `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
+            `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+            `</Relationships>`
+          )
+        },
+        {
+          name: "xl/styles.xml",
+          data: encoder.encode(buildStylesXml())
+        },
+        {
+          name: "xl/worksheets/sheet1.xml",
+          data: encoder.encode(buildSheetXml(headers, rows))
+        }
+      ];
+      return buildStoreZip(files);
+    }
+
+    function downloadXlsx() {
+      if (!state.resultRows.length) return;
+      try {
+        const bytes = buildXlsxBytes(state.resultHeaders, state.resultRows);
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "allocation-result.xlsx";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        elements.statusText.textContent = t("exportedExcel");
+      } catch (error) {
+        setMessage(elements.resultMessage, t("excelExportFailed", { message: error.message }), "error");
+      }
+    }
+
+    async function copyTable() {
+      if (!state.resultRows.length) return;
+      const text = [state.resultHeaders, ...state.resultRows].map(row => row.join("\t")).join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        elements.statusText.textContent = t("copied");
+      } catch {
+        elements.statusText.textContent = t("copyUnavailable");
+      }
+    }
+
+    function xmlText(node) {
+      return node ? node.textContent || "" : "";
+    }
+
+    function colIndexFromCell(cellRef) {
+      const letters = String(cellRef || "").replace(/[0-9]/g, "");
+      let number = 0;
+      for (const letter of letters) number = number * 26 + letter.charCodeAt(0) - 64;
+      return Math.max(number - 1, 0);
+    }
+
+    async function parseXlsx(arrayBuffer) {
+      const entries = await unzipEntries(arrayBuffer);
+      const workbookXml = textDecoder(entries.get("xl/workbook.xml"));
+      const workbookDoc = new DOMParser().parseFromString(workbookXml, "application/xml");
+      const firstSheet = workbookDoc.querySelector("sheet");
+      if (!firstSheet) throw new Error("No worksheet found");
+      const relId = firstSheet.getAttribute("r:id");
+      const relsXml = textDecoder(entries.get("xl/_rels/workbook.xml.rels"));
+      const relsDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+      const rel = Array.from(relsDoc.querySelectorAll("Relationship")).find(item => item.getAttribute("Id") === relId);
+      if (!rel) throw new Error("Worksheet relationship not found");
+      const sheetPath = normalizeZipPath(`xl/${rel.getAttribute("Target")}`);
+      const sheetXml = textDecoder(entries.get(sheetPath));
+      const sharedStrings = entries.has("xl/sharedStrings.xml")
+        ? parseSharedStrings(textDecoder(entries.get("xl/sharedStrings.xml")))
+        : [];
+      return parseSheet(sheetXml, sharedStrings);
+    }
+
+    function parseSharedStrings(xml) {
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      return Array.from(doc.querySelectorAll("si")).map(item =>
+        Array.from(item.querySelectorAll("t")).map(xmlText).join("")
+      );
+    }
+
+    function parseSheet(xml, sharedStrings) {
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      const rows = Array.from(doc.querySelectorAll("sheetData row")).map(rowNode => {
+        const cells = [];
+        Array.from(rowNode.querySelectorAll("c")).forEach(cell => {
+          const index = colIndexFromCell(cell.getAttribute("r"));
+          const type = cell.getAttribute("t");
+          let value = xmlText(cell.querySelector("v"));
+          if (type === "s") value = sharedStrings[Number(value)] || "";
+          if (type === "inlineStr") value = Array.from(cell.querySelectorAll("t")).map(xmlText).join("");
+          cells[index] = value;
+        });
+        return cells.map(cell => cell ?? "");
+      }).filter(row => row.some(cell => String(cell).trim()));
+      if (!rows.length) return { headers: [], rows: [] };
+      const width = Math.max(...rows.map(row => row.length));
+      const headers = normalizeRow(rows[0], width).map((header, index) => String(header || `Column ${index + 1}`));
+      const dataRows = rows.slice(1).map(row => normalizeRow(row, width).slice(0, headers.length));
+      return { headers, rows: dataRows };
+    }
+
+    function normalizeRow(row, width) {
+      const next = [...row];
+      while (next.length < width) next.push("");
+      return next;
+    }
+
+    function textDecoder(bytes) {
+      if (!bytes) throw new Error("Workbook part missing");
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+
+    function normalizeZipPath(path) {
+      const parts = [];
+      path.split("/").forEach(part => {
+        if (!part || part === ".") return;
+        if (part === "..") parts.pop();
+        else parts.push(part);
+      });
+      return parts.join("/");
+    }
+
+    async function unzipEntries(arrayBuffer) {
+      const bytes = new Uint8Array(arrayBuffer);
+      const entries = new Map();
+      const view = new DataView(arrayBuffer);
+      for (let offset = 0; offset < bytes.length - 4;) {
+        if (view.getUint32(offset, true) !== 0x04034b50) {
+          offset++;
+          continue;
+        }
+        const method = view.getUint16(offset + 8, true);
+        const compressedSize = view.getUint32(offset + 18, true);
+        const fileNameLength = view.getUint16(offset + 26, true);
+        const extraLength = view.getUint16(offset + 28, true);
+        const nameStart = offset + 30;
+        const dataStart = nameStart + fileNameLength + extraLength;
+        const name = new TextDecoder("utf-8").decode(bytes.slice(nameStart, nameStart + fileNameLength));
+        const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+        if (!name.endsWith("/")) entries.set(name, await inflateZipEntry(compressed, method));
+        offset = dataStart + compressedSize;
+      }
+      return entries;
+    }
+
+    async function inflateZipEntry(compressed, method) {
+      if (method === 0) return compressed;
+      if (method !== 8) throw new Error("Unsupported Excel compression");
+      if (!("DecompressionStream" in window)) throw new Error(t("workbookUnsupported"));
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      const buffer = await new Response(stream).arrayBuffer();
+      return new Uint8Array(buffer);
+    }
+
+    document.getElementById("loadSample").addEventListener("click", async () => {
+      showProgress(t("loading"), t("parsingFile"), 30);
+      await waitFrame();
+      elements.leftData.value = sampleLeft;
+      elements.rightData.value = sampleRight;
+      elements.thirdData.value = sampleThird;
+      state.left = parseTextTable(sampleLeft);
+      state.right = parseTextTable(sampleRight);
+      state.third = parseTextTable(sampleThird);
+      markResultDirty();
+      refreshMappingTable();
+      setMessage(elements.leftMessage, t("loaded", { rows: state.left.rows.length, cols: state.left.headers.length }), "ok");
+      setMessage(elements.rightMessage, t("loaded", { rows: state.right.rows.length, cols: state.right.headers.length }), "ok");
+      setMessage(elements.thirdMessage, t("loaded", { rows: state.third.rows.length, cols: state.third.headers.length }), "ok");
+      await finishProgress(t("ready"));
+    });
+
+    document.querySelectorAll("[data-clear]").forEach(button => {
+      button.addEventListener("click", () => {
+        const side = button.dataset.clear;
+        document.getElementById(`${side}Data`).value = "";
+        document.getElementById(`${side}File`).value = "";
+        setSideData(side, { headers: [], rows: [] });
+        setMessage(elements[`${side}Message`], "", "");
+      });
+    });
+
+    elements.languageSelect.addEventListener("change", () => {
+      state.lang = elements.languageSelect.value;
+      applyLanguage();
+    });
+    elements.leftFile.addEventListener("change", () => loadFile("left", elements.leftFile.files[0]));
+    elements.rightFile.addEventListener("change", () => loadFile("right", elements.rightFile.files[0]));
+    elements.thirdFile.addEventListener("change", () => loadFile("third", elements.thirdFile.files[0]));
+    elements.leftData.addEventListener("input", () => refreshFromText("left"));
+    elements.rightData.addEventListener("input", () => refreshFromText("right"));
+    elements.thirdData.addEventListener("input", () => refreshFromText("third"));
+    document.querySelectorAll("[data-scroll-to]").forEach(node => {
+      node.addEventListener("click", () => scrollToSection(node.dataset.scrollTo));
+    });
+    document.getElementById("runAllocate").addEventListener("click", buildResult);
+    elements.exportCsv.addEventListener("click", downloadCsv);
+    elements.exportXlsx.addEventListener("click", downloadXlsx);
+    elements.copyTable.addEventListener("click", copyTable);
+    elements.errorModalClose.addEventListener("click", hideErrorModal);
+    bindPrefixSuggest(elements.filterSo, elements.soSuggest, "so");
+    bindPrefixSuggest(elements.filterMother, elements.motherSuggest, "mother");
+    document.getElementById("addConvRow").addEventListener("click", () => {
+      const units = collectUnitOptions();
+      state.conversionRules.push({
+        motherUnit: units[0] || "M",
+        childUnit: units[1] || units[0] || "YD",
+        ratio: 1
+      });
+      saveConversionRules(state.conversionRules);
+      renderConversionTable();
+      markResultDirty();
+    });
+    document.getElementById("resetConv").addEventListener("click", () => {
+      state.conversionRules = cloneDefaultConversionRules();
+      saveConversionRules(state.conversionRules);
+      renderConversionTable();
+      markResultDirty();
+    });
+    [
+      elements.filterCuttingFrom,
+      elements.filterCuttingTo,
+      elements.hideSoAllZero,
+      elements.hideRowZero
+    ].forEach(el => {
+      el.addEventListener("input", applyViewFilters);
+      el.addEventListener("change", applyViewFilters);
+    });
+    // SO / mother inputs already call applyViewFilters via bindPrefixSuggest
+
+    elements.leftData.value = sampleLeft;
+    elements.rightData.value = sampleRight;
+    elements.thirdData.value = sampleThird;
+    state.left = parseTextTable(sampleLeft);
+    state.right = parseTextTable(sampleRight);
+    state.third = parseTextTable(sampleThird);
+    applyLanguage();
+    refreshMappingTable();
+    clearResult();
+    setStep(1, false);
+    setMessage(elements.leftMessage, t("loaded", { rows: state.left.rows.length, cols: state.left.headers.length }), "ok");
+    setMessage(elements.rightMessage, t("loaded", { rows: state.right.rows.length, cols: state.right.headers.length }), "ok");
+    setMessage(elements.thirdMessage, t("loaded", { rows: state.third.rows.length, cols: state.third.headers.length }), "ok");
+    elements.statusText.textContent = `${t("ready")} · v${APP_VERSION}`;
+  </script>
+</body>
+</html>
