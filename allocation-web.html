@@ -443,7 +443,8 @@
     }
 
     .conv-box select,
-    .conv-box input[type="number"] {
+    .conv-box input[type="number"],
+    .conv-box input[type="text"] {
       width: 100%;
       min-height: 32px;
     }
@@ -636,6 +637,26 @@
           </div>
         </div>
 
+        <div class="conv-box">
+          <strong data-i18n="sizeConvTitle">SHT size-suffix conversion</strong>
+          <div class="message" data-i18n="sizeConvHelp">When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.J child description). SHT→SHT is always 1:1. Add / edit / remove rows as needed. Seeds are editable defaults, not hardcoded in the engine.</div>
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="sizeSuffix">Size suffix (from 3.J)</th>
+                <th data-i18n="sizeChildUnit">Child unit (3.M)</th>
+                <th data-i18n="convRatio">Ratio</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sizeConvBody"></tbody>
+          </table>
+          <div class="actions">
+            <button type="button" class="secondary" id="addSizeConvRow" data-i18n="sizeConvAdd">Add size rule</button>
+            <button type="button" class="secondary" id="resetSizeConv" data-i18n="sizeConvReset">Reset size defaults</button>
+          </div>
+        </div>
+
         <div class="actions">
           <button type="button" class="secondary" data-scroll-to="step1" data-i18n="back">Back to import</button>
           <button type="button" id="runAllocate" data-i18n="runAllocate">Run allocation</button>
@@ -721,14 +742,17 @@
   </div>
 
   <script>
-    const APP_VERSION = "2.1.1";
+    const APP_VERSION = "2.2.0";
     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
+    const SIZE_CONV_STORAGE_KEY = "rawmat.allocation.sizeConversionRules.v22";
+    const SIZE_SUFFIX_CUSTOM = "__CUSTOM__";
+    const SIZE_SUFFIX_RE = /(\d+)\s*[x×*]\s*(\d+)\s*cm\s*$/i;
 
     // Fixed 0-based column indexes per locked business rules
     const COL = {
       excel1: { so: 0, cutting: 1 },
       excel2: { so: 1, mother: 5, qty: 16, unitR: 17 },
-      excel3: { mother: 4, child: 8, stock: 10, unitH: 7, unitM: 12 }
+      excel3: { mother: 4, child: 8, descJ: 9, stock: 10, unitH: 7, unitM: 12 }
     };
 
     // Output indexes used by filters / Y flag
@@ -748,6 +772,19 @@
     const DEFAULT_CONVERSION_RULES = [
       { motherUnit: "M", childUnit: "YD", ratio: 1.0936 },
       { motherUnit: "YD", childUnit: "M", ratio: 0.9144 }
+    ];
+
+    // Seed only (editable / Reset). Engine never hardcodes these ratios.
+    const DEFAULT_SIZE_CONVERSION_RULES = [
+      { suffix: "110x200cm", childUnit: "M", ratio: 2 },
+      { suffix: "110x200cm", childUnit: "YD", ratio: 2.187227 },
+      { suffix: "110x200cm", childUnit: "SHT", ratio: 1 },
+      { suffix: "220x110cm", childUnit: "M", ratio: 2 },
+      { suffix: "220x110cm", childUnit: "YD", ratio: 2.187227 },
+      { suffix: "220x110cm", childUnit: "SHT", ratio: 1 },
+      { suffix: "200x110cm", childUnit: "M", ratio: 2.2 },
+      { suffix: "200x110cm", childUnit: "YD", ratio: 2.405949 },
+      { suffix: "200x110cm", childUnit: "SHT", ratio: 1 }
     ];
 
     const OUTPUT_HEADERS_EN = [
@@ -813,13 +850,13 @@
     ];
 
     const sample3Headers = padHeaders([
-      "A", "B", "C", "D", "Material", "F", "G", "OUn", "Article(Com.)", "J", "Unrestricted", "K2", "BUn"
+      "A", "B", "C", "D", "Material", "F", "G", "OUn", "Article(Com.)", "Mtl.Full Desc. (Com.)(EN)", "Unrestricted", "K2", "BUn"
     ], 13);
     const sample3Rows = [
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "", "7", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "", "20", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "", "12", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "", "4", "", "YD"], 13)
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "CHILD DEMO 110x200cm", "7", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "CHILD DEMO 110x200cm", "20", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "CHILD DEMO 110x200cm", "12", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "CHILD DEMO 110x200cm", "4", "", "YD"], 13)
     ];
 
     const sampleLeft = sheetToTsv(sample1Headers, sample1Rows);
@@ -851,7 +888,7 @@
         mapColumn: "Column",
         mapMeaning: "Meaning",
         mapDetected: "Detected header",
-        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; else use conversion table (default M↔YD). Missing rule blocks run.",
+        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; if mother is SHT use size-suffix table (3.J); else unit whitelist (default M↔YD). Missing rule blocks run.",
         back: "Back",
         runAllocate: "Run allocation",
         resultTitle: "Filter, preview and export",
@@ -892,6 +929,7 @@
         mapQty: "Open Quantity (demand)",
         mapUnitR: "Mother unit (2.R)",
         mapMother3: "Mother material",
+        mapDescJ: "Child full description (size suffix)",
         mapUnitH: "Mother unit check (3.H OUn)",
         mapChild: "Child Article(Com.)",
         mapUnitM: "Child unit (3.M BUn)",
@@ -904,6 +942,14 @@
         convAdd: "Add conversion",
         convReset: "Reset defaults",
         convRemove: "Remove",
+        sizeConvTitle: "SHT size-suffix conversion",
+        sizeConvHelp: "When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.J). SHT→SHT is always 1:1. Add, edit ratio, or delete rows yourself. Seeds are editable defaults, not hardcoded in the engine.",
+        sizeSuffix: "Size suffix (from 3.J)",
+        sizeChildUnit: "Child unit (3.M)",
+        sizeConvAdd: "Add size rule",
+        sizeConvReset: "Reset size defaults",
+        sizeSuffixCustom: "Custom…",
+        sizeSuffixPlaceholder: "e.g. 110x200cm",
         filterSo: "Filter SO",
         filterCutting: "Cutting from / to",
         filterMother: "Filter mother",
@@ -939,7 +985,7 @@
         mapColumn: "欄位",
         mapMeaning: "語意",
         mapDetected: "偵測到的表頭",
-        mappingHelp: "事前檢查：同母料 Excel2.R 必須等於 Excel3.H。換算：2.R=3.M 則 1:1；否則查換算表（預設 M↔YD）。缺規則則停止。",
+        mappingHelp: "事前檢查：同母料 Excel2.R 必須等於 Excel3.H。換算：2.R=3.M 則 1:1；母單位為 SHT 則查末碼表（3.J）；否則查單位白名單（預設 M↔YD）。缺規則則停止。",
         back: "返回",
         runAllocate: "執行配發",
         resultTitle: "篩選、預覽與匯出",
@@ -980,6 +1026,7 @@
         mapQty: "Open Quantity（需求）",
         mapUnitR: "母單位（2.R）",
         mapMother3: "母材料",
+        mapDescJ: "子料全名（末碼尺寸）",
         mapUnitH: "母單位檢查（3.H OUn）",
         mapChild: "子材料 Article(Com.)",
         mapUnitM: "子單位（3.M BUn）",
@@ -992,6 +1039,14 @@
         convAdd: "新增換算",
         convReset: "還原預設",
         convRemove: "刪除",
+        sizeConvTitle: "SHT 末碼換算",
+        sizeConvHelp: "母單位（2.R）為 SHT 且子單位不同時，Demand = Q × 本表倍率（末碼取自 Excel3.J 子料描述）。SHT→SHT 一律 1:1。請自行新增／改倍率／刪除不需要的列。預設種子可改，引擎不寫死倍率。",
+        sizeSuffix: "末碼（來自 3.J）",
+        sizeChildUnit: "子單位（3.M）",
+        sizeConvAdd: "新增末碼規則",
+        sizeConvReset: "還原末碼預設",
+        sizeSuffixCustom: "自訂…",
+        sizeSuffixPlaceholder: "例如 110x200cm",
         filterSo: "篩選 SO",
         filterCutting: "Cutting 起迄",
         filterMother: "篩選母材料",
@@ -1007,6 +1062,33 @@
 
     function cloneDefaultConversionRules() {
       return DEFAULT_CONVERSION_RULES.map(rule => ({ ...rule }));
+    }
+
+    function cloneDefaultSizeConversionRules() {
+      return DEFAULT_SIZE_CONVERSION_RULES.map(rule => ({ ...rule }));
+    }
+
+    function normalizeSizeSuffix(value) {
+      const text = String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+      const match = text.match(/^(\d+)[x×*](\d+)cm$/i) || String(value || "").match(SIZE_SUFFIX_RE);
+      if (match && match[1] && match[2]) {
+        return `${match[1]}x${match[2]}cm`.toLowerCase();
+      }
+      if (!text) return "";
+      return text.replace(/[×*]/g, "x");
+    }
+
+    function extractSizeSuffix(text) {
+      const raw = String(text || "");
+      const match = raw.replace(/\s+/g, " ").trim().match(SIZE_SUFFIX_RE);
+      if (!match) return "";
+      return `${match[1]}x${match[2]}cm`.toLowerCase();
+    }
+
+    function normalizeChildUnit(unit) {
+      const u = normalize(unit).toUpperCase();
+      if (u === "Y") return "YD";
+      return u;
     }
 
     function loadConversionRules() {
@@ -1029,6 +1111,26 @@
       localStorage.setItem(CONV_STORAGE_KEY, JSON.stringify(rules));
     }
 
+    function loadSizeConversionRules() {
+      try {
+        const raw = localStorage.getItem(SIZE_CONV_STORAGE_KEY);
+        if (!raw) return cloneDefaultSizeConversionRules();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return cloneDefaultSizeConversionRules();
+        return parsed.map(rule => ({
+          suffix: normalizeSizeSuffix(rule.suffix) || String(rule.suffix || "").trim().toLowerCase(),
+          childUnit: normalizeChildUnit(rule.childUnit),
+          ratio: Number(rule.ratio) || 0
+        })).filter(rule => rule.suffix && rule.childUnit && rule.ratio > 0);
+      } catch {
+        return cloneDefaultSizeConversionRules();
+      }
+    }
+
+    function saveSizeConversionRules(rules) {
+      localStorage.setItem(SIZE_CONV_STORAGE_KEY, JSON.stringify(rules));
+    }
+
     const state = {
       lang: "en",
       step: 1,
@@ -1039,6 +1141,7 @@
       resultRows: [],
       allResultRows: [],
       conversionRules: loadConversionRules(),
+      sizeConversionRules: loadSizeConversionRules(),
       stats: { demandKeys: 0, mothers: 0, shortage: 0 }
     };
 
@@ -1057,6 +1160,7 @@
       mappingBody: document.getElementById("mappingBody"),
       mappingMessage: document.getElementById("mappingMessage"),
       convBody: document.getElementById("convBody"),
+      sizeConvBody: document.getElementById("sizeConvBody"),
       resultMessage: document.getElementById("resultMessage"),
       resultHead: document.getElementById("resultHead"),
       resultBody: document.getElementById("resultBody"),
@@ -1105,7 +1209,6 @@
         state.resultHeaders = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
         applyViewFilters();
       }
-      renderConversionTable();
       document.title = t("appTitle");
     }
 
@@ -1392,6 +1495,7 @@
         ["Excel3", "E", t("mapMother3"), headerAt("third", COL.excel3.mother)],
         ["Excel3", "H", t("mapUnitH"), headerAt("third", COL.excel3.unitH)],
         ["Excel3", "I", t("mapChild"), headerAt("third", COL.excel3.child)],
+        ["Excel3", "J", t("mapDescJ"), headerAt("third", COL.excel3.descJ)],
         ["Excel3", "M", t("mapUnitM"), headerAt("third", COL.excel3.unitM)],
         ["Excel3", "K", t("mapStock"), headerAt("third", COL.excel3.stock)]
       ];
@@ -1399,6 +1503,7 @@
         `<tr><td>${source}</td><td>${col}</td><td>${meaning}</td><td>${detected}</td></tr>`
       ).join("");
       renderConversionTable();
+      renderSizeConversionTable();
     }
 
     function collectUnitOptions() {
@@ -1467,6 +1572,120 @@
       });
     }
 
+    function collectDetectedSizeSuffixes() {
+      const found = new Set();
+      for (const row of state.third.rows) {
+        const suffix = extractSizeSuffix(row[COL.excel3.descJ]);
+        if (suffix) found.add(suffix);
+      }
+      for (const rule of state.sizeConversionRules) {
+        const suffix = normalizeSizeSuffix(rule.suffix);
+        if (suffix) found.add(suffix);
+      }
+      return [...found].sort();
+    }
+
+    function collectSizeChildUnitOptions() {
+      const units = new Set(["M", "YD", "SHT"]);
+      for (const row of state.third.rows) {
+        const u = normalizeChildUnit(row[COL.excel3.unitM]);
+        if (u) units.add(u);
+      }
+      for (const rule of state.sizeConversionRules) {
+        const u = normalizeChildUnit(rule.childUnit);
+        if (u) units.add(u);
+      }
+      return [...units].sort();
+    }
+
+    function renderSizeConversionTable() {
+      if (!elements.sizeConvBody) return;
+      const suffixes = collectDetectedSizeSuffixes();
+      const unitOptions = collectSizeChildUnitOptions();
+      elements.sizeConvBody.innerHTML = "";
+      state.sizeConversionRules.forEach((rule, index) => {
+        const tr = document.createElement("tr");
+        const suffixCell = document.createElement("td");
+        const suffixWrap = document.createElement("div");
+        suffixWrap.style.display = "grid";
+        suffixWrap.style.gap = "4px";
+        const suffixSelect = document.createElement("select");
+        const currentSuffix = normalizeSizeSuffix(rule.suffix) || rule.suffix;
+        for (const suffix of suffixes) {
+          suffixSelect.appendChild(new Option(suffix, suffix, false, suffix === currentSuffix));
+        }
+        if (currentSuffix && !suffixes.includes(currentSuffix)) {
+          suffixSelect.appendChild(new Option(currentSuffix, currentSuffix, true, true));
+        }
+        suffixSelect.appendChild(new Option(t("sizeSuffixCustom"), SIZE_SUFFIX_CUSTOM, false, false));
+        const suffixInput = document.createElement("input");
+        suffixInput.type = "text";
+        suffixInput.placeholder = t("sizeSuffixPlaceholder");
+        suffixInput.value = currentSuffix;
+        suffixInput.hidden = true;
+        const unitSelect = document.createElement("select");
+        for (const unit of unitOptions) {
+          unitSelect.appendChild(new Option(unit, unit, false, unit === normalizeChildUnit(rule.childUnit)));
+        }
+        if (rule.childUnit && !unitOptions.includes(normalizeChildUnit(rule.childUnit))) {
+          unitSelect.appendChild(new Option(rule.childUnit, rule.childUnit, true, true));
+        }
+        const ratioInput = document.createElement("input");
+        ratioInput.type = "number";
+        ratioInput.step = "any";
+        ratioInput.min = "0";
+        ratioInput.value = String(rule.ratio);
+        const sync = () => {
+          let suffix = suffixSelect.value;
+          if (suffix === SIZE_SUFFIX_CUSTOM) {
+            suffixInput.hidden = false;
+            suffix = normalizeSizeSuffix(suffixInput.value) || String(suffixInput.value || "").trim().toLowerCase();
+          } else {
+            suffixInput.hidden = true;
+            suffix = normalizeSizeSuffix(suffix) || suffix;
+          }
+          state.sizeConversionRules[index] = {
+            suffix,
+            childUnit: normalizeChildUnit(unitSelect.value) || unitSelect.value,
+            ratio: Number(ratioInput.value) || 0
+          };
+          saveSizeConversionRules(state.sizeConversionRules);
+          markResultDirty();
+        };
+        suffixSelect.addEventListener("change", () => {
+          if (suffixSelect.value === SIZE_SUFFIX_CUSTOM) {
+            suffixInput.hidden = false;
+            suffixInput.focus();
+          } else {
+            suffixInput.hidden = true;
+            suffixInput.value = suffixSelect.value;
+          }
+          sync();
+        });
+        suffixInput.addEventListener("change", sync);
+        unitSelect.addEventListener("change", sync);
+        ratioInput.addEventListener("change", sync);
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "secondary";
+        removeBtn.textContent = t("convRemove");
+        removeBtn.addEventListener("click", () => {
+          state.sizeConversionRules.splice(index, 1);
+          saveSizeConversionRules(state.sizeConversionRules);
+          renderSizeConversionTable();
+          markResultDirty();
+        });
+        suffixWrap.appendChild(suffixSelect);
+        suffixWrap.appendChild(suffixInput);
+        suffixCell.appendChild(suffixWrap);
+        tr.appendChild(suffixCell);
+        tr.appendChild(document.createElement("td")).appendChild(unitSelect);
+        tr.appendChild(document.createElement("td")).appendChild(ratioInput);
+        tr.appendChild(document.createElement("td")).appendChild(removeBtn);
+        elements.sizeConvBody.appendChild(tr);
+      });
+    }
+
     function showErrorModal(title, body) {
       elements.errorModalTitle.textContent = title;
       elements.errorModalBody.textContent = body;
@@ -1477,12 +1696,27 @@
       elements.errorModal.classList.remove("show");
     }
 
-    function conversionRatio(motherUnit, childUnit, rules) {
+    function conversionRatio(motherUnit, childUnit, unitRules, sizeRules, sizeSuffix) {
       const m = normalize(motherUnit).toUpperCase();
-      const c = normalize(childUnit).toUpperCase();
+      const c = normalizeChildUnit(childUnit);
       if (!m || !c) return { ok: false, ratio: 0, reason: "blank-unit" };
       if (m === c) return { ok: true, ratio: 1 };
-      const hit = rules.find(rule => rule.motherUnit === m && rule.childUnit === c && rule.ratio > 0);
+      if (m === "SHT") {
+        const suffix = normalizeSizeSuffix(sizeSuffix);
+        if (!suffix) return { ok: false, ratio: 0, reason: "missing-suffix" };
+        const hit = (sizeRules || []).find(rule =>
+          normalizeSizeSuffix(rule.suffix) === suffix &&
+          normalizeChildUnit(rule.childUnit) === c &&
+          rule.ratio > 0
+        );
+        if (!hit) return { ok: false, ratio: 0, reason: "missing-size-rule" };
+        return { ok: true, ratio: hit.ratio };
+      }
+      const hit = (unitRules || []).find(rule =>
+        rule.motherUnit === m &&
+        normalizeChildUnit(rule.childUnit) === c &&
+        rule.ratio > 0
+      );
       if (!hit) return { ok: false, ratio: 0, reason: "missing" };
       return { ok: true, ratio: hit.ratio };
     }
@@ -1633,10 +1867,10 @@
     }
 
     /**
-     * Core allocation engine v2.1.
+     * Core allocation engine v2.2.
      * @returns {{ok: boolean, headers?: string[], rows?: string[][], stats?: object, errorTitle?: string, errorBody?: string}}
      */
-    function runAllocationEngine(excel1, excel2, excel3, conversionRules) {
+    function runAllocationEngine(excel1, excel2, excel3, conversionRules, sizeConversionRules) {
       const preErrors = precheckUnitRH(excel2, excel3);
       if (preErrors.length) {
         return {
@@ -1665,6 +1899,8 @@
       const motherUnitH = new Map();
       const childUnitM = new Map();
       const childUnitConflicts = [];
+      const childSuffix = new Map();
+      const suffixConflicts = [];
 
       excel3.rows.forEach((row, idx) => {
         const mother = normalize(row[COL.excel3.mother]);
@@ -1676,8 +1912,18 @@
         if (!child) return;
         if (!childrenByMother.has(mother)) childrenByMother.set(mother, new Set());
         childrenByMother.get(mother).add(child);
-        const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
         const pairKey = `${mother}\u0000${child}`;
+        const suffix = extractSizeSuffix(row[COL.excel3.descJ]);
+        if (suffix) {
+          if (childSuffix.has(pairKey) && childSuffix.get(pairKey) !== suffix) {
+            suffixConflicts.push(
+              `Excel3 row ${idx + 2}: mother ${mother} child ${child} has conflicting 3.J size suffix (${childSuffix.get(pairKey)} vs ${suffix})`
+            );
+          } else if (!childSuffix.has(pairKey)) {
+            childSuffix.set(pairKey, suffix);
+          }
+        }
+        const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
         if (!childUnitM.has(pairKey)) childUnitM.set(pairKey, unitM);
         else if (childUnitM.get(pairKey) !== unitM) {
           childUnitConflicts.push(`Excel3 row ${idx + 2}: mother ${mother} child ${child} has conflicting 3.M (${childUnitM.get(pairKey)} vs ${unitM})`);
@@ -1686,6 +1932,14 @@
         const prev = stockMax.has(child) ? stockMax.get(child) : -Infinity;
         if (k > prev) stockMax.set(child, k);
       });
+
+      if (suffixConflicts.length) {
+        return {
+          ok: false,
+          errorTitle: t("errorPrecheckTitle"),
+          errorBody: `${t("errorPrecheckIntro")}\n\n${[...new Set(suffixConflicts)].slice(0, 80).join("\n")}`
+        };
+      }
 
       if (childUnitConflicts.length) {
         return {
@@ -1718,10 +1972,26 @@
         const motherUnit = motherUnitR.get(mother) || "";
         const children = [...(childrenByMother.get(mother) || [])].sort();
         for (const child of children) {
-          const childUnit = childUnitM.get(`${mother}\u0000${child}`) || "";
-          const conv = conversionRatio(motherUnit, childUnit, conversionRules);
+          const pairKey = `${mother}\u0000${child}`;
+          const childUnit = childUnitM.get(pairKey) || "";
+          const sizeSuffix = childSuffix.get(pairKey) || "";
+          const conv = conversionRatio(
+            motherUnit,
+            childUnit,
+            conversionRules,
+            sizeConversionRules,
+            sizeSuffix
+          );
           if (!conv.ok) {
-            missingRules.push(`Mother ${mother} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`);
+            if (conv.reason === "missing-suffix") {
+              missingRules.push(`Mother ${mother} / Child ${child} (SHT): missing size suffix in Excel3.J`);
+            } else if (conv.reason === "missing-size-rule") {
+              missingRules.push(
+                `Mother ${mother} (SHT / ${sizeSuffix || "?"}) → Child ${child} (${childUnit || "?"})`
+              );
+            } else {
+              missingRules.push(`Mother ${mother} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`);
+            }
             continue;
           }
           expanded.push({
@@ -1877,7 +2147,13 @@
 
       updateProgress(t("allocating"), 60);
       await waitFrame();
-      const result = runAllocationEngine(state.left, state.right, state.third, state.conversionRules);
+      const result = runAllocationEngine(
+        state.left,
+        state.right,
+        state.third,
+        state.conversionRules,
+        state.sizeConversionRules
+      );
       if (!result.ok) {
         elements.progressOverlay.classList.remove("show");
         showErrorModal(result.errorTitle, result.errorBody);
@@ -2386,6 +2662,24 @@
       state.conversionRules = cloneDefaultConversionRules();
       saveConversionRules(state.conversionRules);
       renderConversionTable();
+      markResultDirty();
+    });
+    document.getElementById("addSizeConvRow").addEventListener("click", () => {
+      const suffixes = collectDetectedSizeSuffixes();
+      const units = collectSizeChildUnitOptions();
+      state.sizeConversionRules.push({
+        suffix: suffixes[0] || "110x200cm",
+        childUnit: units.includes("YD") ? "YD" : (units[0] || "YD"),
+        ratio: 1
+      });
+      saveSizeConversionRules(state.sizeConversionRules);
+      renderSizeConversionTable();
+      markResultDirty();
+    });
+    document.getElementById("resetSizeConv").addEventListener("click", () => {
+      state.sizeConversionRules = cloneDefaultSizeConversionRules();
+      saveSizeConversionRules(state.sizeConversionRules);
+      renderSizeConversionTable();
       markResultDirty();
     });
     [

@@ -24,6 +24,7 @@ COL_E2_UNIT_R = 17
 COL_E3_MOTHER = 4
 COL_E3_UNIT_H = 7
 COL_E3_CHILD = 8
+COL_E3_DESC_J = 9
 COL_E3_STOCK = 10
 COL_E3_UNIT_M = 12
 
@@ -44,6 +45,20 @@ DEFAULT_RULES = {
     ("M", "YD"): 1.0936,
     ("YD", "M"): 0.9144,
 }
+
+DEFAULT_SIZE_RULES = {
+    ("110x200cm", "M"): 2.0,
+    ("110x200cm", "YD"): 2.187227,
+    ("110x200cm", "SHT"): 1.0,
+    ("220x110cm", "M"): 2.0,
+    ("220x110cm", "YD"): 2.187227,
+    ("220x110cm", "SHT"): 1.0,
+    ("200x110cm", "M"): 2.2,
+    ("200x110cm", "YD"): 2.405949,
+    ("200x110cm", "SHT"): 1.0,
+}
+
+SIZE_SUFFIX_RE = re.compile(r"(\d+)\s*[x×*]\s*(\d+)\s*cm\s*$", re.I)
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
@@ -169,13 +184,31 @@ def read_xlsx_rows(path: Path) -> list[list[str]]:
     return rows_out[1:]  # skip header row
 
 
-def _ratio(mother_unit: str, child_unit: str) -> float | None:
+def _child_unit(unit: str) -> str:
+    u = unit.upper()
+    if u == "Y":
+        return "YD"
+    return u
+
+
+def _extract_size_suffix(text: object) -> str:
+    match = SIZE_SUFFIX_RE.search(_norm(text))
+    if not match:
+        return ""
+    return f"{match.group(1)}x{match.group(2)}cm".lower()
+
+
+def _ratio(mother_unit: str, child_unit: str, size_suffix: str = "") -> float | None:
     m = mother_unit.upper()
-    c = child_unit.upper()
+    c = _child_unit(child_unit)
     if not m or not c:
         return None
     if m == c:
         return 1.0
+    if m == "SHT":
+        if not size_suffix:
+            return None
+        return DEFAULT_SIZE_RULES.get((size_suffix, c))
     return DEFAULT_RULES.get((m, c))
 
 
@@ -230,6 +263,7 @@ def allocate(
         mother: next(iter(units)) for mother, units in r_by_mother.items()
     }
     child_unit_m: dict[tuple[str, str], str] = {}
+    child_suffix: dict[tuple[str, str], str] = {}
 
     for row in excel3_rows:
         mother = _norm(row[COL_E3_MOTHER] if len(row) > COL_E3_MOTHER else "")
@@ -239,12 +273,25 @@ def allocate(
         mothers_in_bom.add(mother)
         if child:
             children_by_mother.setdefault(mother, set()).add(child)
+            pair = (mother, child)
+            suffix = _extract_size_suffix(row[COL_E3_DESC_J] if len(row) > COL_E3_DESC_J else "")
+            if suffix:
+                prev_suffix = child_suffix.get(pair)
+                if prev_suffix and prev_suffix != suffix:
+                    errors.append(
+                        f"Conflicting 3.J size suffix for {mother}/{child}: {prev_suffix} vs {suffix}"
+                    )
+                else:
+                    child_suffix[pair] = suffix
             unit_m = _norm(row[COL_E3_UNIT_M] if len(row) > COL_E3_UNIT_M else "").upper()
-            child_unit_m[(mother, child)] = unit_m
+            child_unit_m[pair] = unit_m
             k = _num(row[COL_E3_STOCK] if len(row) > COL_E3_STOCK else 0)
             prev_k = stock_max.get(child)
             if prev_k is None or k > prev_k:
                 stock_max[child] = k
+
+    if errors:
+        return OUTPUT_HEADERS, [], stock_max, errors
 
     demand: dict[tuple[str, str], float] = {}
     for row in excel2_rows:
@@ -264,9 +311,15 @@ def allocate(
         m_unit = mother_unit_r.get(mother, "")
         for child in sorted(children_by_mother.get(mother, set())):
             c_unit = child_unit_m.get((mother, child), "")
-            ratio = _ratio(m_unit, c_unit)
+            suffix = child_suffix.get((mother, child), "")
+            ratio = _ratio(m_unit, c_unit, suffix)
             if ratio is None:
-                errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
+                if m_unit.upper() == "SHT":
+                    errors.append(
+                        f"Missing size conversion {suffix or '?'}->{_child_unit(c_unit)} for {mother}/{child}"
+                    )
+                else:
+                    errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
                 continue
             expanded.append(
                 {

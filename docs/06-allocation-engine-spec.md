@@ -3,8 +3,8 @@
 > 本文件為**已核准業務規則**的產品規格，**取代**舊兩段式 VLOOKUP（`vlookup-web.html`）作為產品方向。  
 > This document is the **approved business-rules** product specification and **supersedes** the old two-stage VLOOKUP (`vlookup-web.html`) as the product direction.
 
-**狀態 / Status：** LOCKED（規則鎖定）＋ v2.1 單位／篩選擴充  
-**對應程式 / App：** `allocation-web.html` **v2.1.0**  
+**狀態 / Status：** LOCKED（規則鎖定）＋ v2.2 SHT 末碼換算  
+**對應程式 / App：** `allocation-web.html` **v2.2.0**  
 **日期 / Date：** 2026-07-20
 
 ---
@@ -34,15 +34,18 @@ Using schedule (Excel1), demand (Excel2 Open Quantity), and stock snapshot (Exce
 | Excel3 | E `Material` | 母材料 / Mother material |
 | Excel3 | H `OUn` | 母單位事前檢查（須等於 2.R）/ Mother unit pre-check |
 | Excel3 | I `Article(Com.)` | 子材料 / Child material |
+| Excel3 | J `Mtl.Full Desc. (Com.)(EN)` | 子料全名；SHT 末碼來源 / Child full name; SHT size-suffix source |
 | Excel3 | M `BUn` | 子單位（換算）/ Child unit for conversion |
 | Excel3 | K `Unrestricted` | 庫存快照欄；同子料取 **MAX(K)** / Stock snapshot; **MAX(K)** per child |
 
-### v2.1 單位規則 / Unit rules
+### v2.1 / v2.2 單位規則 / Unit rules
 
 1. **事前檢查**：同母料（2.F=3.E）時 **2.R 必須等於 3.H**；否則彈錯誤並停止。  
-2. **換算**：比較 **2.R vs 3.M**。相同 → Demand **1:1**；不同 → 查白名單（預設 M→YD=1.0936、YD→M=0.9144）；缺規則 → 停止。  
-3. **輸出 10 欄**：cutting, so, mother, mother unit, child, child unit, demand, provided, remaining, Y（provided>0）。  
-4. **UI**：頂部可篩 SO／cutting／母料；可勾選隱藏零需求；預覽 SO 灰白斑馬。
+2. **換算**：比較 **2.R vs 3.M**。相同 → Demand **1:1**。  
+3. **母單位為 SHT**（且子單位不同）：自該母–子列的 Excel3.**J** 擷取末碼（如 `110x200cm`），查可編輯「SHT 末碼換算」表（預設種子可改；使用者自行新增／改倍率／刪除，存 localStorage；引擎不寫死倍率）。缺末碼或缺規則 → 停止。`Y` 與 `YD` 視為同一子單位鍵。同母–子若 J 末碼不一致 → 停止。  
+4. **其他單位對**：查單位白名單（預設 M→YD=1.0936、YD→M=0.9144）；缺規則 → 停止。  
+5. **輸出 10 欄**：cutting, so, mother, mother unit, child, child unit, demand, provided, remaining, Y（provided>0）。  
+6. **UI**：頂部可篩 SO／cutting／母料；可勾選隱藏零需求；預覽 SO 灰白斑馬；末碼下拉 = 檔案偵測 ∪ 既有規則 ∪ 自訂。
 
 **重要說明 / Important notes**
 

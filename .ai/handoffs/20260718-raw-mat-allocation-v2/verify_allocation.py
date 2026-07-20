@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Sanitized fixture verifier for RAW MAT allocation engine v2.1.
+"""Sanitized fixture verifier for RAW MAT allocation engine v2.2.
 
 Proves: MAX(K), greedy, 1:1 when units match, M→YD conversion,
-R vs H pre-check block, missing conversion block, Y flag, 10-column order.
+SHT size-suffix conversion (Excel3.J), R vs H pre-check block,
+missing conversion block, Y flag, 10-column order.
 """
 
 from __future__ import annotations
 
 import csv
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +22,7 @@ COL_E2_UNIT_R = 17
 COL_E3_MOTHER = 4
 COL_E3_UNIT_H = 7
 COL_E3_CHILD = 8
+COL_E3_DESC_J = 9
 COL_E3_STOCK = 10
 COL_E3_UNIT_M = 12
 
@@ -41,6 +44,20 @@ DEFAULT_RULES = {
     ("YD", "M"): 0.9144,
 }
 
+DEFAULT_SIZE_RULES = {
+    ("110x200cm", "M"): 2.0,
+    ("110x200cm", "YD"): 2.187227,
+    ("110x200cm", "SHT"): 1.0,
+    ("220x110cm", "M"): 2.0,
+    ("220x110cm", "YD"): 2.187227,
+    ("220x110cm", "SHT"): 1.0,
+    ("200x110cm", "M"): 2.2,
+    ("200x110cm", "YD"): 2.405949,
+    ("200x110cm", "SHT"): 1.0,
+}
+
+SIZE_SUFFIX_RE = re.compile(r"(\d+)\s*[x×*]\s*(\d+)\s*cm\s*$", re.I)
+
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
@@ -61,7 +78,25 @@ def _num(value: object) -> float:
 def _fmt(value: float) -> str:
     if abs(value - round(value)) < 1e-9:
         return str(int(round(value)))
-    return str(round(value, 6)).rstrip("0").rstrip(".") if "." in str(round(value, 6)) else str(value)
+    rounded = round(value, 6)
+    text = str(rounded)
+    if "." in text:
+        return text.rstrip("0").rstrip(".")
+    return text
+
+
+def _child_unit(unit: str) -> str:
+    u = unit.upper()
+    if u == "Y":
+        return "YD"
+    return u
+
+
+def _extract_size_suffix(text: object) -> str:
+    match = SIZE_SUFFIX_RE.search(_norm(text))
+    if not match:
+        return ""
+    return f"{match.group(1)}x{match.group(2)}cm".lower()
 
 
 def _read_csv(path: Path) -> tuple[list[str], list[list[str]]]:
@@ -76,14 +111,30 @@ def _read_csv(path: Path) -> tuple[list[str], list[list[str]]]:
     return headers, data
 
 
-def _ratio(mother_unit: str, child_unit: str, rules: dict[tuple[str, str], float]) -> float | None:
+def _ratio(
+    mother_unit: str,
+    child_unit: str,
+    rules: dict[tuple[str, str], float],
+    size_rules: dict[tuple[str, str], float],
+    size_suffix: str,
+) -> tuple[float | None, str]:
     m = mother_unit.upper()
-    c = child_unit.upper()
+    c = _child_unit(child_unit)
     if not m or not c:
-        return None
+        return None, "blank-unit"
     if m == c:
-        return 1.0
-    return rules.get((m, c))
+        return 1.0, "ok"
+    if m == "SHT":
+        if not size_suffix:
+            return None, "missing-suffix"
+        hit = size_rules.get((size_suffix, c))
+        if hit is None:
+            return None, "missing-size-rule"
+        return hit, "ok"
+    hit = rules.get((m, c))
+    if hit is None:
+        return None, "missing"
+    return hit, "ok"
 
 
 def allocate(
@@ -91,9 +142,11 @@ def allocate(
     excel2_rows: list[list[str]],
     excel3_rows: list[list[str]],
     rules: dict[tuple[str, str], float] | None = None,
+    size_rules: dict[tuple[str, str], float] | None = None,
 ) -> tuple[list[str], list[list[str]], dict[str, float], list[str]]:
     """Return headers, rows, stock_max, errors (empty if ok)."""
     rules = rules if rules is not None else dict(DEFAULT_RULES)
+    size_rules = size_rules if size_rules is not None else dict(DEFAULT_SIZE_RULES)
     errors: list[str] = []
 
     r_by_mother: dict[str, set[str]] = {}
@@ -137,6 +190,7 @@ def allocate(
     stock_max: dict[str, float] = {}
     mother_unit_r: dict[str, str] = {}
     child_unit_m: dict[tuple[str, str], str] = {}
+    child_suffix: dict[tuple[str, str], str] = {}
 
     for mother, units in r_by_mother.items():
         mother_unit_r[mother] = next(iter(units))
@@ -150,12 +204,25 @@ def allocate(
         if not child:
             continue
         children_by_mother.setdefault(mother, set()).add(child)
+        pair = (mother, child)
+        suffix = _extract_size_suffix(row[COL_E3_DESC_J] if len(row) > COL_E3_DESC_J else "")
+        if suffix:
+            prev_suffix = child_suffix.get(pair)
+            if prev_suffix and prev_suffix != suffix:
+                errors.append(
+                    f"Conflicting 3.J size suffix for {mother}/{child}: {prev_suffix} vs {suffix}"
+                )
+            else:
+                child_suffix[pair] = suffix
         unit_m = _norm(row[COL_E3_UNIT_M] if len(row) > COL_E3_UNIT_M else "").upper()
-        child_unit_m[(mother, child)] = unit_m
+        child_unit_m[pair] = unit_m
         k = _num(row[COL_E3_STOCK] if len(row) > COL_E3_STOCK else 0)
         prev_k = stock_max.get(child)
         if prev_k is None or k > prev_k:
             stock_max[child] = k
+
+    if errors:
+        return OUTPUT_HEADERS, [], stock_max, errors
 
     demand: dict[tuple[str, str], float] = {}
     for row in excel2_rows:
@@ -173,9 +240,17 @@ def allocate(
         m_unit = mother_unit_r.get(mother, "")
         for child in sorted(children_by_mother.get(mother, set())):
             c_unit = child_unit_m.get((mother, child), "")
-            ratio = _ratio(m_unit, c_unit, rules)
+            suffix = child_suffix.get((mother, child), "")
+            ratio, reason = _ratio(m_unit, c_unit, rules, size_rules, suffix)
             if ratio is None:
-                errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
+                if reason == "missing-suffix":
+                    errors.append(f"Missing size suffix in Excel3.J for {mother}/{child}")
+                elif reason == "missing-size-rule":
+                    errors.append(
+                        f"Missing size conversion {suffix or '?'}->{c_unit} for {mother}/{child}"
+                    )
+                else:
+                    errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
                 continue
             expanded.append(
                 {
@@ -231,13 +306,17 @@ def _assert(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def _pad_row(cells: list[str], width: int) -> list[str]:
+    return cells + [""] * (width - len(cells))
+
+
 def main() -> int:
     _, e1 = _read_csv(FIXTURE_DIR / "excel1.csv")
     _, e2 = _read_csv(FIXTURE_DIR / "excel2.csv")
     _, e3 = _read_csv(FIXTURE_DIR / "excel3.csv")
 
     headers, rows, stock_max, errors = allocate(e1, e2, e3)
-    print("=== RAW MAT allocation v2.1 fixture verify ===")
+    print("=== RAW MAT allocation v2.2 fixture verify ===")
     print(f"output_rows={len(rows)}")
     print(f"stock_max={stock_max}")
     for row in rows:
@@ -281,6 +360,32 @@ def main() -> int:
             row[COL_E3_UNIT_H] = "YD"
     _, _, _, err_rh = allocate(e1, e2, e3_bad)
     _assert(any("R/H mismatch" in e for e in err_rh), "R/H mismatch should block")
+
+    # SHT size-suffix conversion (Excel3.J)
+    e1_sht = [["SO-S", "2026-07-05"]]
+    e2_sht = [_pad_row(["", "SO-S", "", "", "", "MOTHER-SHT", "", "", "", "", "", "", "", "", "", "", "3", "SHT"], 18)]
+    e3_sht = [
+        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-Y", "CHILD YD 110x200cm", "10", "", "YD"], 13),
+        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-S", "CHILD SHT 110x200cm", "5", "", "SHT"], 13),
+    ]
+    _, rows_sht, _, err_sht = allocate(e1_sht, e2_sht, e3_sht)
+    _assert(not err_sht, f"SHT conversion errors: {err_sht}")
+    row_y = next(r for r in rows_sht if r[4] == "CHILD-Y")
+    row_s = next(r for r in rows_sht if r[4] == "CHILD-S")
+    _assert(abs(float(row_y[6]) - 3 * 2.187227) < 1e-6, f"SHT→YD demand got {row_y[6]}")
+    _assert(row_s[6] == "3", f"SHT→SHT should stay 1:1 got {row_s[6]}")
+
+    # Missing size rule blocks
+    _, _, _, err_size = allocate(e1_sht, e2_sht, e3_sht, size_rules={})
+    _assert(any("Missing size conversion" in e for e in err_size), "missing size conversion should block")
+
+    # Conflicting suffixes on same mother+child block
+    e3_conflict = [
+        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-Y", "A 110x200cm", "10", "", "YD"], 13),
+        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-Y", "B 220x110cm", "5", "", "YD"], 13),
+    ]
+    _, _, _, err_conflict = allocate(e1_sht, e2_sht, e3_conflict)
+    _assert(any("Conflicting 3.J size suffix" in e for e in err_conflict), "suffix conflict should block")
 
     print("ALL CHECKS PASSED")
     return 0
