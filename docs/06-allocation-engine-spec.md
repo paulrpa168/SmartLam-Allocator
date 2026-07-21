@@ -4,8 +4,8 @@
 > This document is the **approved business-rules** product specification and **supersedes** the old two-stage VLOOKUP (`vlookup-web.html`) as the product direction.
 
 **狀態 / Status：** LOCKED（規則鎖定）＋ v2.2 SHT 末碼換算  
-**對應程式 / App：** `allocation-web.html` **v2.2.0**  
-**日期 / Date：** 2026-07-20
+**對應程式 / App：** `allocation-web.html` — 配發引擎規則 **v2.2.x**；UI 版本見檔內 `APP_VERSION`（目前 **v2.4.0**）  
+**日期 / Date：** 2026-07-20（規格）；UI 更新見 git 紀錄
 
 ---
 

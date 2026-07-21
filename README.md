@@ -4,7 +4,7 @@
 
 本專案是一個在使用者電腦瀏覽器內執行的單頁工具，依核准業務規則將排程（Excel1）、需求 Open Quantity（Excel2）與 BOM／庫存（Excel3）合併後做**庫存貪婪配發**，並匯出可比對「需求 vs 能提供」與「扣減後剩餘」的結果。
 
-**現行程式入口：`allocation-web.html`（v2.3.1）**  
+**現行程式入口：`allocation-web.html`（v2.4.0）**  
 規格：[docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)
 
 舊檔 `vlookup-web.html` 為**已淘汰的兩段式查找原型**，僅供歷史對照，**不是**現行產品方向。
@@ -13,15 +13,15 @@
 
 This project is a browser-based, single-page allocation tool. It combines schedule (Excel1), Open Quantity demand (Excel2), and BOM/stock (Excel3) under approved business rules, then greedily allocates child stock and exports a result that compares demand vs provided and remaining stock after each row.
 
-**Current app entry point: `allocation-web.html` (v2.3.1)**  
+**Current app entry point: `allocation-web.html` (v2.4.0)**  
 Spec: [docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)
 
 Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only — it is **not** the current product direction.
 
 ## 目前狀態
 
-- 狀態：配發引擎 **v2.2.x 規則** + UI **v2.3.1**（Mill Ops／Soft Enterprise 主題切換、一次一屏步驟、欄位 hover 說明、單位事前檢查、SHT 末碼換算、篩選、斑馬色、Y 欄、三語手冊）已實作；fixture 驗證通過。
-- 程式版本：`allocation-web.html` **2.3.9**。
+- 狀態：配發引擎 **v2.2.x 規則** + UI **v2.4.0**（v0 視覺重設計、Mill Ops／Soft Enterprise 主題切換、一次一屏步驟、欄位 hover 說明、單位事前檢查、SHT 末碼換算、篩選、斑馬色、Y 欄、三語手冊）已實作；fixture 驗證通過。
+- 程式版本：`allocation-web.html` **2.4.0**。
 - 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
 - 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
 - 語言規則：專案說明與規格採繁體中文在前、英文緊接；UI 為 English／繁體中文／မြန်မာ。
@@ -29,8 +29,8 @@ Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept fo
 
 ## Current status
 
-- Status: Allocation engine **v2.2.x rules** + UI **v2.3.1** (Mill Ops / Soft Enterprise themes, one-step screens, hover field tips, unit pre-check, editable SHT size-suffix conversion, filters, zebra rows, Y flag, trilingual manual) is implemented; fixture verification passed.
-- App version: `allocation-web.html` **2.3.9**.
+- Status: Allocation engine **v2.2.x rules** + UI **v2.4.0** (v0 visual redesign, Mill Ops / Soft Enterprise themes, one-step screens, hover field tips, unit pre-check, editable SHT size-suffix conversion, filters, zebra rows, Y flag, trilingual manual) is implemented; fixture verification passed.
+- App version: `allocation-web.html` **2.4.0**.
 - Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
 - Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
 - Language rule: Project docs place Traditional Chinese first and English immediately after. UI languages are English, Traditional Chinese, and Myanmar.
@@ -41,16 +41,16 @@ Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept fo
 1. Excel 1：`so`（A）→ `cutting`（B）；同 SO 取最早 cutting。
 2. Excel 2：`SD Document`（B）+ `Material` 母料（F）+ `Open Quantity`（Q）加總；母料須存在於 Excel3.E。
 3. Excel 3：母料（E）→ 子料 `Article(Com.)`（I）；子料初始庫存 = **MAX(Unrestricted K)**。
-4. 母：子需求 **1:1**；排序 cutting / SO / mother / child；由上而下貪婪配發。
-5. 輸出欄：cutting、so、mother、child、demand qty、provided qty、remaining after row。
+4. 依 **2.R vs 3.M** 換算子料需求（相同則 1:1；母單位 SHT 用 Excel3.F 末碼表；其餘用可編輯單位白名單）；排序 cutting / SO / mother / child；由上而下貪婪配發。細節見 [docs/06](docs/06-allocation-engine-spec.md)。
+5. 輸出 10 欄：cutting、so、mother、mother unit、child、child unit、demand qty、provided qty、remaining after row、Y（群組標記）。
 
 ## Allocation data flow (v2)
 
 1. Excel 1: `so` (A) → `cutting` (B); earliest cutting wins per SO.
 2. Excel 2: aggregate `Open Quantity` (Q) by (`SD Document` B, mother `Material` F); mother must exist in Excel3.E.
 3. Excel 3: mother (E) → child `Article(Com.)` (I); initial stock = **MAX(Unrestricted K)** per child.
-4. Mother:child demand ratio **1:1**; sort by cutting / SO / mother / child; greedy allocate top-to-bottom.
-5. Output columns: cutting, so, mother, child, demand qty, provided qty, remaining after row.
+4. Convert mother demand to child demand via **2.R vs 3.M** (1:1 when equal; SHT uses Excel3.F suffix table; otherwise editable unit whitelist); sort by cutting / SO / mother / child; greedy allocate top-to-bottom. See [docs/06](docs/06-allocation-engine-spec.md).
+5. Output 10 columns: cutting, so, mother, mother unit, child, child unit, demand qty, provided qty, remaining after row, Y (group flag).
 
 ## 文件索引
 

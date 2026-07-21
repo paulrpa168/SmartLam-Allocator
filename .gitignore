@@ -2,6 +2,8 @@
 /1.xlsx
 /2.xlsx
 /3.xlsx
+/New data/
+/raw-mat-allocation-engine.zip
 /New Microsoft Word Document.docx
 /New Microsoft Word Document.pdf
 ~$*.xlsx
@@ -25,3 +27,5 @@ Thumbs.db
 .DS_Store
 node_modules/
 coverage/
+__pycache__/
+*.pyc
