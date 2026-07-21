@@ -1,30 +1,87 @@
 <!doctype html>
 <!--
   RAW MAT Allocation Engine
-  Version: 2.0.0
+  Version: 2.3.0
   Product direction: inventory allocation (supersedes two-stage VLOOKUP)
   Spec: docs/06-allocation-engine-spec.md
+  UI: Mill Ops (default) / Soft Enterprise theme toggle + L2 one-step screens
 -->
-<html lang="en">
+<html lang="en" data-theme="mill">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RAW MAT Allocation Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("rawmat.allocation.theme");
+        document.documentElement.setAttribute(
+          "data-theme",
+          theme === "soft" || theme === "mill" ? theme : "mill"
+        );
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "mill");
+      }
+    })();
+  </script>
   <style>
-    :root {
+    :root,
+    [data-theme="mill"] {
       color-scheme: light;
-      --bg: #f3f6f8;
-      --ink: #17212b;
-      --muted: #5b6874;
-      --line: #d4dce3;
+      --bg: #e8edf2;
+      --bg-accent: #dfe6ee;
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #cbd5e1;
+      --panel: #f8fafc;
+      --soft: #e2e8f0;
+      --head-bg: #eef2f6;
+      --accent: #334155;
+      --accent-dark: #1e293b;
+      --accent-bright: #4338ca;
+      --ok: #166534;
+      --warn: #b91c1c;
+      --shadow: none;
+      --shadow-filter: 0 1px 0 rgba(15, 23, 42, 0.06);
+      --focus: rgba(67, 56, 202, 0.22);
+      --radius: 5px;
+      --radius-pill: 6px;
+      --space: 12px;
+      --stripe-even: #c5d3e0;
+      --stripe-odd: #ffffff;
+      --group-rule: #64748b;
+      --font: "IBM Plex Sans", "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+      --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+      --progress-a: #6366f1;
+      --progress-b: #334155;
+    }
+
+    [data-theme="soft"] {
+      --bg: #f1f5f9;
+      --bg-accent: #e8eef6;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
       --panel: #ffffff;
-      --soft: #edf3f6;
-      --accent: #1f7a8c;
-      --accent-dark: #155c6b;
-      --ok: #187348;
-      --warn: #b42318;
-      --shadow: 0 14px 34px rgba(23, 33, 43, 0.10);
-      --focus: rgba(31, 122, 140, 0.24);
+      --soft: #f1f5f9;
+      --head-bg: #f8fafc;
+      --accent: #4338ca;
+      --accent-dark: #3730a3;
+      --accent-bright: #4f46e5;
+      --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      --shadow-filter: 0 8px 20px rgba(15, 23, 42, 0.06);
+      --focus: rgba(67, 56, 202, 0.18);
+      --radius: 12px;
+      --radius-pill: 999px;
+      --space: 16px;
+      --stripe-even: #dbe4ee;
+      --stripe-odd: #ffffff;
+      --group-rule: #94a3b8;
+      --progress-a: #818cf8;
+      --progress-b: #4338ca;
     }
 
     * { box-sizing: border-box; }
@@ -32,17 +89,23 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        radial-gradient(1200px 480px at 8% -10%, var(--bg-accent), transparent 55%),
+        var(--bg);
       color: var(--ink);
-      font: 15px/1.45 "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+      font: 15px/1.5 var(--font);
     }
 
     button, input, select, textarea { font: inherit; }
 
     header {
-      background: var(--panel);
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
-      padding: 18px clamp(16px, 4vw, 42px);
+      padding: 14px clamp(16px, 4vw, 42px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
     }
 
     .topbar, main {
@@ -57,6 +120,21 @@
       gap: 16px;
     }
 
+    .brand-block {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .brand-kicker {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
     .top-actions {
       display: flex;
       align-items: center;
@@ -66,50 +144,64 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(22px, 3vw, 32px);
-      line-height: 1.15;
+      font-size: clamp(20px, 2.6vw, 28px);
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: -0.02em;
     }
 
     .status {
-      min-height: 32px;
+      min-height: 34px;
       display: inline-flex;
       align-items: center;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-pill);
       padding: 5px 10px;
       color: var(--muted);
       background: var(--soft);
+      font-size: 13px;
+    }
+
+    #themeSelect,
+    #languageSelect {
+      width: auto;
+      min-width: 9.5rem;
+      min-height: 34px;
     }
 
     main {
       width: 100%;
-      padding: 22px clamp(16px, 4vw, 42px) 38px;
+      padding: 20px clamp(16px, 4vw, 42px) 40px;
       display: grid;
-      gap: 18px;
+      gap: var(--space);
     }
 
     .stepper {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
     }
 
     .step-pill {
-      min-height: 46px;
+      min-height: 48px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px 10px;
+      border-radius: var(--radius);
+      padding: 8px 12px;
       background: var(--panel);
       color: var(--muted);
       display: flex;
       align-items: center;
-      gap: 9px;
-      font-weight: 800;
+      gap: 10px;
+      font-weight: 600;
       cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
     }
 
-    .step-pill:hover {
-      border-color: var(--accent);
+    .step-pill:hover { border-color: var(--accent-bright); }
+    .step-pill:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
     }
 
     .step-pill span {
@@ -121,49 +213,49 @@
       background: var(--soft);
       color: var(--muted);
       flex: 0 0 auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
     }
 
     .step-pill.active {
       color: var(--ink);
-      border-color: var(--accent);
-      box-shadow: 0 0 0 4px var(--focus);
+      border-color: var(--accent-bright);
+      box-shadow: 0 0 0 3px var(--focus);
     }
 
     .step-pill.active span {
-      background: var(--accent);
+      background: var(--accent-bright);
       color: #fff;
     }
 
-    section {
-      display: block;
+    main > section {
+      display: none;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
       overflow: visible;
-      scroll-margin-top: 12px;
     }
 
-    section.active {
-      outline: 2px solid rgba(31, 122, 140, 0.28);
+    main > section.active {
+      display: block;
     }
 
     .filter-panel {
       position: sticky;
-      top: 8px;
+      top: 72px;
       z-index: 6;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: var(--radius);
       padding: 12px;
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 8px 20px rgba(23, 33, 43, 0.08);
+      background: color-mix(in srgb, var(--panel) 96%, transparent);
+      box-shadow: var(--shadow-filter);
       display: grid;
       gap: 10px;
     }
 
-    .combo {
-      position: relative;
-    }
+    .combo { position: relative; }
 
     .suggest-list {
       position: absolute;
@@ -175,10 +267,10 @@
       list-style: none;
       max-height: 220px;
       overflow: auto;
-      background: #fff;
+      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-filter);
       z-index: 8;
     }
 
@@ -203,15 +295,21 @@
       gap: 12px;
       padding: 14px 16px;
       border-bottom: 1px solid var(--line);
-      background: #fbfcfd;
+      background: var(--head-bg);
     }
 
     h2 {
       margin: 0;
       font-size: 17px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
     }
 
-    .section-body { padding: 16px; display: grid; gap: 14px; }
+    .section-body {
+      padding: var(--space);
+      display: grid;
+      gap: 14px;
+    }
 
     .three-col {
       display: grid;
@@ -221,11 +319,12 @@
 
     .card {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 12px;
-      background: #fff;
+      background: var(--panel);
       display: grid;
       gap: 10px;
+      box-shadow: var(--shadow);
     }
 
     .card h3 {
@@ -243,19 +342,30 @@
 
     input[type="file"],
     textarea,
-    select {
+    select,
+    input[type="text"],
+    input[type="number"],
+    input[type="date"] {
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 8px 10px;
       background: #fff;
       color: var(--ink);
     }
 
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+
     textarea {
       min-height: 120px;
       resize: vertical;
-      font-family: Consolas, "Courier New", monospace;
+      font-family: var(--font-mono);
       font-size: 12px;
     }
 
@@ -268,11 +378,11 @@
 
     button {
       border: 0;
-      border-radius: 8px;
+      border-radius: var(--radius-pill);
       padding: 9px 14px;
       background: var(--accent);
       color: #fff;
-      font-weight: 700;
+      font-weight: 650;
       cursor: pointer;
     }
 
@@ -285,7 +395,7 @@
     }
 
     .message {
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 10px 12px;
       background: var(--soft);
       color: var(--muted);
@@ -295,23 +405,23 @@
 
     .message.ok {
       color: var(--ok);
-      border-color: #b7e0c5;
-      background: #edf9f1;
+      border-color: #bbf7d0;
+      background: #f0fdf4;
     }
 
     .message.error {
       color: var(--warn);
-      border-color: #f0c2c2;
-      background: #fff1f1;
+      border-color: #fecaca;
+      background: #fef2f2;
     }
 
     .sample {
       display: inline-flex;
       align-items: center;
-      border-radius: 999px;
+      border-radius: var(--radius-pill);
       padding: 4px 10px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 650;
       color: var(--muted);
       background: var(--soft);
       border: 1px solid var(--line);
@@ -345,26 +455,167 @@
 
     .stat {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 10px 12px;
       background: var(--soft);
+      display: grid;
+      gap: 4px;
+      position: relative;
+    }
+
+    .stat-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
 
     .stat .label {
       display: block;
       color: var(--muted);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 650;
+      min-width: 0;
     }
 
     .stat b {
       font-size: 20px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .tip-btn {
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--accent-bright);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .tip-btn:hover,
+    .tip-btn[aria-expanded="true"] {
+      background: var(--soft);
+      border-color: var(--accent-bright);
+    }
+
+    .tip-panel {
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .tip-panel[hidden] {
+      display: none;
+    }
+
+    .has-tip {
+      position: relative;
+      cursor: help;
+    }
+
+    .has-tip::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 0;
+      top: calc(100% + 6px);
+      z-index: 28;
+      width: max(200px, 100%);
+      max-width: min(320px, 80vw);
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #ffffff;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.45;
+      text-align: left;
+      white-space: pre-wrap;
+      box-shadow: var(--shadow-filter);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.08s ease, visibility 0.08s ease;
+    }
+
+    .has-tip:hover::after,
+    .has-tip:focus-visible::after {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    table.result th.has-tip {
+      cursor: help;
+    }
+
+    table.result th.has-tip::after {
+      left: 0;
+      right: auto;
+      width: min(280px, 70vw);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .has-tip::after { transition: none; }
+    }
+
+    .back-to-top {
+      position: fixed;
+      right: max(16px, calc((100vw - 1440px) / 2 + 16px));
+      bottom: 20px;
+      z-index: 25;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 10px 14px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font-weight: 650;
+      box-shadow: var(--shadow-filter);
+      cursor: pointer;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.15s ease, visibility 0.15s ease;
+    }
+
+    .back-to-top.show {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .back-to-top:hover {
+      border-color: var(--accent-bright);
+      color: var(--accent-bright);
+      background: var(--soft);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .back-to-top { transition: none; }
     }
 
     .table-wrap {
       overflow: auto;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       max-height: 520px;
     }
 
@@ -382,22 +633,122 @@
       white-space: nowrap;
     }
 
+    table.result td:nth-child(n+5):nth-child(-n+9) {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
     table.result th {
       position: sticky;
       top: 0;
-      background: #f8fafb;
+      background: var(--head-bg);
       z-index: 1;
     }
 
-    table.result tr.so-even td { background: #c5d3e0; }
-    table.result tr.so-odd td { background: #ffffff; }
-    table.result tr.group-break td { box-shadow: inset 0 2px 0 #64748b; }
+    table.result tr.so-even td { background: var(--stripe-even); }
+    table.result tr.so-odd td { background: var(--stripe-odd); }
+    table.result tr.group-break td { box-shadow: inset 0 2px 0 var(--group-rule); }
 
     .filter-bar {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 10px;
+    }
+
+    .filter-bar .field-mother {
+      grid-column: 1 / -1;
+    }
+
+    .filter-textarea {
+      width: 100%;
+      min-height: 76px;
+      max-height: 220px;
+      resize: vertical;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .chip-filter {
+      display: grid;
+      gap: 8px;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      min-height: 0;
+    }
+
+    .chip-row:empty {
+      display: none;
+    }
+
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 4px 6px 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      background: #fff;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .filter-chip span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 14rem;
+    }
+
+    .filter-chip-remove {
+      width: 22px;
+      height: 22px;
+      min-width: 22px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .filter-chip-remove:hover {
+      background: var(--line);
+      color: var(--ink);
+    }
+
+    .chip-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .chip-clear {
+      border: 0;
+      background: transparent;
+      color: var(--accent-bright);
+      font-size: 12px;
+      font-weight: 650;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
     }
 
     .filter-bar .field,
@@ -421,7 +772,7 @@
 
     .conv-box {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 12px;
       background: var(--soft);
       display: grid;
@@ -454,7 +805,7 @@
       inset: 0;
       display: none;
       place-items: center;
-      background: rgba(23, 33, 43, 0.35);
+      background: rgba(15, 23, 42, 0.4);
       z-index: 50;
       padding: 16px;
     }
@@ -465,13 +816,14 @@
       width: min(720px, 100%);
       max-height: min(80vh, 640px);
       overflow: auto;
-      background: #fff;
-      border-radius: 10px;
+      background: var(--panel);
+      border-radius: var(--radius);
       padding: 18px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-filter);
       display: grid;
       gap: 12px;
       position: relative;
+      border: 1px solid var(--line);
     }
 
     .error-modal-close-x {
@@ -491,16 +843,15 @@
       place-items: center;
     }
 
-    .error-modal-close-x:hover {
-      color: var(--accent);
-    }
+    .error-modal-close-x:hover { color: var(--accent-bright); }
 
     .modal-card pre {
       white-space: pre-wrap;
       font-size: 13px;
-      background: #fff5f5;
+      font-family: var(--font-mono);
+      background: #fef2f2;
       border: 1px solid #fecaca;
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 10px;
       margin: 0;
       color: #7f1d1d;
@@ -511,7 +862,7 @@
       inset: 0;
       display: none;
       place-items: center;
-      background: rgba(23, 33, 43, 0.28);
+      background: rgba(15, 23, 42, 0.28);
       z-index: 40;
     }
 
@@ -519,12 +870,13 @@
 
     .progress-card {
       width: min(420px, calc(100vw - 32px));
-      background: #fff;
-      border-radius: 10px;
+      background: var(--panel);
+      border-radius: var(--radius);
       padding: 18px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-filter);
       display: grid;
       gap: 10px;
+      border: 1px solid var(--line);
     }
 
     .progress-bar {
@@ -538,7 +890,7 @@
       display: block;
       height: 100%;
       width: 0;
-      background: linear-gradient(90deg, #38bdf8, #1f7a8c);
+      background: linear-gradient(90deg, var(--progress-a), var(--progress-b));
       transition: width 0.25s ease;
     }
 
@@ -547,9 +899,9 @@
       align-items: center;
       padding: 6px 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-pill);
       background: var(--panel);
-      color: var(--accent);
+      color: var(--accent-bright);
       text-decoration: none;
       font-weight: 600;
       font-size: 14px;
@@ -557,21 +909,34 @@
 
     .manual-link:hover {
       background: var(--soft);
-      border-color: var(--accent);
+      border-color: var(--accent-bright);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .step-pill,
+      .progress-bar > i { transition: none; }
     }
 
     @media (max-width: 920px) {
       .topbar { flex-direction: column; align-items: flex-start; }
-      .stepper, .three-col, .result-band { grid-template-columns: 1fr; }
+      .stepper, .three-col, .result-band, .filter-bar { grid-template-columns: 1fr; }
+      .filter-panel { top: 8px; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="topbar">
-      <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
+      <div class="brand-block">
+        <p class="brand-kicker" data-i18n="brandKicker">Allocation workbench</p>
+        <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
+      </div>
       <div class="top-actions">
         <a href="allocation-manual.html" class="manual-link" data-i18n="manualLink">Operation manual</a>
+        <select id="themeSelect" aria-label="Theme">
+          <option value="mill" data-i18n="themeMill">Mill Ops</option>
+          <option value="soft" data-i18n="themeSoft">Soft Enterprise</option>
+        </select>
         <select id="languageSelect" aria-label="Language">
           <option value="en">English</option>
           <option value="zh">繁體中文</option>
@@ -706,47 +1071,82 @@
       </div>
     </section>
 
-    <section id="step3" class="active">
+    <section id="step3">
       <div class="section-head">
         <h2 data-i18n="resultTitle">Filter, preview and export</h2>
-        <span class="sample" data-i18n="previewLimit">Preview shows first 300 rows · filters update live</span>
+        <span class="sample" data-i18n="previewLimit">Table preview max 300 rows · export uses full filtered set</span>
       </div>
       <div class="section-body">
         <div class="filter-panel">
           <div class="message" data-i18n="filterLiveHelp">Filters stay on this page. Changing any filter instantly refreshes the preview and export set.</div>
           <div class="filter-bar">
             <div class="field">
-              <label for="filterSo" data-i18n="filterSo">Filter SO</label>
+              <label for="filterSo" class="has-tip" data-i18n="filterSo" data-i18n-tip="tipFilterSo">Filter SO</label>
               <div class="combo" id="soCombo">
                 <input id="filterSo" type="text" autocomplete="off" placeholder="Type prefix, e.g. 10106" aria-autocomplete="list" aria-controls="soSuggest">
                 <ul id="soSuggest" class="suggest-list" hidden role="listbox"></ul>
               </div>
             </div>
             <div class="field">
-              <label for="filterCuttingFrom" data-i18n="filterCutting">Cutting from / to</label>
+              <label for="filterCuttingFrom" class="has-tip" data-i18n="filterCutting" data-i18n-tip="tipFilterCutting">Cutting from / to</label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                 <input id="filterCuttingFrom" type="date">
                 <input id="filterCuttingTo" type="date">
               </div>
             </div>
-            <div class="field">
-              <label for="filterMother" data-i18n="filterMother">Filter mother</label>
-              <div class="combo" id="motherCombo">
-                <input id="filterMother" type="text" autocomplete="off" placeholder="Type prefix" aria-autocomplete="list" aria-controls="motherSuggest">
-                <ul id="motherSuggest" class="suggest-list" hidden role="listbox"></ul>
+            <div class="field field-mother">
+              <label for="filterMother" class="has-tip" data-i18n="filterMother" data-i18n-tip="tipFilterMother">Filter mother</label>
+              <div class="chip-filter" id="motherChipFilter">
+                <div class="chip-row" id="motherChips" aria-live="polite"></div>
+                <div class="chip-meta" id="motherChipMeta" hidden>
+                  <span id="motherChipCount"></span>
+                  <button type="button" class="chip-clear" id="clearMotherChips" data-i18n="filterMotherClear">Clear all</button>
+                </div>
+                <div class="combo" id="motherCombo">
+                  <input id="filterMother" type="text" autocomplete="off" data-i18n-placeholder="filterMotherPlaceholder" placeholder="Type prefix, then Enter" aria-autocomplete="list" aria-controls="motherSuggest">
+                  <ul id="motherSuggest" class="suggest-list" hidden role="listbox"></ul>
+                </div>
               </div>
             </div>
           </div>
           <div class="check-row">
-            <label><input id="hideSoAllZero" type="checkbox"> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
-            <label><input id="hideRowZero" type="checkbox"> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
+            <label class="has-tip" data-i18n-tip="tipHideSoAllZero"><input id="hideSoAllZero" type="checkbox"> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
+            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox"> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
           </div>
         </div>
         <div class="result-band">
-          <div class="stat"><span class="label" data-i18n="rowsExported">Rows exported</span><b id="statRows">0</b></div>
-          <div class="stat"><span class="label" data-i18n="demandKeys">Demand keys kept</span><b id="statDemand">0</b></div>
-          <div class="stat"><span class="label" data-i18n="mothersMatched">Mothers matched</span><b id="statMothers">0</b></div>
-          <div class="stat"><span class="label" data-i18n="shortageRows">Shortage rows</span><b id="statShortage">0</b></div>
+          <div class="stat">
+            <div class="stat-head">
+              <span class="label" data-i18n="rowsExported">Rows exported</span>
+              <button type="button" class="tip-btn" data-tip-key="tipRowsExported" aria-expanded="false" aria-controls="tipPanelRows">?</button>
+            </div>
+            <b id="statRows">0</b>
+            <div class="tip-panel" id="tipPanelRows" hidden></div>
+          </div>
+          <div class="stat">
+            <div class="stat-head">
+              <span class="label" data-i18n="demandKeys">Demand keys kept</span>
+              <button type="button" class="tip-btn" data-tip-key="tipDemandKeys" aria-expanded="false" aria-controls="tipPanelDemand">?</button>
+            </div>
+            <b id="statDemand">0</b>
+            <div class="tip-panel" id="tipPanelDemand" hidden></div>
+          </div>
+          <div class="stat">
+            <div class="stat-head">
+              <span class="label" data-i18n="mothersMatched">Mothers matched</span>
+              <button type="button" class="tip-btn" data-tip-key="tipMothersMatched" aria-expanded="false" aria-controls="tipPanelMothers">?</button>
+            </div>
+            <b id="statMothers">0</b>
+            <div class="tip-panel" id="tipPanelMothers" hidden></div>
+          </div>
+          <div class="stat">
+            <div class="stat-head">
+              <span class="label" data-i18n="shortageRows">Shortage (full run)</span>
+              <button type="button" class="tip-btn" data-tip-key="tipShortageRows" aria-expanded="false" aria-controls="tipPanelShortage">?</button>
+            </div>
+            <b id="statShortage">0</b>
+            <div class="tip-panel" id="tipPanelShortage" hidden></div>
+          </div>
         </div>
         <div class="message" id="resultMessage" data-i18n="resultEmpty">Run allocation to preview and export.</div>
         <div class="table-wrap">
@@ -784,13 +1184,17 @@
     </div>
   </div>
 
+  <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
+
   <script>
-    const APP_VERSION = "2.2.2";
+    const APP_VERSION = "2.3.9";
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
+    const THEME_STORAGE_KEY = "rawmat.allocation.theme";
     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
     const SIZE_CONV_STORAGE_KEY = "rawmat.allocation.sizeConversionRules.v22";
     const SIZE_SUFFIX_CUSTOM = "__CUSTOM__";
     const SIZE_SUFFIX_RE = /(\d+)\s*[x×*]\s*(\d+)\s*cm\s*$/i;
+    const PREVIEW_ROW_LIMIT = 300;
 
     // Fixed 0-based column indexes per locked business rules
     const COL = {
@@ -870,6 +1274,19 @@
       "ခွဲဝေပြီး (Y)"
     ];
 
+    const OUTPUT_TIP_KEYS = [
+      "tipColCutting",
+      "tipColSo",
+      "tipColMother",
+      "tipColMotherUnit",
+      "tipColChild",
+      "tipColChildUnit",
+      "tipColDemand",
+      "tipColProvided",
+      "tipColRemaining",
+      "tipColY"
+    ];
+
     function htmlLangFor(code) {
       if (code === "zh") return "zh-Hant";
       if (code === "my") return "my";
@@ -935,7 +1352,10 @@
     const translations = {
       en: {
         appTitle: "RAW MAT Allocation Engine",
+        brandKicker: "Allocation workbench",
         manualLink: "Operation manual",
+        themeMill: "Mill Ops",
+        themeSoft: "Soft Enterprise",
         ready: "Ready",
         step1: "Import files",
         step2: "Mapping & run",
@@ -952,6 +1372,7 @@
         clearExcel2: "Clear Excel 2",
         clearExcel3: "Clear Excel 3",
         nextMapping: "Next: mapping & run",
+        backToTop: "↑ Top",
         mappingTitle: "Step 2: Fixed mapping & allocate",
         fixedMapping: "Fixed mapping",
         mapSource: "Source",
@@ -962,12 +1383,12 @@
         back: "Back",
         runAllocate: "Run allocation",
         resultTitle: "Filter, preview and export",
-        previewLimit: "Preview shows first 300 rows · filters update live",
+        previewLimit: "Table preview max 300 rows · export uses full filtered set",
         filterLiveHelp: "Filters stay on this page. Changing any filter instantly refreshes the preview and export set.",
         rowsExported: "Rows exported",
         demandKeys: "Demand keys kept",
         mothersMatched: "Mothers matched",
-        shortageRows: "Shortage rows",
+        shortageRows: "Shortage (full run)",
         resultEmpty: "Run allocation to preview and export.",
         exportCsv: "Export CSV",
         exportExcel: "Export Excel",
@@ -983,7 +1404,8 @@
         loaded: "Loaded {rows} rows and {cols} columns.",
         importError: "Could not read file: {message}",
         needBoth: "Please load Excel 1, Excel 2, and Excel 3 first.",
-        built: "Allocated {rows} rows (showing {shown}). Shortage rows: {shortage}.",
+        built: "Allocated {rows} rows · filtered/export {shown} · table preview {preview}/{limit}{capNote} · shortage (full run) {shortage}",
+        builtCapNote: " (export still includes all filtered rows)",
         exported: "CSV exported",
         exportedExcel: "Excel exported",
         excelExportFailed: "Excel export failed: {message}",
@@ -1023,8 +1445,32 @@
         filterSo: "Filter SO",
         filterCutting: "Cutting from / to",
         filterMother: "Filter mother",
+        filterMotherPlaceholder: "Type prefix, Enter or pick from list",
+        filterMotherClear: "Clear all",
+        filterMotherCount: "{count} selected",
+        tipFilterMother: "Selected mothers appear as chips above (wrap to the right). Type a prefix and press Enter or pick a suggestion; click × to remove one.",
         hideSoAllZero: "Hide SO when all demand qty = 0",
         hideRowZero: "Hide rows where demand qty = 0",
+        tipRowsExported: "Rows in the current filtered preview. Same set is used for CSV/Excel export.",
+        tipDemandKeys: "Count of unique (SO + mother) demand keys kept after matching Excel2 to BOM mothers in Excel3.",
+        tipMothersMatched: "Count of mother materials in Excel3 that have at least one child (BOM coverage).",
+        tipShortageRows: "Count of rows in the full allocation result where provided qty < demand qty (stock short for that child row). This number does not change when you filter SO / mother / cutting above.",
+        tipHelpAria: "Explain this metric",
+        tipFilterSo: "Type an SO prefix or comma-separated list. Preview and export update immediately.",
+        tipFilterCutting: "Keep rows whose cutting date is within this range (inclusive).",
+        tipFilterMother: "Selected mothers appear as chips above (wrap to the right). Type a prefix and press Enter or pick a suggestion; click × to remove one.",
+        tipHideSoAllZero: "Hide every row of an SO when that SO’s total demand is zero.",
+        tipHideRowZero: "Hide individual rows whose demand qty is zero.",
+        tipColCutting: "Production / cutting date from Excel1 for this SO.",
+        tipColSo: "Sales order number.",
+        tipColMother: "Mother material code.",
+        tipColMotherUnit: "Mother unit from Excel2 column R.",
+        tipColChild: "Child material under this mother (Excel3).",
+        tipColChildUnit: "Child unit from Excel3 column M.",
+        tipColDemand: "Converted demand for this child (Q × conversion ratio).",
+        tipColProvided: "Quantity allocated to this row from remaining child stock.",
+        tipColRemaining: "Child stock left after this row’s allocation.",
+        tipColY: "Group flag: Y only when every child under the same SO + mother has demand > 0 and provided ≥ demand.",
         errorClose: "OK",
         errorPrecheckTitle: "Unit pre-check failed (2.R vs 3.H)",
         errorConvTitle: "Missing conversion rules (2.R vs 3.M)",
@@ -1033,7 +1479,10 @@
       },
       zh: {
         appTitle: "RAW MAT 庫存配發引擎",
+        brandKicker: "配發工作台",
         manualLink: "操作手冊",
+        themeMill: "Mill Ops 廠務",
+        themeSoft: "Soft 企業風",
         ready: "就緒",
         step1: "匯入檔案",
         step2: "對應與執行",
@@ -1050,6 +1499,7 @@
         clearExcel2: "清除 Excel 2",
         clearExcel3: "清除 Excel 3",
         nextMapping: "下一步：對應與執行",
+        backToTop: "↑ 回到頂端",
         mappingTitle: "第 2 步：固定對應與配發",
         fixedMapping: "固定對應",
         mapSource: "來源",
@@ -1060,12 +1510,12 @@
         back: "返回",
         runAllocate: "執行配發",
         resultTitle: "篩選、預覽與匯出",
-        previewLimit: "預覽顯示前 300 列 · 篩選即時更新",
+        previewLimit: "表格預覽最多 300 列 · 匯出為篩選後全量",
         filterLiveHelp: "篩選條件與預覽在同一頁。變更任一條件會立即更新預覽與匯出內容。",
         rowsExported: "匯出列數",
         demandKeys: "保留需求鍵數",
         mothersMatched: "匹配母料數",
-        shortageRows: "短缺列數",
+        shortageRows: "短缺列（全量）",
         resultEmpty: "執行配發後可預覽與匯出。",
         exportCsv: "匯出 CSV",
         exportExcel: "匯出 Excel",
@@ -1081,7 +1531,8 @@
         loaded: "已載入 {rows} 列、{cols} 欄。",
         importError: "無法讀取檔案：{message}",
         needBoth: "請先載入 Excel 1、Excel 2 與 Excel 3。",
-        built: "已配發 {rows} 列（目前顯示 {shown}）。短缺列：{shortage}。",
+        built: "已配發 {rows} 列 · 篩選後可匯出 {shown} 列 · 表格預覽 {preview}/{limit}{capNote} · 短缺列（全量）{shortage}",
+        builtCapNote: "（匯出仍含篩選後全部列）",
         exported: "CSV 已匯出",
         exportedExcel: "Excel 已匯出",
         excelExportFailed: "Excel 匯出失敗：{message}",
@@ -1121,8 +1572,31 @@
         filterSo: "篩選 SO",
         filterCutting: "Cutting 起迄",
         filterMother: "篩選母材料",
+        filterMotherPlaceholder: "輸入前綴後按 Enter，或從清單挑選",
+        filterMotherClear: "全部清除",
+        filterMotherCount: "已選 {count} 筆",
         hideSoAllZero: "隱藏：整張 SO 需求皆為 0",
         hideRowZero: "隱藏：單列需求 = 0",
+        tipRowsExported: "目前篩選後的預覽列數；匯出 CSV／Excel 也使用同一組列。",
+        tipDemandKeys: "Excel2 需求彙總後保留的 (SO + 母料) 組合數（母料須存在於 Excel3 BOM）。",
+        tipMothersMatched: "Excel3 中至少有一個子料的母料種數（BOM 涵蓋）。",
+        tipShortageRows: "整次配發結果中，能提供數量 < 需求數量的列數（該子料列庫存不足）。上方 SO／母料／日期篩選不會改變此數字。",
+        tipHelpAria: "說明此統計意義",
+        tipFilterSo: "輸入 SO 前綴或以逗號分隔多筆；預覽與匯出即時更新。",
+        tipFilterCutting: "只保留 cutting 日期在此區間（含起迄）的列。",
+        tipFilterMother: "已選母料以標籤顯示在輸入框上方（往右換行）。輸入前綴後按 Enter 或點選建議；點 × 可移除單筆。",
+        tipHideSoAllZero: "若某張 SO 的需求加總為 0，隱藏該 SO 的所有列。",
+        tipHideRowZero: "隱藏需求數量為 0 的單列。",
+        tipColCutting: "此 SO 在 Excel1 的生產／cutting 日期。",
+        tipColSo: "銷售訂單號碼。",
+        tipColMother: "母材料代號。",
+        tipColMotherUnit: "母單位（Excel2 欄 R）。",
+        tipColChild: "此母料下的子材料（Excel3）。",
+        tipColChildUnit: "子單位（Excel3 欄 M）。",
+        tipColDemand: "換算後的子料需求（Q × 換算倍率）。",
+        tipColProvided: "本列自剩餘子料庫存配到的數量。",
+        tipColRemaining: "本列配發後，該子料剩餘庫存。",
+        tipColY: "群組標記：同 SO + 母料下，全部子料 demand > 0 且 provided ≥ demand 時才標 Y。",
         errorClose: "確定",
         errorPrecheckTitle: "單位事前檢查失敗（2.R vs 3.H）",
         errorConvTitle: "缺少換算規則（2.R vs 3.M）",
@@ -1131,7 +1605,10 @@
       },
       my: {
         appTitle: "RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင်",
+        brandKicker: "ခွဲဝေမှု လုပ်ငန်းခုံ",
         manualLink: "လုပ်ဆောင်ချက် လက်စွဲ",
+        themeMill: "Mill Ops",
+        themeSoft: "Soft Enterprise",
         ready: "အဆင်သင့်",
         step1: "ဖိုင်များ တင်သွင်းရန်",
         step2: "အမှတ်အသား နှင့် လုပ်ဆောင်ရန်",
@@ -1148,6 +1625,7 @@
         clearExcel2: "Excel 2 ရှင်းရန်",
         clearExcel3: "Excel 3 ရှင်းရန်",
         nextMapping: "နောက်တစ်ဆင့် — အမှတ်အသား",
+        backToTop: "↑ အပေါ်သို့",
         mappingTitle: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု",
         fixedMapping: "သတ်မှတ် အမှတ်အသား",
         mapSource: "ရင်းမြစ်",
@@ -1158,12 +1636,12 @@
         back: "နောက်သို့",
         runAllocate: "ခွဲဝေမှု လုပ်ဆောင်ရန်",
         resultTitle: "စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
-        previewLimit: "အစမ်းကြည့် အပေါ် ၃၀၀ အတန်း · စစ်ထုတ်မှု ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်",
+        previewLimit: "ဇယား အစမ်းကြည့် အများဆုံး ၃၀၀ · ထုတ်ယူမှုသည် စစ်ထုတ်ပြီး အားလုံး",
         filterLiveHelp: "စစ်ထုတ်မှုသည် ဤစာမျက်နှာတွင်သာ ရှိသည်။ ပြောင်းလဲမှုသည် အစမ်းကြည့်နှင့် ထုတ်ယူမှုကို ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်။",
         rowsExported: "ထုတ်ယူသော အတန်းများ",
         demandKeys: "ထိန်းသိမ်းထားသော လိုအပ်ချက်",
         mothersMatched: "ကိုက်ညီသော မိခင်ပစ္စည်း",
-        shortageRows: "မလုံလောက်သော အတန်းများ",
+        shortageRows: "မလုံလောက် (အပြည့်)",
         resultEmpty: "အစမ်းကြည့်နှင့် ထုတ်ယူရန် ခွဲဝေမှု လုပ်ဆောင်ပါ။",
         exportCsv: "CSV ထုတ်ယူရန်",
         exportExcel: "Excel ထုတ်ယူရန်",
@@ -1179,7 +1657,8 @@
         loaded: "အတန်း {rows} ခု၊ ကော်လံ {cols} ခု တင်ပြီးပါပြီ။",
         importError: "ဖိုင် မဖတ်နိုင်ပါ — {message}",
         needBoth: "Excel 1၊ Excel 2 နှင့် Excel 3 ကို အရင် တင်ပါ။",
-        built: "အတန်း {rows} ခု ခွဲဝေပြီး (ပြသထားသည် {shown})။ မလုံလောက်သော အတန်း {shortage}။",
+        built: "အတန်း {rows} · စစ်ထုတ်/ထုတ်ယူ {shown} · ဇယား အစမ်းကြည့် {preview}/{limit}{capNote} · မလုံလောက် (အပြည့်) {shortage}",
+        builtCapNote: " (ထုတ်ယူမှုတွင် စစ်ထုတ်ပြီး အားလုံး ပါဝင်ဆဲ)",
         exported: "CSV ထုတ်ယူပြီး",
         exportedExcel: "Excel ထုတ်ယူပြီး",
         excelExportFailed: "Excel ထုတ်ယူမှု မအောင်မြင် — {message}",
@@ -1219,8 +1698,31 @@
         filterSo: "SO စစ်ထုတ်ရန်",
         filterCutting: "Cutting ရက်စွဲ အစ — အဆုံး",
         filterMother: "မိခင်ပစ္စည်း စစ်ထုတ်ရန်",
+        filterMotherPlaceholder: "ရှေ့စာလုံး ရိုက်ပြီး Enter — သို့မဟုတ် စာရင်းမှ ရွေးပါ",
+        filterMotherClear: "အားလုံး ရှင်းရန်",
+        filterMotherCount: "ရွေးထားသည် {count}",
         hideSoAllZero: "လိုအပ်ချက် သုည ဖြစ်သော SO များ ဖျောက်ရန်",
         hideRowZero: "လိုအပ်ချက် သုည အတန်းများ ဖျောက်ရန်",
+        tipRowsExported: "လက်ရှိ စစ်ထုတ်ပြီး အစမ်းကြည့် အတန်းအရေအတွက်။ CSV/Excel ထုတ်ယူမှုနှင့် တူညီသည်။",
+        tipDemandKeys: "Excel2 မှ ထိန်းသိမ်းထားသော (SO + မိခင်ပစ္စည်း) ပေါင်းစပ်အရေအတွက် (Excel3 BOM တွင် ရှိရမည်)။",
+        tipMothersMatched: "Excel3 တွင် သားပစ္စည်း အနည်းဆုံး တစ်ခု ရှိသော မိခင်ပစ္စည်း အရေအတွက်။",
+        tipShortageRows: "ခွဲဝေမှု အပြည့်အစုံတွင် provided < demand ဖြစ်သော အတန်းအရေအတွက်။ အပေါ် SO/မိခင်/ရက်စွဲ စစ်ထုတ်မှုကြောင့် ဤဂဏန်း မပြောင်းပါ။",
+        tipHelpAria: "ဤစာရင်းဇယားကို ရှင်းပြရန်",
+        tipFilterSo: "SO ရှေ့စာလုံး သို့မဟုတ် ကော်မာဖြင့် ခွဲထားသော စာရင်း ရိုက်ပါ။",
+        tipFilterCutting: "cutting ရက်စွဲ ဤအကွာအဝေးအတွင်းရှိ အတန်းများကိုသာ ထားပါ။",
+        tipFilterMother: "ရွေးထားသော မိခင်များကို အပေါ်တွင် chip အဖြစ် ပြသသည်။ ရှေ့စာလုံး ရိုက်ပြီး Enter သို့မဟုတ် အကြံပြုချက် ရွေးပါ။ × ဖြင့် ဖယ်ရှားနိုင်သည်။",
+        tipHideSoAllZero: "SO တစ်ခုလုံး၏ လိုအပ်ချက် ပေါင်းလဒ် သုည ဖြစ်ပါက ထို SO အတန်းအားလုံး ဖျောက်ပါ။",
+        tipHideRowZero: "လိုအပ်ချက် သုည ဖြစ်သော တစ်တန်းချင်း ဖျောက်ပါ။",
+        tipColCutting: "Excel1 မှ ဤ SO ၏ cutting ရက်စွဲ။",
+        tipColSo: "မှာယူမှု နံပါတ်။",
+        tipColMother: "မိခင်ပစ္စည်း ကုဒ်။",
+        tipColMotherUnit: "မိခင်ယူနစ် (Excel2 R)။",
+        tipColChild: "ဤမိခင်အောက်ရှိ သားပစ္စည်း (Excel3)။",
+        tipColChildUnit: "သားယူနစ် (Excel3 M)။",
+        tipColDemand: "ပြောင်းလဲပြီး လိုအပ်ချက် (Q × အချိုး)။",
+        tipColProvided: "ဤအတန်းသို့ ခွဲဝေပေးသော ပမာဏ။",
+        tipColRemaining: "ဤအတန်းပြီးနောက် ကျန်ရှိ သိုလှောင်ရုံ။",
+        tipColY: "အုပ်စု အမှတ် — တူညီသော SO + မိခင်တွင် သားအားလုံး demand > 0 နှင့် provided ≥ demand ဖြစ်မှ Y။",
         errorClose: "အိုကေ",
         errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (2.R နှင့် 3.H)",
         errorConvTitle: "ပြောင်းလဲမှု စည်းမျဉ်း မရှိ",
@@ -1311,11 +1813,14 @@
       allResultRows: [],
       conversionRules: loadConversionRules(),
       sizeConversionRules: loadSizeConversionRules(),
-      stats: { demandKeys: 0, mothers: 0, shortage: 0 }
+      stats: { demandKeys: 0, mothers: 0, shortage: 0 },
+      motherFilters: [],
+      allocating: false
     };
 
     const elements = {
       languageSelect: document.getElementById("languageSelect"),
+      themeSelect: document.getElementById("themeSelect"),
       statusText: document.getElementById("statusText"),
       leftFile: document.getElementById("leftFile"),
       rightFile: document.getElementById("rightFile"),
@@ -1342,6 +1847,10 @@
       filterCuttingTo: document.getElementById("filterCuttingTo"),
       filterMother: document.getElementById("filterMother"),
       motherSuggest: document.getElementById("motherSuggest"),
+      motherChips: document.getElementById("motherChips"),
+      motherChipMeta: document.getElementById("motherChipMeta"),
+      motherChipCount: document.getElementById("motherChipCount"),
+      clearMotherChips: document.getElementById("clearMotherChips"),
       hideSoAllZero: document.getElementById("hideSoAllZero"),
       hideRowZero: document.getElementById("hideRowZero"),
       errorModal: document.getElementById("errorModal"),
@@ -1356,7 +1865,8 @@
       progressOverlay: document.getElementById("progressOverlay"),
       progressTitle: document.getElementById("progressTitle"),
       progressMessage: document.getElementById("progressMessage"),
-      progressFill: document.getElementById("progressFill")
+      progressFill: document.getElementById("progressFill"),
+      backToTop: document.getElementById("backToTop")
     };
 
     function t(key, values = {}) {
@@ -1368,12 +1878,75 @@
       return text;
     }
 
+    function closeAllStatTips(exceptBtn = null) {
+      document.querySelectorAll(".tip-btn").forEach(btn => {
+        if (exceptBtn && btn === exceptBtn) return;
+        btn.setAttribute("aria-expanded", "false");
+        const panel = document.getElementById(btn.getAttribute("aria-controls"));
+        if (panel) panel.hidden = true;
+      });
+    }
+
+    function refreshStatTipPanels() {
+      document.querySelectorAll(".tip-btn").forEach(btn => {
+        const key = btn.dataset.tipKey;
+        const panel = document.getElementById(btn.getAttribute("aria-controls"));
+        if (!key || !panel) return;
+        panel.textContent = t(key);
+        btn.setAttribute("aria-label", t("tipHelpAria"));
+        btn.removeAttribute("title");
+      });
+    }
+
+    function bindStatTipButtons() {
+      document.querySelectorAll(".tip-btn").forEach(btn => {
+        if (btn.dataset.bound === "1") return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", event => {
+          event.stopPropagation();
+          const panel = document.getElementById(btn.getAttribute("aria-controls"));
+          if (!panel) return;
+          const open = btn.getAttribute("aria-expanded") === "true";
+          closeAllStatTips();
+          if (!open) {
+            panel.textContent = t(btn.dataset.tipKey);
+            panel.hidden = false;
+            btn.setAttribute("aria-expanded", "true");
+          }
+        });
+      });
+      if (!window.__rawmatTipOutsideBound) {
+        window.__rawmatTipOutsideBound = true;
+        document.addEventListener("click", () => closeAllStatTips());
+        document.addEventListener("keydown", event => {
+          if (event.key === "Escape") closeAllStatTips();
+        });
+      }
+    }
+
     function applyLanguage() {
       document.documentElement.lang = htmlLangFor(state.lang);
       document.querySelectorAll("[data-i18n]").forEach(node => {
         node.textContent = t(node.dataset.i18n);
       });
+      document.querySelectorAll("[data-i18n-tip]").forEach(node => {
+        const tip = t(node.dataset.i18nTip);
+        node.setAttribute("data-tip", tip);
+        node.removeAttribute("title");
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(node => {
+        node.setAttribute("placeholder", t(node.dataset.i18nPlaceholder));
+      });
+      refreshStatTipPanels();
+      renderMotherChips();
+      if (elements.backToTop) {
+        elements.backToTop.setAttribute("aria-label", t("backToTop"));
+      }
       elements.statusText.textContent = t("ready");
+      if (elements.themeSelect) {
+        elements.themeSelect.value = document.documentElement.getAttribute("data-theme") || "mill";
+        elements.themeSelect.setAttribute("aria-label", t("themeMill") + " / " + t("themeSoft"));
+      }
       refreshMappingTable();
       if (state.allResultRows.length) {
         state.resultHeaders = [...outputHeadersForLang(state.lang)];
@@ -1383,8 +1956,17 @@
     }
 
     function setStep(step, scroll = true) {
+      const next = Math.max(1, Math.min(3, step));
+      if (next === 3) {
+        void ensureStep3(scroll);
+        return;
+      }
+      applyStepUI(next, scroll);
+    }
+
+    function applyStepUI(step, scroll = true) {
       state.step = Math.max(1, Math.min(3, step));
-      document.querySelectorAll("section").forEach((section, index) => {
+      document.querySelectorAll("main > section").forEach((section, index) => {
         section.classList.toggle("active", index + 1 === state.step);
       });
       document.querySelectorAll("[data-step-pill]").forEach(pill => {
@@ -1392,9 +1974,38 @@
       });
       if (state.step === 2) refreshMappingTable();
       if (scroll) {
-        const target = document.getElementById(`step${state.step}`);
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
       }
+    }
+
+    /**
+     * Step 3 needs allocation output. If none yet, run allocation automatically.
+     */
+    async function ensureStep3(scroll = true) {
+      if (state.allResultRows.length) {
+        applyStepUI(3, scroll);
+        return;
+      }
+      if (state.allocating) return;
+      await buildResult({ scroll });
+    }
+
+    function updateBackToTopVisibility() {
+      if (!elements.backToTop) return;
+      elements.backToTop.classList.toggle("show", window.scrollY > 280);
+    }
+
+    function scrollToTop() {
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    }
+
+    function applyTheme(theme) {
+      const next = theme === "soft" ? "soft" : "mill";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+      if (elements.themeSelect) elements.themeSelect.value = next;
     }
 
     function scrollToSection(id) {
@@ -1432,11 +2043,11 @@
 
     function splitFilterTokens(text) {
       const raw = String(text ?? "");
-      const parts = raw.split(/[,;]/);
+      const parts = raw.split(/[,;\n]+/);
       const complete = parts.slice(0, -1).map(part => part.trim()).filter(Boolean);
       const current = (parts[parts.length - 1] || "").trim();
-      const suffix = /[,;]\s*$/.test(raw) ? "" : current;
-      return { complete, current: suffix, endsWithSeparator: /[,;]\s*$/.test(raw) };
+      const suffix = /[,;\n]\s*$/.test(raw) ? "" : current;
+      return { complete, current: suffix, endsWithSeparator: /[,;\n]\s*$/.test(raw) };
     }
 
     function renderSuggestList(listEl, matches, activeIndex = -1) {
@@ -1516,6 +2127,160 @@
           pick(matches[activeIndex]);
         } else if (event.key === "Escape") {
           listEl.hidden = true;
+        }
+      });
+      listEl.addEventListener("mousedown", (event) => {
+        const li = event.target.closest("li[data-value]");
+        if (!li) return;
+        event.preventDefault();
+        pick(li.dataset.value);
+      });
+      inputEl.addEventListener("blur", () => {
+        setTimeout(() => { listEl.hidden = true; }, 150);
+      });
+      inputEl.addEventListener("focus", refresh);
+    }
+
+    function renderMotherChips() {
+      if (!elements.motherChips) return;
+      elements.motherChips.innerHTML = "";
+      for (const value of state.motherFilters) {
+        const chip = document.createElement("span");
+        chip.className = "filter-chip";
+        const label = document.createElement("span");
+        label.textContent = value;
+        label.title = value;
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "filter-chip-remove";
+        removeBtn.setAttribute("aria-label", `${t("filterMotherClear")}: ${value}`);
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", () => removeMotherChip(value));
+        chip.appendChild(label);
+        chip.appendChild(removeBtn);
+        elements.motherChips.appendChild(chip);
+      }
+      if (elements.motherChipMeta) {
+        elements.motherChipMeta.hidden = state.motherFilters.length === 0;
+      }
+      if (elements.motherChipCount) {
+        elements.motherChipCount.textContent = t("filterMotherCount", {
+          count: state.motherFilters.length
+        });
+      }
+    }
+
+    function addMotherChip(rawValue) {
+      const value = normalize(rawValue);
+      if (!value) return false;
+      const exists = state.motherFilters.some(item => item.toLowerCase() === value.toLowerCase());
+      if (exists) return false;
+      state.motherFilters.push(value);
+      renderMotherChips();
+      applyViewFilters();
+      return true;
+    }
+
+    function removeMotherChip(value) {
+      const lower = String(value).toLowerCase();
+      state.motherFilters = state.motherFilters.filter(item => item.toLowerCase() !== lower);
+      renderMotherChips();
+      applyViewFilters();
+    }
+
+    function clearMotherChips() {
+      state.motherFilters = [];
+      renderMotherChips();
+      applyViewFilters();
+    }
+
+    function bindMotherChipFilter(inputEl, listEl) {
+      let activeIndex = -1;
+      let matches = [];
+
+      const selectedSet = () => new Set(state.motherFilters.map(v => v.toLowerCase()));
+
+      const refresh = () => {
+        const current = normalize(inputEl.value);
+        if (!current) {
+          matches = [];
+          activeIndex = -1;
+          renderSuggestList(listEl, matches, activeIndex);
+          return;
+        }
+        const selected = selectedSet();
+        const prefix = current.toLowerCase();
+        matches = collectDistinctValues("mother")
+          .filter(value => {
+            const lower = value.toLowerCase();
+            if (selected.has(lower)) return false;
+            return lower.startsWith(prefix);
+          })
+          .slice(0, 30);
+        activeIndex = matches.length ? 0 : -1;
+        renderSuggestList(listEl, matches, activeIndex);
+      };
+
+      const commitCurrent = () => {
+        const typed = normalize(inputEl.value);
+        if (!typed) return;
+        if (matches.length && activeIndex >= 0) {
+          addMotherChip(matches[activeIndex]);
+        } else {
+          addMotherChip(typed);
+        }
+        inputEl.value = "";
+        matches = [];
+        activeIndex = -1;
+        renderSuggestList(listEl, matches, activeIndex);
+      };
+
+      const pick = (value) => {
+        addMotherChip(value);
+        inputEl.value = "";
+        matches = [];
+        activeIndex = -1;
+        renderSuggestList(listEl, matches, activeIndex);
+        inputEl.focus();
+      };
+
+      inputEl.addEventListener("input", () => {
+        const raw = String(inputEl.value ?? "");
+        if (/[,;\n]/.test(raw)) {
+          const parts = raw.split(/[,;\n]+/).map(part => part.trim()).filter(Boolean);
+          const trailingSep = /[,;\n]\s*$/.test(raw);
+          const pending = trailingSep ? parts : parts.slice(0, -1);
+          const rest = trailingSep ? "" : (parts[parts.length - 1] || "");
+          for (const part of pending) addMotherChip(part);
+          inputEl.value = rest;
+        }
+        refresh();
+      });
+      inputEl.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown" && matches.length) {
+          event.preventDefault();
+          activeIndex = (activeIndex + 1) % matches.length;
+          renderSuggestList(listEl, matches, activeIndex);
+          return;
+        }
+        if (event.key === "ArrowUp" && matches.length) {
+          event.preventDefault();
+          activeIndex = (activeIndex - 1 + matches.length) % matches.length;
+          renderSuggestList(listEl, matches, activeIndex);
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (matches.length && activeIndex >= 0) pick(matches[activeIndex]);
+          else commitCurrent();
+          return;
+        }
+        if (event.key === "Escape") {
+          listEl.hidden = true;
+          return;
+        }
+        if (event.key === "Backspace" && !inputEl.value && state.motherFilters.length) {
+          removeMotherChip(state.motherFilters[state.motherFilters.length - 1]);
         }
       });
       listEl.addEventListener("mousedown", (event) => {
@@ -2274,7 +3039,7 @@
     function getFilteredRows() {
       let rows = state.allResultRows.slice();
       const soFilter = parseFilterList(elements.filterSo.value);
-      const motherFilter = parseFilterList(elements.filterMother.value);
+      const motherFilter = new Set(state.motherFilters.map(v => normalize(v)).filter(Boolean));
       const from = elements.filterCuttingFrom.value;
       const to = elements.filterCuttingTo.value;
 
@@ -2312,6 +3077,19 @@
       return rows;
     }
 
+    function formatBuiltMessage(totalRows, filteredRows, shortage) {
+      const preview = Math.min(filteredRows, PREVIEW_ROW_LIMIT);
+      const capped = filteredRows > PREVIEW_ROW_LIMIT;
+      return t("built", {
+        rows: totalRows,
+        shown: filteredRows,
+        preview,
+        limit: PREVIEW_ROW_LIMIT,
+        capNote: capped ? t("builtCapNote") : "",
+        shortage
+      });
+    }
+
     function applyViewFilters() {
       if (!state.allResultRows.length) return;
       state.resultRows = getFilteredRows();
@@ -2320,66 +3098,79 @@
       elements.exportCsv.disabled = state.resultRows.length === 0;
       elements.exportXlsx.disabled = state.resultRows.length === 0;
       elements.copyTable.disabled = state.resultRows.length === 0;
-      setMessage(elements.resultMessage, t("built", {
-        rows: state.allResultRows.length,
-        shown: state.resultRows.length,
-        shortage: state.stats.shortage
-      }), "ok");
+      setMessage(elements.resultMessage, formatBuiltMessage(
+        state.allResultRows.length,
+        state.resultRows.length,
+        state.stats.shortage
+      ), "ok");
     }
 
-    async function buildResult() {
+    async function buildResult(options = {}) {
+      const scroll = options.scroll !== false;
+      if (state.allocating) return;
       if (!state.left.headers.length || !state.right.headers.length || !state.third.headers.length) {
         setMessage(elements.resultMessage, t("needBoth"), "error");
-        setStep(1);
+        applyStepUI(1, scroll);
         return;
       }
 
-      showProgress(t("processing"), t("expanding"), 20);
-      await waitFrame();
+      state.allocating = true;
+      try {
+        showProgress(t("processing"), t("expanding"), 20);
+        await waitFrame();
 
-      updateProgress(t("allocating"), 60);
-      await waitFrame();
-      const result = runAllocationEngine(
-        state.left,
-        state.right,
-        state.third,
-        state.conversionRules,
-        state.sizeConversionRules
-      );
-      if (!result.ok) {
-        elements.progressOverlay.classList.remove("show");
-        showErrorModal(result.errorTitle, result.errorBody);
-        return;
+        updateProgress(t("allocating"), 60);
+        await waitFrame();
+        const result = runAllocationEngine(
+          state.left,
+          state.right,
+          state.third,
+          state.conversionRules,
+          state.sizeConversionRules
+        );
+        if (!result.ok) {
+          elements.progressOverlay.classList.remove("show");
+          showErrorModal(result.errorTitle, result.errorBody);
+          applyStepUI(2, scroll);
+          return;
+        }
+
+        updateProgress(t("rendering"), 85);
+        await waitFrame();
+
+        state.resultHeaders = result.headers;
+        state.allResultRows = result.rows;
+        state.stats = result.stats;
+        state.resultRows = getFilteredRows();
+        renderResult(state.resultHeaders, state.resultRows);
+        elements.statRows.textContent = String(state.resultRows.length);
+        elements.statDemand.textContent = String(result.stats.demandKeys);
+        elements.statMothers.textContent = String(result.stats.mothers);
+        elements.statShortage.textContent = String(result.stats.shortage);
+        elements.exportCsv.disabled = state.resultRows.length === 0;
+        elements.exportXlsx.disabled = state.resultRows.length === 0;
+        elements.copyTable.disabled = state.resultRows.length === 0;
+        setMessage(elements.resultMessage, formatBuiltMessage(
+          result.rows.length,
+          state.resultRows.length,
+          result.stats.shortage
+        ), "ok");
+        applyStepUI(3, scroll);
+        await finishProgress(t("ready"));
+      } finally {
+        state.allocating = false;
       }
-
-      updateProgress(t("rendering"), 85);
-      await waitFrame();
-
-      state.resultHeaders = result.headers;
-      state.allResultRows = result.rows;
-      state.stats = result.stats;
-      state.resultRows = getFilteredRows();
-      renderResult(state.resultHeaders, state.resultRows);
-      elements.statRows.textContent = String(state.resultRows.length);
-      elements.statDemand.textContent = String(result.stats.demandKeys);
-      elements.statMothers.textContent = String(result.stats.mothers);
-      elements.statShortage.textContent = String(result.stats.shortage);
-      elements.exportCsv.disabled = state.resultRows.length === 0;
-      elements.exportXlsx.disabled = state.resultRows.length === 0;
-      elements.copyTable.disabled = state.resultRows.length === 0;
-      setMessage(elements.resultMessage, t("built", {
-        rows: result.rows.length,
-        shown: state.resultRows.length,
-        shortage: result.stats.shortage
-      }), "ok");
-      setStep(3);
-      await finishProgress(t("ready"));
     }
 
     function renderResult(headers, rows) {
-      elements.resultHead.innerHTML = headers.map(h => `<th>${escapeHtml(h)}</th>`).join("");
+      elements.resultHead.innerHTML = headers.map((h, index) => {
+        const tipKey = OUTPUT_TIP_KEYS[index];
+        const tip = tipKey ? escapeHtml(t(tipKey)) : "";
+        if (!tip) return `<th>${escapeHtml(h)}</th>`;
+        return `<th class="has-tip" tabindex="0" data-tip="${tip}">${escapeHtml(h)}</th>`;
+      }).join("");
       elements.resultBody.innerHTML = "";
-      const preview = rows.slice(0, 300);
+      const preview = rows.slice(0, PREVIEW_ROW_LIMIT);
       let prevSo = null;
       let prevMother = null;
       let soTone = 0;
@@ -2824,12 +3615,23 @@
       localStorage.setItem(LANG_STORAGE_KEY, state.lang);
       applyLanguage();
     });
+    if (elements.themeSelect) {
+      elements.themeSelect.addEventListener("change", () => {
+        applyTheme(elements.themeSelect.value);
+      });
+    }
     elements.leftFile.addEventListener("change", () => loadFile("left", elements.leftFile.files[0]));
     elements.rightFile.addEventListener("change", () => loadFile("right", elements.rightFile.files[0]));
     elements.thirdFile.addEventListener("change", () => loadFile("third", elements.thirdFile.files[0]));
     elements.leftData.addEventListener("input", () => refreshFromText("left"));
     elements.rightData.addEventListener("input", () => refreshFromText("right"));
     elements.thirdData.addEventListener("input", () => refreshFromText("third"));
+    if (elements.backToTop) {
+      elements.backToTop.addEventListener("click", scrollToTop);
+      window.addEventListener("scroll", updateBackToTopVisibility, { passive: true });
+      updateBackToTopVisibility();
+    }
+
     document.querySelectorAll("[data-scroll-to]").forEach(node => {
       node.addEventListener("click", () => scrollToSection(node.dataset.scrollTo));
     });
@@ -2840,7 +3642,11 @@
     elements.errorModalClose.addEventListener("click", hideErrorModal);
     if (elements.errorModalX) elements.errorModalX.addEventListener("click", hideErrorModal);
     bindPrefixSuggest(elements.filterSo, elements.soSuggest, "so");
-    bindPrefixSuggest(elements.filterMother, elements.motherSuggest, "mother");
+    bindMotherChipFilter(elements.filterMother, elements.motherSuggest);
+    if (elements.clearMotherChips) {
+      elements.clearMotherChips.addEventListener("click", clearMotherChips);
+    }
+    renderMotherChips();
     document.getElementById("addConvRow").addEventListener("click", () => {
       const units = collectUnitOptions();
       state.conversionRules.push({
@@ -2885,13 +3691,15 @@
       el.addEventListener("input", applyViewFilters);
       el.addEventListener("change", applyViewFilters);
     });
-    // SO / mother inputs already call applyViewFilters via bindPrefixSuggest
+    // SO suggest + mother chips call applyViewFilters on change
 
     const savedLang = localStorage.getItem(LANG_STORAGE_KEY);
     if (savedLang && translations[savedLang]) {
       state.lang = savedLang;
       elements.languageSelect.value = savedLang;
     }
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    applyTheme(savedTheme === "soft" ? "soft" : "mill");
     const versionBadge = document.getElementById("appVersionBadge");
     if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
 
@@ -2902,6 +3710,7 @@
     state.right = parseTextTable(sampleRight);
     state.third = parseTextTable(sampleThird);
     applyLanguage();
+    bindStatTipButtons();
     refreshMappingTable();
     clearResult();
     setStep(1, false);

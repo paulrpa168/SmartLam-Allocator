@@ -1,32 +1,76 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="mill">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RAW MAT Allocation — Operation Manual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("rawmat.allocation.theme");
+        document.documentElement.setAttribute(
+          "data-theme",
+          theme === "soft" || theme === "mill" ? theme : "mill"
+        );
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "mill");
+      }
+    })();
+  </script>
   <style>
-    :root {
-      --bg: #f3f6f8;
-      --ink: #17212b;
-      --muted: #5b6874;
-      --line: #d4dce3;
+    :root,
+    [data-theme="mill"] {
+      --bg: #e8edf2;
+      --bg-accent: #dfe6ee;
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #cbd5e1;
+      --panel: #f8fafc;
+      --soft: #e2e8f0;
+      --accent: #334155;
+      --accent-dark: #1e293b;
+      --accent-bright: #4338ca;
+      --shadow: none;
+      --radius: 5px;
+      --radius-pill: 6px;
+      --font: "IBM Plex Sans", "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", sans-serif;
+    }
+    [data-theme="soft"] {
+      --bg: #f1f5f9;
+      --bg-accent: #e8eef6;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
       --panel: #ffffff;
-      --soft: #edf3f6;
-      --accent: #1f7a8c;
-      --accent-dark: #155c6b;
+      --soft: #f1f5f9;
+      --accent: #4338ca;
+      --accent-dark: #3730a3;
+      --accent-bright: #4f46e5;
+      --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      --radius: 12px;
+      --radius-pill: 999px;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        radial-gradient(1000px 420px at 10% -8%, var(--bg-accent), transparent 55%),
+        var(--bg);
       color: var(--ink);
-      font: 15px/1.55 "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", sans-serif;
+      font: 15px/1.55 var(--font);
     }
     header {
-      background: var(--panel);
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
-      padding: 18px clamp(16px, 4vw, 42px);
+      padding: 16px clamp(16px, 4vw, 42px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
     .topbar, main {
       max-width: 900px;
@@ -45,14 +89,23 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-    h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); }
+    .brand-kicker {
+      margin: 0 0 2px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: -0.02em; }
     main { padding: 24px clamp(16px, 4vw, 42px) 48px; }
     section {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: var(--radius);
       padding: 18px 20px;
       margin-bottom: 16px;
+      box-shadow: var(--shadow);
     }
     h2 { margin: 0 0 10px; font-size: 18px; color: var(--accent-dark); }
     p, li { margin: 0 0 8px; }
@@ -75,29 +128,31 @@
       align-items: center;
       padding: 6px 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-pill);
       background: var(--panel);
-      color: var(--accent);
+      color: var(--accent-bright);
       text-decoration: none;
       font-weight: 600;
       font-size: 14px;
     }
     a.app-link:hover, a.manual-link:hover {
       background: var(--soft);
-      border-color: var(--accent);
+      border-color: var(--accent-bright);
     }
     select {
       min-height: 34px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       padding: 4px 8px;
       background: #fff;
+      color: var(--ink);
+      font: inherit;
     }
     .note {
       background: var(--soft);
-      border-left: 4px solid var(--accent);
+      border-left: 4px solid var(--accent-bright);
       padding: 10px 12px;
-      border-radius: 0 8px 8px 0;
+      border-radius: 0 var(--radius) var(--radius) 0;
       margin-top: 8px;
       font-size: 14px;
     }
@@ -106,9 +161,16 @@
 <body>
   <header>
     <div class="topbar">
-      <h1 data-i18n="manualTitle">Operation Manual</h1>
+      <div>
+        <p class="brand-kicker" data-i18n="brandKicker">Allocation workbench</p>
+        <h1 data-i18n="manualTitle">Operation Manual</h1>
+      </div>
       <div class="top-actions">
         <a href="allocation-web.html" class="app-link" data-i18n="backToApp">Back to app</a>
+        <select id="themeSelect" aria-label="Theme">
+          <option value="mill" data-i18n="themeMill">Mill Ops</option>
+          <option value="soft" data-i18n="themeSoft">Soft Enterprise</option>
+        </select>
         <select id="languageSelect" aria-label="Language">
           <option value="en">English</option>
           <option value="zh">繁體中文</option>
@@ -198,11 +260,15 @@
 
   <script>
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
+    const THEME_STORAGE_KEY = "rawmat.allocation.theme";
 
     const translations = {
       en: {
+        brandKicker: "Allocation workbench",
         manualTitle: "Operation Manual",
         backToApp: "Back to app",
+        themeMill: "Mill Ops",
+        themeSoft: "Soft Enterprise",
         manualIntro: "This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.",
         step1Title: "Step 1 — Import Excel files",
         step1a: "Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.",
@@ -244,8 +310,11 @@
         troubleNote: "Data stays on your computer. Do not upload real business files to external services."
       },
       zh: {
+        brandKicker: "配發工作台",
         manualTitle: "操作手冊",
         backToApp: "返回程式",
+        themeMill: "Mill Ops 廠務",
+        themeSoft: "Soft 企業風",
         manualIntro: "本手冊說明如何使用 RAW MAT 庫存配發引擎（離線瀏覽器工具）。請在上方選擇語系。",
         step1Title: "第 1 步 — 匯入 Excel",
         step1a: "上傳或貼上三個檔案：Excel1 排程、Excel2 需求（COIS）、Excel3 BOM／庫存。",
@@ -287,8 +356,11 @@
         troubleNote: "資料僅留在本機電腦，請勿將真實業務檔上傳至外部服務。"
       },
       my: {
+        brandKicker: "ခွဲဝေမှု လုပ်ငန်းခုံ",
         manualTitle: "လုပ်ဆောင်ချက် လက်စွဲ",
         backToApp: "အက်ပ်သို့ ပြန်သွားရန်",
+        themeMill: "Mill Ops",
+        themeSoft: "Soft Enterprise",
         manualIntro: "ဤလက်စွဲသည် RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင် (offline ဘရောက်ဆာ ကိရိယာ) ကို အသုံးပြုနည်းကို ရှင်းပြထားသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
         step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
         step1a: "ဖိုင် ၃ ခု တင်ပါ သို့မဟုတ် ကူးထည့်ပါ — Excel1 အချိန်ဇယား၊ Excel2 လိုအပ်ချက် (COIS)၊ Excel3 BOM/သိုလှောင်ရုံ။",
@@ -333,6 +405,7 @@
 
     let lang = "en";
     const languageSelect = document.getElementById("languageSelect");
+    const themeSelect = document.getElementById("themeSelect");
 
     function t(key) {
       const table = translations[lang] || translations.en;
@@ -345,11 +418,19 @@
       return "en";
     }
 
+    function applyTheme(theme) {
+      const next = theme === "soft" ? "soft" : "mill";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+      themeSelect.value = next;
+    }
+
     function applyLanguage() {
       document.documentElement.lang = htmlLangFor(lang);
       document.querySelectorAll("[data-i18n]").forEach(node => {
         node.textContent = t(node.dataset.i18n);
       });
+      themeSelect.value = document.documentElement.getAttribute("data-theme") || "mill";
       document.title = `${t("manualTitle")} — RAW MAT`;
       localStorage.setItem(LANG_STORAGE_KEY, lang);
     }
@@ -359,10 +440,15 @@
       lang = saved;
       languageSelect.value = saved;
     }
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    applyTheme(savedTheme === "soft" ? "soft" : "mill");
 
     languageSelect.addEventListener("change", () => {
       lang = languageSelect.value;
       applyLanguage();
+    });
+    themeSelect.addEventListener("change", () => {
+      applyTheme(themeSelect.value);
     });
 
     applyLanguage();
