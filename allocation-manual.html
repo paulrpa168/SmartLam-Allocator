@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAW MAT Allocation — Operation Manual</title>
+  <style>
+    :root {
+      --bg: #f3f6f8;
+      --ink: #17212b;
+      --muted: #5b6874;
+      --line: #d4dce3;
+      --panel: #ffffff;
+      --soft: #edf3f6;
+      --accent: #1f7a8c;
+      --accent-dark: #155c6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", sans-serif;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 18px clamp(16px, 4vw, 42px);
+    }
+    .topbar, main {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); }
+    main { padding: 24px clamp(16px, 4vw, 42px) 48px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    h2 { margin: 0 0 10px; font-size: 18px; color: var(--accent-dark); }
+    p, li { margin: 0 0 8px; }
+    ul, ol { margin: 0 0 8px; padding-left: 1.4em; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--soft); }
+    a.app-link, a.manual-link {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    a.app-link:hover, a.manual-link:hover {
+      background: var(--soft);
+      border-color: var(--accent);
+    }
+    select {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px 8px;
+      background: #fff;
+    }
+    .note {
+      background: var(--soft);
+      border-left: 4px solid var(--accent);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <h1 data-i18n="manualTitle">Operation Manual</h1>
+      <div class="top-actions">
+        <a href="allocation-web.html" class="app-link" data-i18n="backToApp">Back to app</a>
+        <select id="languageSelect" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh">繁體中文</option>
+          <option value="my">မြန်မာ</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <p data-i18n="manualIntro">This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="step1Title">Step 1 — Import Excel files</h2>
+      <ul>
+        <li data-i18n="step1a">Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.</li>
+        <li data-i18n="step1b">Column mapping is fixed by business rules (see table below).</li>
+        <li data-i18n="step1c">Use Sample data to try the tool without real files.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="step2Title">Step 2 — Mapping &amp; run allocation</h2>
+      <ul>
+        <li data-i18n="step2a">Review the fixed mapping table and detected headers.</li>
+        <li data-i18n="step2b">Unit whitelist: when mother unit ≠ child unit (non-SHT), add conversion ratios (default M↔YD).</li>
+        <li data-i18n="step2c">SHT size-suffix table: when mother unit is SHT, read size suffix from Excel3.F mother name (e.g. 110x200cm). Add or edit rows as needed.</li>
+        <li data-i18n="step2d">Click Run allocation. Missing rules or unit mismatches will block with an error message.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="step3Title">Step 3 — Filter, preview &amp; export</h2>
+      <ul>
+        <li data-i18n="step3a">Filter by SO, cutting date range, or mother material. Preview updates live.</li>
+        <li data-i18n="step3b">Checkboxes can hide zero-demand SOs or rows.</li>
+        <li data-i18n="step3c">Export CSV or Excel. Export uses the same filters as preview.</li>
+        <li data-i18n="step3d">If inputs change after a run, re-run allocation before exporting.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="yTitle">Column Y (allocated flag)</h2>
+      <p data-i18n="yBody">For each sales order + mother material group: Y appears on all rows only when every child has demand &gt; 0 and provided ≥ demand (fully allocated). If any child is short, the whole group shows blank.</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="colsTitle">Fixed column mapping</h2>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="colSource">Source</th>
+            <th data-i18n="colLetter">Column</th>
+            <th data-i18n="colMeaning">Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Excel1</td><td>A</td><td data-i18n="colSo">Sales order (so)</td></tr>
+          <tr><td>Excel1</td><td>B</td><td data-i18n="colCutting">Cutting / production date</td></tr>
+          <tr><td>Excel2</td><td>B</td><td data-i18n="colSd">SD Document (SO)</td></tr>
+          <tr><td>Excel2</td><td>F</td><td data-i18n="colMother">Mother material</td></tr>
+          <tr><td>Excel2</td><td>Q</td><td data-i18n="colQty">Open Quantity (demand)</td></tr>
+          <tr><td>Excel2</td><td>R</td><td data-i18n="colUnitR">Mother unit</td></tr>
+          <tr><td>Excel3</td><td>E</td><td data-i18n="colMother3">Mother material</td></tr>
+          <tr><td>Excel3</td><td>F</td><td data-i18n="colDescF">Mother full name (SHT size suffix)</td></tr>
+          <tr><td>Excel3</td><td>H</td><td data-i18n="colUnitH">Mother unit check (must match 2.R)</td></tr>
+          <tr><td>Excel3</td><td>I</td><td data-i18n="colChild">Child material</td></tr>
+          <tr><td>Excel3</td><td>M</td><td data-i18n="colUnitM">Child unit</td></tr>
+          <tr><td>Excel3</td><td>K</td><td data-i18n="colStock">Unrestricted stock (MAX per child)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2 data-i18n="troubleTitle">Troubleshooting</h2>
+      <ul>
+        <li data-i18n="trouble1">Unit pre-check failed: same mother must have matching Excel2.R and Excel3.H.</li>
+        <li data-i18n="trouble2">Missing conversion: add unit or SHT size-suffix rule in Step 2, then re-run.</li>
+        <li data-i18n="trouble3">SHT mother missing suffix: ensure Excel3.F mother name ends with size like 110x200cm.</li>
+        <li data-i18n="trouble4">Results stale: inputs changed — run allocation again before export.</li>
+      </ul>
+      <div class="note" data-i18n="troubleNote">Data stays on your computer. Do not upload real business files to external services.</div>
+    </section>
+  </main>
+
+  <script>
+    const LANG_STORAGE_KEY = "rawmat.allocation.lang";
+
+    const translations = {
+      en: {
+        manualTitle: "Operation Manual",
+        backToApp: "Back to app",
+        manualIntro: "This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.",
+        step1Title: "Step 1 — Import Excel files",
+        step1a: "Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.",
+        step1b: "Column mapping is fixed by business rules (see table below).",
+        step1c: "Use Sample data to try the tool without real files.",
+        step2Title: "Step 2 — Mapping & run allocation",
+        step2a: "Review the fixed mapping table and detected headers.",
+        step2b: "Unit whitelist: when mother unit ≠ child unit (non-SHT), add conversion ratios (default M↔YD).",
+        step2c: "SHT size-suffix table: when mother unit is SHT, read size suffix from Excel3.F mother name (e.g. 110x200cm). Add or edit rows as needed.",
+        step2d: "Click Run allocation. Missing rules or unit mismatches will block with an error message.",
+        step3Title: "Step 3 — Filter, preview & export",
+        step3a: "Filter by SO, cutting date range, or mother material. Preview updates live.",
+        step3b: "Checkboxes can hide zero-demand SOs or rows.",
+        step3c: "Export CSV or Excel. Export uses the same filters as preview.",
+        step3d: "If inputs change after a run, re-run allocation before exporting.",
+        yTitle: "Column Y (allocated flag)",
+        yBody: "For each sales order + mother material group: Y appears on all rows only when every child has demand > 0 and provided ≥ demand (fully allocated). If any child is short, the whole group shows blank.",
+        colsTitle: "Fixed column mapping",
+        colSource: "Source",
+        colLetter: "Column",
+        colMeaning: "Meaning",
+        colSo: "Sales order (so)",
+        colCutting: "Cutting / production date",
+        colSd: "SD Document (SO)",
+        colMother: "Mother material",
+        colQty: "Open Quantity (demand)",
+        colUnitR: "Mother unit",
+        colMother3: "Mother material",
+        colDescF: "Mother full name (SHT size suffix)",
+        colUnitH: "Mother unit check (must match 2.R)",
+        colChild: "Child material",
+        colUnitM: "Child unit",
+        colStock: "Unrestricted stock (MAX per child)",
+        troubleTitle: "Troubleshooting",
+        trouble1: "Unit pre-check failed: same mother must have matching Excel2.R and Excel3.H.",
+        trouble2: "Missing conversion: add unit or SHT size-suffix rule in Step 2, then re-run.",
+        trouble3: "SHT mother missing suffix: ensure Excel3.F mother name ends with size like 110x200cm.",
+        trouble4: "Results stale: inputs changed — run allocation again before export.",
+        troubleNote: "Data stays on your computer. Do not upload real business files to external services."
+      },
+      zh: {
+        manualTitle: "操作手冊",
+        backToApp: "返回程式",
+        manualIntro: "本手冊說明如何使用 RAW MAT 庫存配發引擎（離線瀏覽器工具）。請在上方選擇語系。",
+        step1Title: "第 1 步 — 匯入 Excel",
+        step1a: "上傳或貼上三個檔案：Excel1 排程、Excel2 需求（COIS）、Excel3 BOM／庫存。",
+        step1b: "欄位對應依業務規則固定（見下表）。",
+        step1c: "可使用「範例資料」在不使用真實檔的情況下試用。",
+        step2Title: "第 2 步 — 對應與執行配發",
+        step2a: "檢視固定對應表與偵測到的表頭。",
+        step2b: "單位白名單：母單位 ≠ 子單位（非 SHT）時，補上換算倍率（預設 M↔YD）。",
+        step2c: "SHT 末碼換算：母單位為 SHT 時，從 Excel3.F 母料全名讀取末碼（如 110x200cm）。請自行新增或修改規則。",
+        step2d: "按「執行配發」。缺規則或單位不一致會以錯誤訊息阻擋。",
+        step3Title: "第 3 步 — 篩選、預覽與匯出",
+        step3a: "可依 SO、cutting 日期、母材料篩選；預覽即時更新。",
+        step3b: "可勾選隱藏零需求 SO 或零需求列。",
+        step3c: "匯出 CSV 或 Excel；匯出內容與預覽篩選一致。",
+        step3d: "若執行後又修改輸入，請重新配發再匯出。",
+        yTitle: "Y 欄（已配發標記）",
+        yBody: "同一訂單 + 同一母材料：僅當所有子料 demand > 0 且 provided ≥ demand（全數配滿）時，群組內每一列才顯示 Y；任一字料短缺則整組空白。",
+        colsTitle: "固定欄位對應",
+        colSource: "來源",
+        colLetter: "欄位",
+        colMeaning: "語意",
+        colSo: "訂單（so）",
+        colCutting: "排程生產日 cutting",
+        colSd: "訂單（SD Document）",
+        colMother: "母材料",
+        colQty: "Open Quantity（需求）",
+        colUnitR: "母單位（2.R）",
+        colMother3: "母材料",
+        colDescF: "母料全名（SHT 末碼）",
+        colUnitH: "母單位檢查（須等於 2.R）",
+        colChild: "子材料",
+        colUnitM: "子單位（3.M）",
+        colStock: "Unrestricted 庫存（同子料取 MAX）",
+        troubleTitle: "常見問題",
+        trouble1: "單位事前檢查失敗：同母料 Excel2.R 與 Excel3.H 必須一致。",
+        trouble2: "缺少換算：在 Step 2 補單位或 SHT 末碼規則後重跑。",
+        trouble3: "SHT 母料無末碼：請確認 Excel3.F 母料全名末尾含 110x200cm 等尺寸。",
+        trouble4: "結果已過期：輸入已變更 — 請重新執行配發再匯出。",
+        troubleNote: "資料僅留在本機電腦，請勿將真實業務檔上傳至外部服務。"
+      },
+      my: {
+        manualTitle: "လုပ်ဆောင်ချက် လက်စွဲ",
+        backToApp: "အက်ပ်သို့ ပြန်သွားရန်",
+        manualIntro: "ဤလက်စွဲသည် RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင် (offline ဘရောက်ဆာ ကိရိယာ) ကို အသုံးပြုနည်းကို ရှင်းပြထားသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
+        step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
+        step1a: "ဖိုင် ၃ ခု တင်ပါ သို့မဟုတ် ကူးထည့်ပါ — Excel1 အချိန်ဇယား၊ Excel2 လိုအပ်ချက် (COIS)၊ Excel3 BOM/သိုလှောင်ရုံ။",
+        step1b: "ကော်လံ အမှတ်အသားသည် လုပ်ငန်း စည်းမျဉ်းအရ သတ်မှတ်ထားသည် (အောက်ဇယားကြည့်ပါ)။",
+        step1c: "အစမ်း အသုံးပြုရန် Sample data ကို သုံးနိုင်သည်။",
+        step2Title: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု လုပ်ဆောင်ရန်",
+        step2a: "သတ်မှတ်ထားသော အမှတ်အသား ဇယားနှင့် တွေ့ရှိသော ခေါင်းစဉ်များကို စစ်ဆေးပါ။",
+        step2b: "ယူနစ် whitelist — မိခင်ယူနစ် ≠ သားယူနစ် (SHT မဟုတ်) ဆိုပါက ပြောင်းလဲမှု အချိုးကို ထည့်ပါ (ပုံမှန် M↔YD)။",
+        step2c: "SHT အရွယ်အစား နောက်ဆုံးစာလုံး — မိခင်ယူနစ် SHT ဖြစ်ပါက Excel3.F မိခင်အမည် မှ အရွယ်အစား (ဥပမာ 110x200cm) ကို ဖတ်ပါ။ လိုအပ်သလို စာရင်းထည့်/ပြင်ပါ။",
+        step2d: "Run allocation ကို နှိပ်ပါ။ စည်းမျဉ်း မပြည့်မီပါက အမှားပြမည်။",
+        step3Title: "အဆင့် ၃ — စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
+        step3a: "SO၊ cutting ရက်စွဲ၊ မိခင်ပစ္စည်း ဖြင့် စစ်ထုတ်နိုင်သည်။ အစမ်းကြည့်မှု ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်။",
+        step3b: "လိုအပ်ချက် သုည ဖြစ်သော SO သို့မဟုတ် အတန်းများကို ဖျောက်နိုင်သည်။",
+        step3c: "CSV သို့မဟုတ် Excel ထုတ်ယူပါ။ ထုတ်ယူမှုသည် အစမ်းကြည့်မှု စစ်ထုတ်မှုနှင့် တူညီသည်။",
+        step3d: "လုပ်ဆောင်ပြီးနောက် ထည့်သွင်းမှု ပြောင်းပါက ထပ်မံ ခွဲဝေမှု လုပ်ဆောင်ပါ။",
+        yTitle: "ကော်လံ Y (ခွဲဝေပြီး အမှတ်အသား)",
+        yBody: "တစ်စုံတစ်ရာ မှာယူမှု + မိခင်ပစ္စည်း အုပ်စုတစ်ခုလုံးအတွက် — သားပစ္စည်း အားလုံး demand > 0 နှင့် provided ≥ demand (ပြည့်စုံစွာ ခွဲဝေပြီး) ဖြစ်မှသာ Y ပြမည်။ တစ်ခုခု မလုံလောက်ပါက အုပ်စုလုံး ဗလာဖြစ်မည်။",
+        colsTitle: "သတ်မှတ် ကော်လံ အမှတ်အသား",
+        colSource: "ရင်းမြစ်",
+        colLetter: "ကော်လံ",
+        colMeaning: "အဓိပ္ပာယ်",
+        colSo: "မှာယူမှု (so)",
+        colCutting: "Cutting / ထုတ်လုပ်ရက်",
+        colSd: "SD Document (SO)",
+        colMother: "မိခင်ပစ္စည်း",
+        colQty: "Open Quantity (လိုအပ်ချက်)",
+        colUnitR: "မိခင်ယူနစ်",
+        colMother3: "မိခင်ပစ္စည်း",
+        colDescF: "မိခင်အမည် အပြည့်အစုံ (SHT အရွယ်အစား)",
+        colUnitH: "မိခင်ယူနစ် စစ်ဆေးမှု (2.R နှင့် တူညီရမည်)",
+        colChild: "သားပစ္စည်း",
+        colUnitM: "သားယူနစ်",
+        colStock: "Unrestricted သိုလှောင်ရုံ (သားပစ္စည်းတစ်ခုလျှင် MAX)",
+        troubleTitle: "ပြဿနာ ဖြေရှင်းနည်း",
+        trouble1: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် — တူညီသော မိခင်ပစ္စည်းတွင် Excel2.R နှင့် Excel3.H တူညီရမည်။",
+        trouble2: "ပြောင်းလဲမှု မရှိ — အဆင့် ၂ တွင် ယူနစ် သို့မဟုတ် SHT နောက်ဆုံးစာလုံး စည်းမျဉ်း ထည့်ပြီး ပြန်လုပ်ပါ။",
+        trouble3: "SHT မိခင်တွင် နောက်ဆုံးစာလုံး မရှိ — Excel3.F တွင် 110x200cm ကဲ့သို့ အဆုံးတွင် အရွယ်အစား ရှိရမည်။",
+        trouble4: "ရလဒ် ဟောင်းနေပြီ — ထည့်သွင်းမှု ပြောင်းပြီး — ထပ်မံ ခွဲဝေမှု လုပ်ဆောင်ပါ။",
+        troubleNote: "ဒေတာသည် သင့်ကွန်ပျူတာတွင်သာ ရှိသည်။ လုပ်ငန်း ဖိုင်များကို ပြင်ပ ဝန်ဆောင်မှုသို့ မတင်ပါနှင့်။"
+      }
+    };
+
+    let lang = "en";
+    const languageSelect = document.getElementById("languageSelect");
+
+    function t(key) {
+      const table = translations[lang] || translations.en;
+      return table[key] || translations.en[key] || key;
+    }
+
+    function htmlLangFor(code) {
+      if (code === "zh") return "zh-Hant";
+      if (code === "my") return "my";
+      return "en";
+    }
+
+    function applyLanguage() {
+      document.documentElement.lang = htmlLangFor(lang);
+      document.querySelectorAll("[data-i18n]").forEach(node => {
+        node.textContent = t(node.dataset.i18n);
+      });
+      document.title = `${t("manualTitle")} — RAW MAT`;
+      localStorage.setItem(LANG_STORAGE_KEY, lang);
+    }
+
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    if (saved && translations[saved]) {
+      lang = saved;
+      languageSelect.value = saved;
+    }
+
+    languageSelect.addEventListener("change", () => {
+      lang = languageSelect.value;
+      applyLanguage();
+    });
+
+    applyLanguage();
+  </script>
+</body>
+</html>

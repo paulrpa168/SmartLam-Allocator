@@ -34,7 +34,7 @@
       min-height: 100vh;
       background: var(--bg);
       color: var(--ink);
-      font: 15px/1.45 "Segoe UI", Arial, "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+      font: 15px/1.45 "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
     }
 
     button, input, select, textarea { font: inherit; }
@@ -389,9 +389,9 @@
       z-index: 1;
     }
 
-    table.result tr.so-even td { background: #f3f5f7; }
+    table.result tr.so-even td { background: #c5d3e0; }
     table.result tr.so-odd td { background: #ffffff; }
-    table.result tr.group-break td { box-shadow: inset 0 2px 0 #94a3b8; }
+    table.result tr.group-break td { box-shadow: inset 0 2px 0 #64748b; }
 
     .filter-bar {
       display: grid;
@@ -471,6 +471,28 @@
       box-shadow: var(--shadow);
       display: grid;
       gap: 12px;
+      position: relative;
+    }
+
+    .error-modal-close-x {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 34px;
+      height: 34px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .error-modal-close-x:hover {
+      color: var(--accent);
     }
 
     .modal-card pre {
@@ -520,6 +542,24 @@
       transition: width 0.25s ease;
     }
 
+    .manual-link {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .manual-link:hover {
+      background: var(--soft);
+      border-color: var(--accent);
+    }
+
     @media (max-width: 920px) {
       .topbar { flex-direction: column; align-items: flex-start; }
       .stepper, .three-col, .result-band { grid-template-columns: 1fr; }
@@ -531,9 +571,11 @@
     <div class="topbar">
       <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
       <div class="top-actions">
+        <a href="allocation-manual.html" class="manual-link" data-i18n="manualLink">Operation manual</a>
         <select id="languageSelect" aria-label="Language">
           <option value="en">English</option>
           <option value="zh">繁體中文</option>
+          <option value="my">မြန်မာ</option>
         </select>
         <div class="status" id="statusText">Ready</div>
       </div>
@@ -550,7 +592,7 @@
     <section class="active" id="step1">
       <div class="section-head">
         <h2 data-i18n="importTitle">Step 1: Import Excel files</h2>
-        <span class="sample">v2.1.1</span>
+        <span class="sample" id="appVersionBadge"></span>
       </div>
       <div class="section-body">
         <div class="message" data-i18n="importHelp">Upload schedule (Excel1), COIS demand (Excel2), and ZRMm BOM/stock (Excel3). Column mapping is fixed by business rules.</div>
@@ -639,11 +681,11 @@
 
         <div class="conv-box">
           <strong data-i18n="sizeConvTitle">SHT size-suffix conversion</strong>
-          <div class="message" data-i18n="sizeConvHelp">When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.J child description). SHT→SHT is always 1:1. Add / edit / remove rows as needed. Seeds are editable defaults, not hardcoded in the engine.</div>
+          <div class="message" data-i18n="sizeConvHelp">When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.F mother name). SHT→SHT is always 1:1. Add / edit / remove rows as needed. Seeds are editable defaults, not hardcoded in the engine.</div>
           <table>
             <thead>
               <tr>
-                <th data-i18n="sizeSuffix">Size suffix (from 3.J)</th>
+                <th data-i18n="sizeSuffix">Size suffix (from 3.F)</th>
                 <th data-i18n="sizeChildUnit">Child unit (3.M)</th>
                 <th data-i18n="convRatio">Ratio</th>
                 <th></th>
@@ -725,6 +767,7 @@
 
   <div class="modal-overlay" id="errorModal">
     <div class="modal-card">
+      <button type="button" id="errorModalX" class="error-modal-close-x" aria-label="Close">×</button>
       <strong id="errorModalTitle">Error</strong>
       <pre id="errorModalBody"></pre>
       <div class="actions">
@@ -742,7 +785,8 @@
   </div>
 
   <script>
-    const APP_VERSION = "2.2.0";
+    const APP_VERSION = "2.2.2";
+    const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
     const SIZE_CONV_STORAGE_KEY = "rawmat.allocation.sizeConversionRules.v22";
     const SIZE_SUFFIX_CUSTOM = "__CUSTOM__";
@@ -752,7 +796,7 @@
     const COL = {
       excel1: { so: 0, cutting: 1 },
       excel2: { so: 1, mother: 5, qty: 16, unitR: 17 },
-      excel3: { mother: 4, child: 8, descJ: 9, stock: 10, unitH: 7, unitM: 12 }
+      excel3: { mother: 4, descF: 5, child: 8, stock: 10, unitH: 7, unitM: 12 }
     };
 
     // Output indexes used by filters / Y flag
@@ -813,6 +857,31 @@
       "已配發（Y）"
     ];
 
+    const OUTPUT_HEADERS_MY = [
+      "cutting",
+      "so",
+      "မိခင်ပစ္စည်း",
+      "မိခင်ယူနစ် (2.R)",
+      "သားပစ္စည်း",
+      "သားယူနစ် (3.M)",
+      "လိုအပ်ချက်",
+      "ပေးနိုင်သော ပမာဏ",
+      "ကျန်ရှိ သိုလှောင်ရုံ",
+      "ခွဲဝေပြီး (Y)"
+    ];
+
+    function htmlLangFor(code) {
+      if (code === "zh") return "zh-Hant";
+      if (code === "my") return "my";
+      return "en";
+    }
+
+    function outputHeadersForLang(lang) {
+      if (lang === "zh") return OUTPUT_HEADERS_ZH;
+      if (lang === "my") return OUTPUT_HEADERS_MY;
+      return OUTPUT_HEADERS_EN;
+    }
+
     function padHeaders(base, width) {
       const headers = [];
       for (let i = 0; i < width; i++) {
@@ -850,13 +919,13 @@
     ];
 
     const sample3Headers = padHeaders([
-      "A", "B", "C", "D", "Material", "F", "G", "OUn", "Article(Com.)", "Mtl.Full Desc. (Com.)(EN)", "Unrestricted", "K2", "BUn"
+      "A", "B", "C", "D", "Material", "Material Full Description(EN)", "G", "OUn", "Article(Com.)", "J", "Unrestricted", "K2", "BUn"
     ], 13);
     const sample3Rows = [
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "CHILD DEMO 110x200cm", "7", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "CHILD DEMO 110x200cm", "20", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "CHILD DEMO 110x200cm", "12", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "CHILD DEMO 110x200cm", "4", "", "YD"], 13)
+      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-1", "", "7", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-1", "", "20", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-2", "", "12", "", "YD"], 13),
+      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-2", "", "4", "", "YD"], 13)
     ];
 
     const sampleLeft = sheetToTsv(sample1Headers, sample1Rows);
@@ -866,6 +935,7 @@
     const translations = {
       en: {
         appTitle: "RAW MAT Allocation Engine",
+        manualLink: "Operation manual",
         ready: "Ready",
         step1: "Import files",
         step2: "Mapping & run",
@@ -888,7 +958,7 @@
         mapColumn: "Column",
         mapMeaning: "Meaning",
         mapDetected: "Detected header",
-        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; if mother is SHT use size-suffix table (3.J); else unit whitelist (default M↔YD). Missing rule blocks run.",
+        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; if mother is SHT use size-suffix table (3.F mother name); else unit whitelist (default M↔YD). Missing rule blocks run.",
         back: "Back",
         runAllocate: "Run allocation",
         resultTitle: "Filter, preview and export",
@@ -929,7 +999,7 @@
         mapQty: "Open Quantity (demand)",
         mapUnitR: "Mother unit (2.R)",
         mapMother3: "Mother material",
-        mapDescJ: "Child full description (size suffix)",
+        mapDescF: "Mother full description (size suffix)",
         mapUnitH: "Mother unit check (3.H OUn)",
         mapChild: "Child Article(Com.)",
         mapUnitM: "Child unit (3.M BUn)",
@@ -943,8 +1013,8 @@
         convReset: "Reset defaults",
         convRemove: "Remove",
         sizeConvTitle: "SHT size-suffix conversion",
-        sizeConvHelp: "When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.J). SHT→SHT is always 1:1. Add, edit ratio, or delete rows yourself. Seeds are editable defaults, not hardcoded in the engine.",
-        sizeSuffix: "Size suffix (from 3.J)",
+        sizeConvHelp: "When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.F mother name). SHT→SHT is always 1:1. Add, edit ratio, or delete rows yourself. Seeds are editable defaults, not hardcoded in the engine.",
+        sizeSuffix: "Size suffix (from 3.F)",
         sizeChildUnit: "Child unit (3.M)",
         sizeConvAdd: "Add size rule",
         sizeConvReset: "Reset size defaults",
@@ -963,6 +1033,7 @@
       },
       zh: {
         appTitle: "RAW MAT 庫存配發引擎",
+        manualLink: "操作手冊",
         ready: "就緒",
         step1: "匯入檔案",
         step2: "對應與執行",
@@ -985,7 +1056,7 @@
         mapColumn: "欄位",
         mapMeaning: "語意",
         mapDetected: "偵測到的表頭",
-        mappingHelp: "事前檢查：同母料 Excel2.R 必須等於 Excel3.H。換算：2.R=3.M 則 1:1；母單位為 SHT 則查末碼表（3.J）；否則查單位白名單（預設 M↔YD）。缺規則則停止。",
+        mappingHelp: "事前檢查：同母料 Excel2.R 必須等於 Excel3.H。換算：2.R=3.M 則 1:1；母單位為 SHT 則查末碼表（3.F 母料全名）；否則查單位白名單（預設 M↔YD）。缺規則則停止。",
         back: "返回",
         runAllocate: "執行配發",
         resultTitle: "篩選、預覽與匯出",
@@ -1026,7 +1097,7 @@
         mapQty: "Open Quantity（需求）",
         mapUnitR: "母單位（2.R）",
         mapMother3: "母材料",
-        mapDescJ: "子料全名（末碼尺寸）",
+        mapDescF: "母料全名（末碼尺寸）",
         mapUnitH: "母單位檢查（3.H OUn）",
         mapChild: "子材料 Article(Com.)",
         mapUnitM: "子單位（3.M BUn）",
@@ -1040,8 +1111,8 @@
         convReset: "還原預設",
         convRemove: "刪除",
         sizeConvTitle: "SHT 末碼換算",
-        sizeConvHelp: "母單位（2.R）為 SHT 且子單位不同時，Demand = Q × 本表倍率（末碼取自 Excel3.J 子料描述）。SHT→SHT 一律 1:1。請自行新增／改倍率／刪除不需要的列。預設種子可改，引擎不寫死倍率。",
-        sizeSuffix: "末碼（來自 3.J）",
+        sizeConvHelp: "母單位（2.R）為 SHT 且子單位不同時，Demand = Q × 本表倍率（末碼取自 Excel3.F 母料全名）。SHT→SHT 一律 1:1。請自行新增／改倍率／刪除不需要的列。預設種子可改，引擎不寫死倍率。",
+        sizeSuffix: "末碼（來自 3.F）",
         sizeChildUnit: "子單位（3.M）",
         sizeConvAdd: "新增末碼規則",
         sizeConvReset: "還原末碼預設",
@@ -1057,6 +1128,104 @@
         errorConvTitle: "缺少換算規則（2.R vs 3.M）",
         errorPrecheckIntro: "同母料單位必須一致。請修正原始資料後重跑。",
         errorConvIntro: "請在換算表補上缺少的母→子單位乘數後再執行。"
+      },
+      my: {
+        appTitle: "RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင်",
+        manualLink: "လုပ်ဆောင်ချက် လက်စွဲ",
+        ready: "အဆင်သင့်",
+        step1: "ဖိုင်များ တင်သွင်းရန်",
+        step2: "အမှတ်အသား နှင့် လုပ်ဆောင်ရန်",
+        step3: "စစ်ထုတ် နှင့် အစမ်းကြည့်ရန်",
+        importTitle: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
+        importHelp: "အချိန်ဇယား (Excel1)၊ လိုအပ်ချက် COIS (Excel2) နှင့် BOM/သိုလှောင်ရုံ (Excel3) ကို တင်ပါ။ ကော်လံ အမှတ်အသားသည် လုပ်ငန်း စည်းမျဉ်းအရ သတ်မှတ်ထားသည်။",
+        excel1: "Excel 1 — အချိန်ဇယား",
+        excel2: "Excel 2 — လိုအပ်ချက် (COIS)",
+        excel3: "Excel 3 — BOM / သိုလှောင်ရုံ",
+        uploadFile: "ဖိုင် တင်ရန်",
+        pasteExcel: "သို့မဟုတ် Excel မှ ကူးထည့်ရန်",
+        sampleData: "နမူန်ဒေတာ",
+        clearExcel1: "Excel 1 ရှင်းရန်",
+        clearExcel2: "Excel 2 ရှင်းရန်",
+        clearExcel3: "Excel 3 ရှင်းရန်",
+        nextMapping: "နောက်တစ်ဆင့် — အမှတ်အသား",
+        mappingTitle: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု",
+        fixedMapping: "သတ်မှတ် အမှတ်အသား",
+        mapSource: "ရင်းမြစ်",
+        mapColumn: "ကော်လံ",
+        mapMeaning: "အဓိပ္ပာယ်",
+        mapDetected: "တွေ့ရှိသော ခေါင်းစဉ်",
+        mappingHelp: "စစ်ဆေးမှု — တူညီသော မိခင်ပစ္စည်းတွင် Excel2.R နှင့် Excel3.H တူညီရမည်။ 2.R=3.M ဆိုပါက 1:1။ မိခင်ယူနစ် SHT ဆိုပါက Excel3.F နောက်ဆုံးစာလုံး ဇယားကို သုံးပါ။ မဟုတ်ပါက ယူနစ် whitelist (M↔YD)။ စည်းမျဉ်း မရှိပါက ရပ်တန့်မည်။",
+        back: "နောက်သို့",
+        runAllocate: "ခွဲဝေမှု လုပ်ဆောင်ရန်",
+        resultTitle: "စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
+        previewLimit: "အစမ်းကြည့် အပေါ် ၃၀၀ အတန်း · စစ်ထုတ်မှု ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်",
+        filterLiveHelp: "စစ်ထုတ်မှုသည် ဤစာမျက်နှာတွင်သာ ရှိသည်။ ပြောင်းလဲမှုသည် အစမ်းကြည့်နှင့် ထုတ်ယူမှုကို ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်။",
+        rowsExported: "ထုတ်ယူသော အတန်းများ",
+        demandKeys: "ထိန်းသိမ်းထားသော လိုအပ်ချက်",
+        mothersMatched: "ကိုက်ညီသော မိခင်ပစ္စည်း",
+        shortageRows: "မလုံလောက်သော အတန်းများ",
+        resultEmpty: "အစမ်းကြည့်နှင့် ထုတ်ယူရန် ခွဲဝေမှု လုပ်ဆောင်ပါ။",
+        exportCsv: "CSV ထုတ်ယူရန်",
+        exportExcel: "Excel ထုတ်ယူရန်",
+        copyTable: "ဇယား ကူးယူရန်",
+        loading: "ဖွင့်နေသည်",
+        importing: "ဖိုင် တင်သွင်းနေသည်",
+        readingFile: "ဖိုင် ဖတ်နေသည်...",
+        parsingFile: "ဇယား ခွဲခြမ်းနေသည်...",
+        processing: "ခွဲဝေမှု လုပ်ဆောင်နေသည်",
+        expanding: "လိုအပ်ချက် အတန်းများ ဖန်တီးနေသည်...",
+        allocating: "သိုလှောင်ရုံ ခွဲဝေနေသည်...",
+        rendering: "အစမ်းကြည့် ပြင်ဆင်နေသည်...",
+        loaded: "အတန်း {rows} ခု၊ ကော်လံ {cols} ခု တင်ပြီးပါပြီ။",
+        importError: "ဖိုင် မဖတ်နိုင်ပါ — {message}",
+        needBoth: "Excel 1၊ Excel 2 နှင့် Excel 3 ကို အရင် တင်ပါ။",
+        built: "အတန်း {rows} ခု ခွဲဝေပြီး (ပြသထားသည် {shown})။ မလုံလောက်သော အတန်း {shortage}။",
+        exported: "CSV ထုတ်ယူပြီး",
+        exportedExcel: "Excel ထုတ်ယူပြီး",
+        excelExportFailed: "Excel ထုတ်ယူမှု မအောင်မြင် — {message}",
+        copied: "ဇယား ကူးယူပြီး",
+        copyUnavailable: "ကူးယူ၍ မရပါ",
+        resultStale: "ထည့်သွင်းမှု ပြောင်းလဲပြီး။ ထုတ်ယူမီ ခွဲဝေမှု ပြန်လုပ်ပါ။",
+        workbookUnsupported: "ဤဘရောက်ဆာသည် .xlsx မဖတ်နိုင်ပါ။ CSV သို့မဟုတ် ကူးထည့်မှု သုံးပါ။",
+        missingHeader: "(အညွှန်း {index}၊ ခေါင်းစဉ် မရှိ)",
+        mapSo: "မှာယူမှု",
+        mapCutting: "ထုတ်လုပ်ရက် cutting",
+        mapSd: "မှာယူမှု (SD Document)",
+        mapMother2: "မိခင်ပစ္စည်း",
+        mapQty: "Open Quantity (လိုအပ်ချက်)",
+        mapUnitR: "မိခင်ယူနစ် (2.R)",
+        mapMother3: "မိခင်ပစ္စည်း",
+        mapDescF: "မိခင်အမည် အပြည့်အစုံ (အရွယ်အစား နောက်ဆုံးစာလုံး)",
+        mapUnitH: "မိခင်ယူနစ် စစ်ဆေးမှု (3.H)",
+        mapChild: "သားပစ္စည်း Article(Com.)",
+        mapUnitM: "သားယူနစ် (3.M)",
+        mapStock: "Unrestricted (သားပစ္စည်းတစ်ခုလျှင် MAX)",
+        convTitle: "ယူနစ် ပြောင်းလဲမှု whitelist",
+        convHelp: "မိခင်ယူနစ် × အချိုး = သားပစ္စည်း လိုအပ်ချက်။ ပုံမှန် (ပြင်နိုင်) M→YD=1.0936၊ YD→M=0.9144။ ယူနစ် တူညီပါက 1:1။",
+        convMotherUnit: "မိခင်ယူနစ် (2.R)",
+        convChildUnit: "သားယူနစ် (3.M)",
+        convRatio: "ပြောင်းလဲမှု အချိုး",
+        convAdd: "ပြောင်းလဲမှု ထည့်ရန်",
+        convReset: "ပုံမှန် ပြန်ထားရန်",
+        convRemove: "ဖျက်ရန်",
+        sizeConvTitle: "SHT အရွယ်အစား နောက်ဆုံးစာလုံး ပြောင်းလဲမှု",
+        sizeConvHelp: "မိခင်ယူနစ် (2.R) သည် SHT ဖြစ်ပြီး သားယူနစ် မတူညီပါက — လိုအပ်ချက် = Q × ဤဇယားအချိုး (Excel3.F မိခင်အမည် မှ နောက်ဆုံးစာလုံး)။ SHT→SHT သည် 1:1။ စာရင်းထည့်/ပြင်/ဖျက်နိုင်သည်။",
+        sizeSuffix: "နောက်ဆုံးစာလုံး (3.F မှ)",
+        sizeChildUnit: "သားယူနစ် (3.M)",
+        sizeConvAdd: "အရွယ်အစား စည်းမျဉ်း ထည့်ရန်",
+        sizeConvReset: "အရွယ်အစား ပုံမှန် ပြန်ထားရန်",
+        sizeSuffixCustom: "ကိုယ်ပိုင်...",
+        sizeSuffixPlaceholder: "ဥပမာ 110x200cm",
+        filterSo: "SO စစ်ထုတ်ရန်",
+        filterCutting: "Cutting ရက်စွဲ အစ — အဆုံး",
+        filterMother: "မိခင်ပစ္စည်း စစ်ထုတ်ရန်",
+        hideSoAllZero: "လိုအပ်ချက် သုည ဖြစ်သော SO များ ဖျောက်ရန်",
+        hideRowZero: "လိုအပ်ချက် သုည အတန်းများ ဖျောက်ရန်",
+        errorClose: "အိုကေ",
+        errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (2.R နှင့် 3.H)",
+        errorConvTitle: "ပြောင်းလဲမှု စည်းမျဉ်း မရှိ",
+        errorPrecheckIntro: "တူညီသော မိခင်ပစ္စည်းတွင် ယူနစ် တူညီရမည်။ ဒေတာ ပြင်ပြီး ပြန်လုပ်ပါ။",
+        errorConvIntro: "ပြောင်းလဲမှု ဇယားတွင် မိခင်→သား ယူနစ် အချိုးများ ထည့်ပြီး ပြန်လုပ်ပါ။"
       }
     };
 
@@ -1179,6 +1348,7 @@
       errorModalTitle: document.getElementById("errorModalTitle"),
       errorModalBody: document.getElementById("errorModalBody"),
       errorModalClose: document.getElementById("errorModalClose"),
+      errorModalX: document.getElementById("errorModalX"),
       statRows: document.getElementById("statRows"),
       statDemand: document.getElementById("statDemand"),
       statMothers: document.getElementById("statMothers"),
@@ -1199,14 +1369,14 @@
     }
 
     function applyLanguage() {
-      document.documentElement.lang = state.lang === "zh" ? "zh-Hant" : "en";
+      document.documentElement.lang = htmlLangFor(state.lang);
       document.querySelectorAll("[data-i18n]").forEach(node => {
         node.textContent = t(node.dataset.i18n);
       });
       elements.statusText.textContent = t("ready");
       refreshMappingTable();
       if (state.allResultRows.length) {
-        state.resultHeaders = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
+        state.resultHeaders = [...outputHeadersForLang(state.lang)];
         applyViewFilters();
       }
       document.title = t("appTitle");
@@ -1493,9 +1663,9 @@
         ["Excel2", "Q", t("mapQty"), headerAt("right", COL.excel2.qty)],
         ["Excel2", "R", t("mapUnitR"), headerAt("right", COL.excel2.unitR)],
         ["Excel3", "E", t("mapMother3"), headerAt("third", COL.excel3.mother)],
+        ["Excel3", "F", t("mapDescF"), headerAt("third", COL.excel3.descF)],
         ["Excel3", "H", t("mapUnitH"), headerAt("third", COL.excel3.unitH)],
         ["Excel3", "I", t("mapChild"), headerAt("third", COL.excel3.child)],
-        ["Excel3", "J", t("mapDescJ"), headerAt("third", COL.excel3.descJ)],
         ["Excel3", "M", t("mapUnitM"), headerAt("third", COL.excel3.unitM)],
         ["Excel3", "K", t("mapStock"), headerAt("third", COL.excel3.stock)]
       ];
@@ -1575,7 +1745,7 @@
     function collectDetectedSizeSuffixes() {
       const found = new Set();
       for (const row of state.third.rows) {
-        const suffix = extractSizeSuffix(row[COL.excel3.descJ]);
+        const suffix = extractSizeSuffix(row[COL.excel3.descF]);
         if (suffix) found.add(suffix);
       }
       for (const rule of state.sizeConversionRules) {
@@ -1870,6 +2040,26 @@
      * Core allocation engine v2.2.
      * @returns {{ok: boolean, headers?: string[], rows?: string[][], stats?: object, errorTitle?: string, errorBody?: string}}
      */
+    function applyGroupYFlag(rows) {
+      const groups = new Map();
+      rows.forEach((row, idx) => {
+        const key = `${normalize(row[OUT.so])}\u0000${normalize(row[OUT.mother])}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(idx);
+      });
+      for (const indices of groups.values()) {
+        const qualifies = indices.length > 0 && indices.every(i => {
+          const demand = parseNumber(rows[i][OUT.demand]);
+          const provided = parseNumber(rows[i][OUT.provided]);
+          return demand > 0 && provided >= demand - 1e-9;
+        });
+        for (const i of indices) {
+          rows[i][OUT.flagY] = qualifies ? "Y" : "";
+        }
+      }
+      return rows;
+    }
+
     function runAllocationEngine(excel1, excel2, excel3, conversionRules, sizeConversionRules) {
       const preErrors = precheckUnitRH(excel2, excel3);
       if (preErrors.length) {
@@ -1899,7 +2089,7 @@
       const motherUnitH = new Map();
       const childUnitM = new Map();
       const childUnitConflicts = [];
-      const childSuffix = new Map();
+      const motherSuffix = new Map();
       const suffixConflicts = [];
 
       excel3.rows.forEach((row, idx) => {
@@ -1909,20 +2099,20 @@
         mothersInBom.add(mother);
         const unitH = normalize(row[COL.excel3.unitH]).toUpperCase();
         if (!motherUnitH.has(mother) && unitH) motherUnitH.set(mother, unitH);
+        const suffix = extractSizeSuffix(row[COL.excel3.descF]);
+        if (suffix) {
+          if (motherSuffix.has(mother) && motherSuffix.get(mother) !== suffix) {
+            suffixConflicts.push(
+              `Excel3 row ${idx + 2}: mother ${mother} has conflicting 3.F size suffix (${motherSuffix.get(mother)} vs ${suffix})`
+            );
+          } else if (!motherSuffix.has(mother)) {
+            motherSuffix.set(mother, suffix);
+          }
+        }
         if (!child) return;
         if (!childrenByMother.has(mother)) childrenByMother.set(mother, new Set());
         childrenByMother.get(mother).add(child);
         const pairKey = `${mother}\u0000${child}`;
-        const suffix = extractSizeSuffix(row[COL.excel3.descJ]);
-        if (suffix) {
-          if (childSuffix.has(pairKey) && childSuffix.get(pairKey) !== suffix) {
-            suffixConflicts.push(
-              `Excel3 row ${idx + 2}: mother ${mother} child ${child} has conflicting 3.J size suffix (${childSuffix.get(pairKey)} vs ${suffix})`
-            );
-          } else if (!childSuffix.has(pairKey)) {
-            childSuffix.set(pairKey, suffix);
-          }
-        }
         const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
         if (!childUnitM.has(pairKey)) childUnitM.set(pairKey, unitM);
         else if (childUnitM.get(pairKey) !== unitM) {
@@ -1970,11 +2160,11 @@
         const cutting = sched ? sched.cutting : "";
         const sortCutting = sched ? sched.sortKey : "\uffff";
         const motherUnit = motherUnitR.get(mother) || "";
+        const sizeSuffix = motherSuffix.get(mother) || "";
         const children = [...(childrenByMother.get(mother) || [])].sort();
         for (const child of children) {
           const pairKey = `${mother}\u0000${child}`;
           const childUnit = childUnitM.get(pairKey) || "";
-          const sizeSuffix = childSuffix.get(pairKey) || "";
           const conv = conversionRatio(
             motherUnit,
             childUnit,
@@ -1984,7 +2174,7 @@
           );
           if (!conv.ok) {
             if (conv.reason === "missing-suffix") {
-              missingRules.push(`Mother ${mother} / Child ${child} (SHT): missing size suffix in Excel3.J`);
+              missingRules.push(`Mother ${mother} (SHT): missing size suffix in Excel3.F`);
             } else if (conv.reason === "missing-size-rule") {
               missingRules.push(
                 `Mother ${mother} (SHT / ${sizeSuffix || "?"}) → Child ${child} (${childUnit || "?"})`
@@ -2047,11 +2237,13 @@
           formatQty(item.need),
           formatQty(provide),
           formatQty(nextRem),
-          provide > 0 ? "Y" : ""
+          ""
         ]);
       }
 
-      const headers = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
+      applyGroupYFlag(outRows);
+
+      const headers = [...outputHeadersForLang(state.lang)];
       return {
         ok: true,
         headers,
@@ -2383,12 +2575,12 @@
         `<fills count="4">` +
         `<fill><patternFill patternType="none"/></fill>` +
         `<fill><patternFill patternType="gray125"/></fill>` +
-        `<fill><patternFill patternType="solid"><fgColor rgb="FFF3F5F7"/></patternFill></fill>` +
+        `<fill><patternFill patternType="solid"><fgColor rgb="FFC5D3E0"/></patternFill></fill>` +
         `<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill>` +
         `</fills>` +
         `<borders count="2">` +
         `<border><left/><right/><top/><bottom/><diagonal/></border>` +
-        `<border><left/><right/><top style="medium"><color rgb="FF94A3B8"/></top><bottom/><diagonal/></border>` +
+        `<border><left/><right/><top style="medium"><color rgb="FF64748B"/></top><bottom/><diagonal/></border>` +
         `</borders>` +
         `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
         `<cellXfs count="5">` +
@@ -2629,6 +2821,7 @@
 
     elements.languageSelect.addEventListener("change", () => {
       state.lang = elements.languageSelect.value;
+      localStorage.setItem(LANG_STORAGE_KEY, state.lang);
       applyLanguage();
     });
     elements.leftFile.addEventListener("change", () => loadFile("left", elements.leftFile.files[0]));
@@ -2645,6 +2838,7 @@
     elements.exportXlsx.addEventListener("click", downloadXlsx);
     elements.copyTable.addEventListener("click", copyTable);
     elements.errorModalClose.addEventListener("click", hideErrorModal);
+    if (elements.errorModalX) elements.errorModalX.addEventListener("click", hideErrorModal);
     bindPrefixSuggest(elements.filterSo, elements.soSuggest, "so");
     bindPrefixSuggest(elements.filterMother, elements.motherSuggest, "mother");
     document.getElementById("addConvRow").addEventListener("click", () => {
@@ -2692,6 +2886,14 @@
       el.addEventListener("change", applyViewFilters);
     });
     // SO / mother inputs already call applyViewFilters via bindPrefixSuggest
+
+    const savedLang = localStorage.getItem(LANG_STORAGE_KEY);
+    if (savedLang && translations[savedLang]) {
+      state.lang = savedLang;
+      elements.languageSelect.value = savedLang;
+    }
+    const versionBadge = document.getElementById("appVersionBadge");
+    if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
 
     elements.leftData.value = sampleLeft;
     elements.rightData.value = sampleRight;

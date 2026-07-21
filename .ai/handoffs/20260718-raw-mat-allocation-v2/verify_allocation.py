@@ -2,7 +2,7 @@
 """Sanitized fixture verifier for RAW MAT allocation engine v2.2.
 
 Proves: MAX(K), greedy, 1:1 when units match, M→YD conversion,
-SHT size-suffix conversion (Excel3.J), R vs H pre-check block,
+SHT size-suffix conversion (Excel3.F), R vs H pre-check block,
 missing conversion block, Y flag, 10-column order.
 """
 
@@ -20,9 +20,9 @@ COL_E2_MOTHER = 5
 COL_E2_QTY = 16
 COL_E2_UNIT_R = 17
 COL_E3_MOTHER = 4
+COL_E3_DESC_F = 5
 COL_E3_UNIT_H = 7
 COL_E3_CHILD = 8
-COL_E3_DESC_J = 9
 COL_E3_STOCK = 10
 COL_E3_UNIT_M = 12
 
@@ -137,6 +137,26 @@ def _ratio(
     return hit, "ok"
 
 
+OUT_DEMAND = 6
+OUT_PROVIDED = 7
+OUT_FLAG_Y = 9
+
+
+def _apply_group_y_flag(rows: list[list[str]]) -> list[list[str]]:
+    groups: dict[str, list[int]] = {}
+    for idx, row in enumerate(rows):
+        key = f"{_norm(row[1])}\0{_norm(row[2])}"
+        groups.setdefault(key, []).append(idx)
+    for indices in groups.values():
+        qualifies = bool(indices) and all(
+            _num(rows[i][OUT_DEMAND]) > 0 and _num(rows[i][OUT_PROVIDED]) >= _num(rows[i][OUT_DEMAND]) - 1e-9
+            for i in indices
+        )
+        for i in indices:
+            rows[i][OUT_FLAG_Y] = "Y" if qualifies else ""
+    return rows
+
+
 def allocate(
     excel1_rows: list[list[str]],
     excel2_rows: list[list[str]],
@@ -190,7 +210,7 @@ def allocate(
     stock_max: dict[str, float] = {}
     mother_unit_r: dict[str, str] = {}
     child_unit_m: dict[tuple[str, str], str] = {}
-    child_suffix: dict[tuple[str, str], str] = {}
+    mother_suffix: dict[str, str] = {}
 
     for mother, units in r_by_mother.items():
         mother_unit_r[mother] = next(iter(units))
@@ -201,21 +221,18 @@ def allocate(
         if not mother:
             continue
         mothers_in_bom.add(mother)
+        suffix = _extract_size_suffix(row[COL_E3_DESC_F] if len(row) > COL_E3_DESC_F else "")
+        if suffix:
+            prev_suffix = mother_suffix.get(mother)
+            if prev_suffix and prev_suffix != suffix:
+                errors.append(f"Conflicting 3.F size suffix for {mother}: {prev_suffix} vs {suffix}")
+            else:
+                mother_suffix[mother] = suffix
         if not child:
             continue
         children_by_mother.setdefault(mother, set()).add(child)
-        pair = (mother, child)
-        suffix = _extract_size_suffix(row[COL_E3_DESC_J] if len(row) > COL_E3_DESC_J else "")
-        if suffix:
-            prev_suffix = child_suffix.get(pair)
-            if prev_suffix and prev_suffix != suffix:
-                errors.append(
-                    f"Conflicting 3.J size suffix for {mother}/{child}: {prev_suffix} vs {suffix}"
-                )
-            else:
-                child_suffix[pair] = suffix
         unit_m = _norm(row[COL_E3_UNIT_M] if len(row) > COL_E3_UNIT_M else "").upper()
-        child_unit_m[pair] = unit_m
+        child_unit_m[(mother, child)] = unit_m
         k = _num(row[COL_E3_STOCK] if len(row) > COL_E3_STOCK else 0)
         prev_k = stock_max.get(child)
         if prev_k is None or k > prev_k:
@@ -238,13 +255,13 @@ def allocate(
     for (so, mother), qty in demand.items():
         cutting = schedule.get(so, "")
         m_unit = mother_unit_r.get(mother, "")
+        suffix = mother_suffix.get(mother, "")
         for child in sorted(children_by_mother.get(mother, set())):
             c_unit = child_unit_m.get((mother, child), "")
-            suffix = child_suffix.get((mother, child), "")
             ratio, reason = _ratio(m_unit, c_unit, rules, size_rules, suffix)
             if ratio is None:
                 if reason == "missing-suffix":
-                    errors.append(f"Missing size suffix in Excel3.J for {mother}/{child}")
+                    errors.append(f"Missing size suffix in Excel3.F for {mother}")
                 elif reason == "missing-size-rule":
                     errors.append(
                         f"Missing size conversion {suffix or '?'}->{c_unit} for {mother}/{child}"
@@ -295,9 +312,10 @@ def allocate(
                 _fmt(need),
                 _fmt(provide),
                 _fmt(next_rem),
-                "Y" if provide > 0 else "",
+                "",
             ]
         )
+    _apply_group_y_flag(out_rows)
     return OUTPUT_HEADERS, out_rows, stock_max, []
 
 
@@ -333,8 +351,8 @@ def main() -> int:
     expected = [
         ["2026-07-01", "SO-A", "MOTHER-1", "M", "CHILD-1", "M", "10", "10", "10", "Y"],
         ["2026-07-01", "SO-A", "MOTHER-1", "M", "CHILD-2", "M", "10", "10", "2", "Y"],
-        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-1", "M", "5", "5", "5", "Y"],
-        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-2", "M", "5", "2", "0", "Y"],
+        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-1", "M", "5", "5", "5", ""],
+        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-2", "M", "5", "2", "0", ""],
     ]
     _assert(rows == expected, f"row mismatch:\n got={rows}\n exp={expected}")
 
@@ -361,12 +379,12 @@ def main() -> int:
     _, _, _, err_rh = allocate(e1, e2, e3_bad)
     _assert(any("R/H mismatch" in e for e in err_rh), "R/H mismatch should block")
 
-    # SHT size-suffix conversion (Excel3.J)
+    # SHT size-suffix conversion (Excel3.F mother name)
     e1_sht = [["SO-S", "2026-07-05"]]
     e2_sht = [_pad_row(["", "SO-S", "", "", "", "MOTHER-SHT", "", "", "", "", "", "", "", "", "", "", "3", "SHT"], 18)]
     e3_sht = [
-        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-Y", "CHILD YD 110x200cm", "10", "", "YD"], 13),
-        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-S", "CHILD SHT 110x200cm", "5", "", "SHT"], 13),
+        _pad_row(["", "", "", "", "MOTHER-SHT", "DEMO SHEET 110x200cm", "", "SHT", "CHILD-Y", "", "10", "", "YD"], 13),
+        _pad_row(["", "", "", "", "MOTHER-SHT", "DEMO SHEET 110x200cm", "", "SHT", "CHILD-S", "", "5", "", "SHT"], 13),
     ]
     _, rows_sht, _, err_sht = allocate(e1_sht, e2_sht, e3_sht)
     _assert(not err_sht, f"SHT conversion errors: {err_sht}")
@@ -379,13 +397,13 @@ def main() -> int:
     _, _, _, err_size = allocate(e1_sht, e2_sht, e3_sht, size_rules={})
     _assert(any("Missing size conversion" in e for e in err_size), "missing size conversion should block")
 
-    # Conflicting suffixes on same mother+child block
+    # Conflicting mother suffixes block
     e3_conflict = [
-        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-Y", "A 110x200cm", "10", "", "YD"], 13),
-        _pad_row(["", "", "", "", "MOTHER-SHT", "", "", "SHT", "CHILD-Y", "B 220x110cm", "5", "", "YD"], 13),
+        _pad_row(["", "", "", "", "MOTHER-SHT", "A 110x200cm", "", "SHT", "CHILD-Y", "", "10", "", "YD"], 13),
+        _pad_row(["", "", "", "", "MOTHER-SHT", "B 220x110cm", "", "SHT", "CHILD-S", "", "5", "", "SHT"], 13),
     ]
     _, _, _, err_conflict = allocate(e1_sht, e2_sht, e3_conflict)
-    _assert(any("Conflicting 3.J size suffix" in e for e in err_conflict), "suffix conflict should block")
+    _assert(any("Conflicting 3.F size suffix" in e for e in err_conflict), "suffix conflict should block")
 
     print("ALL CHECKS PASSED")
     return 0

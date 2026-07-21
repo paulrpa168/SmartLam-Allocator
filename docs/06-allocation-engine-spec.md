@@ -32,9 +32,9 @@ Using schedule (Excel1), demand (Excel2 Open Quantity), and stock snapshot (Exce
 | Excel2 | Q `Open Quantity` | **需求數量**（加總）/ **Demand qty** (summed) |
 | Excel2 | R `Base Unit of Measure` | 母單位（事前檢查＋換算）/ Mother unit |
 | Excel3 | E `Material` | 母材料 / Mother material |
+| Excel3 | F `Material Full Description(EN)` | 母料全名；SHT 末碼來源 / Mother full name; SHT size-suffix source |
 | Excel3 | H `OUn` | 母單位事前檢查（須等於 2.R）/ Mother unit pre-check |
 | Excel3 | I `Article(Com.)` | 子材料 / Child material |
-| Excel3 | J `Mtl.Full Desc. (Com.)(EN)` | 子料全名；SHT 末碼來源 / Child full name; SHT size-suffix source |
 | Excel3 | M `BUn` | 子單位（換算）/ Child unit for conversion |
 | Excel3 | K `Unrestricted` | 庫存快照欄；同子料取 **MAX(K)** / Stock snapshot; **MAX(K)** per child |
 
@@ -42,9 +42,9 @@ Using schedule (Excel1), demand (Excel2 Open Quantity), and stock snapshot (Exce
 
 1. **事前檢查**：同母料（2.F=3.E）時 **2.R 必須等於 3.H**；否則彈錯誤並停止。  
 2. **換算**：比較 **2.R vs 3.M**。相同 → Demand **1:1**。  
-3. **母單位為 SHT**（且子單位不同）：自該母–子列的 Excel3.**J** 擷取末碼（如 `110x200cm`），查可編輯「SHT 末碼換算」表（預設種子可改；使用者自行新增／改倍率／刪除，存 localStorage；引擎不寫死倍率）。缺末碼或缺規則 → 停止。`Y` 與 `YD` 視為同一子單位鍵。同母–子若 J 末碼不一致 → 停止。  
+3. **母單位為 SHT**（且子單位不同）：自 Excel3.**F** 母料全名擷取末碼（如 `110x200cm`），查可編輯「SHT 末碼換算」表（預設種子可改；使用者自行新增／改倍率／刪除，存 localStorage；引擎不寫死倍率）。缺末碼或缺規則 → 停止。`Y` 與 `YD` 視為同一子單位鍵。同母若 F 末碼不一致 → 停止。  
 4. **其他單位對**：查單位白名單（預設 M→YD=1.0936、YD→M=0.9144）；缺規則 → 停止。  
-5. **輸出 10 欄**：cutting, so, mother, mother unit, child, child unit, demand, provided, remaining, Y（provided>0）。  
+5. **輸出 10 欄**：cutting, so, mother, mother unit, child, child unit, demand, provided, remaining, Y（同 SO+母料群組：全部子料 demand>0 且 provided≥demand 才標 Y）。  
 6. **UI**：頂部可篩 SO／cutting／母料；可勾選隱藏零需求；預覽 SO 灰白斑馬；末碼下拉 = 檔案偵測 ∪ 既有規則 ∪ 自訂。
 
 **重要說明 / Important notes**
@@ -116,7 +116,7 @@ Using schedule (Excel1), demand (Excel2 Open Quantity), and stock snapshot (Exce
 | 7 | demand qty | 換算後子料需求 / converted child demand |
 | 8 | provided qty | `min(demand, remaining)` |
 | 9 | remaining stock after this row | 扣減後剩餘 / post-allocate remaining |
-| 10 | allocated (Y) | provided > 0 → `Y` |
+| 10 | allocated (Y) | 同 SO+母料：全部子料 demand>0 且 provided≥demand → `Y` |
 
 比對方式：同一列若第 7 欄 == 第 8 欄 → 該子料需求配平；第 8 < 第 7 → 短缺。  
 Compare: on the same row, col7 == col8 means demand met; col8 < col7 means shortage.

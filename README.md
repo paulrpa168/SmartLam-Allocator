@@ -25,7 +25,7 @@ Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept fo
 - 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
 - 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
 - 語言規則：專案說明與規格採繁體中文在前、英文緊接；v2 UI 為英文與繁體中文。
-- 正式上線判定：`NEEDS WORK`（待真實檔 UI 驗收；SHT 母料請確認 3.J 末碼與末碼換算表）。
+- 正式上線判定：`NEEDS WORK`（待真實檔 UI 驗收；SHT 母料請確認 3.F 末碼與末碼換算表）。
 
 ## Current status
 
@@ -34,7 +34,7 @@ Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept fo
 - Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
 - Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
 - Language rule: Project docs place Traditional Chinese first and English immediately after. The v2 UI languages are English and Traditional Chinese.
-- Release assessment: Still `NEEDS WORK` pending real-file UI acceptance (confirm Excel3.J suffixes and size-conversion table for SHT mothers).
+- Release assessment: Still `NEEDS WORK` pending real-file UI acceptance (confirm Excel3.F suffixes and size-conversion table for SHT mothers).
 
 ## 配發資料流程（v2）
 

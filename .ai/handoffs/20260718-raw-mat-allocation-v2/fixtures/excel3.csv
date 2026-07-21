@@ -1,5 +1,5 @@
-A,B,C,D,Material,F,G,OUn,Article(Com.),Mtl.Full Desc. (Com.)(EN),Unrestricted,K2,BUn
-,,,,MOTHER-1,,,M,CHILD-1,CHILD DEMO 110x200cm,7,,M
-,,,,MOTHER-1,,,M,CHILD-1,CHILD DEMO 110x200cm,20,,M
-,,,,MOTHER-1,,,M,CHILD-2,CHILD DEMO 110x200cm,12,,M
-,,,,MOTHER-1,,,M,CHILD-2,CHILD DEMO 110x200cm,4,,M
+A,B,C,D,Material,Material Full Description(EN),G,OUn,Article(Com.),J,Unrestricted,K2,BUn
+,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-1,,7,,M
+,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-1,,20,,M
+,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-2,,12,,M
+,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-2,,4,,M

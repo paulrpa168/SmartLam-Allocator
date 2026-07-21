@@ -1,0 +1,1828 @@
+﻿diff --git a/.ai/handoffs/20260718-raw-mat-allocation-v2/fixtures/excel3.csv b/.ai/handoffs/20260718-raw-mat-allocation-v2/fixtures/excel3.csv
+index c8b7054..920e398 100644
+--- a/.ai/handoffs/20260718-raw-mat-allocation-v2/fixtures/excel3.csv
++++ b/.ai/handoffs/20260718-raw-mat-allocation-v2/fixtures/excel3.csv
+@@ -1,5 +1,5 @@
+-A,B,C,D,Material,F,G,OUn,Article(Com.),J,Unrestricted,K2,BUn
+-,,,,MOTHER-1,,,M,CHILD-1,,7,,M
+-,,,,MOTHER-1,,,M,CHILD-1,,20,,M
+-,,,,MOTHER-1,,,M,CHILD-2,,12,,M
+-,,,,MOTHER-1,,,M,CHILD-2,,4,,M
++A,B,C,D,Material,Material Full Description(EN),G,OUn,Article(Com.),J,Unrestricted,K2,BUn
++,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-1,,7,,M
++,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-1,,20,,M
++,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-2,,12,,M
++,,,,MOTHER-1,FABRIC DEMO 110x200cm,,M,CHILD-2,,4,,M
+diff --git a/.ai/handoffs/20260718-raw-mat-allocation-v2/run_real_allocation.py b/.ai/handoffs/20260718-raw-mat-allocation-v2/run_real_allocation.py
+index 8f798bb..6c803a0 100644
+--- a/.ai/handoffs/20260718-raw-mat-allocation-v2/run_real_allocation.py
++++ b/.ai/handoffs/20260718-raw-mat-allocation-v2/run_real_allocation.py
+@@ -22,6 +22,7 @@ COL_E2_MOTHER = 5
+ COL_E2_QTY = 16
+ COL_E2_UNIT_R = 17
+ COL_E3_MOTHER = 4
++COL_E3_DESC_F = 5
+ COL_E3_UNIT_H = 7
+ COL_E3_CHILD = 8
+ COL_E3_STOCK = 10
+@@ -45,6 +46,20 @@ DEFAULT_RULES = {
+     ("YD", "M"): 0.9144,
+ }
+ 
++DEFAULT_SIZE_RULES = {
++    ("110x200cm", "M"): 2.0,
++    ("110x200cm", "YD"): 2.187227,
++    ("110x200cm", "SHT"): 1.0,
++    ("220x110cm", "M"): 2.0,
++    ("220x110cm", "YD"): 2.187227,
++    ("220x110cm", "SHT"): 1.0,
++    ("200x110cm", "M"): 2.2,
++    ("200x110cm", "YD"): 2.405949,
++    ("200x110cm", "SHT"): 1.0,
++}
++
++SIZE_SUFFIX_RE = re.compile(r"(\d+)\s*[x├ù*]\s*(\d+)\s*cm\s*$", re.I)
++
+ NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+ REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+ 
+@@ -169,16 +184,54 @@ def read_xlsx_rows(path: Path) -> list[list[str]]:
+     return rows_out[1:]  # skip header row
+ 
+ 
+-def _ratio(mother_unit: str, child_unit: str) -> float | None:
++def _child_unit(unit: str) -> str:
++    u = unit.upper()
++    if u == "Y":
++        return "YD"
++    return u
++
++
++def _extract_size_suffix(text: object) -> str:
++    match = SIZE_SUFFIX_RE.search(_norm(text))
++    if not match:
++        return ""
++    return f"{match.group(1)}x{match.group(2)}cm".lower()
++
++
++def _ratio(mother_unit: str, child_unit: str, size_suffix: str = "") -> float | None:
+     m = mother_unit.upper()
+-    c = child_unit.upper()
++    c = _child_unit(child_unit)
+     if not m or not c:
+         return None
+     if m == c:
+         return 1.0
++    if m == "SHT":
++        if not size_suffix:
++            return None
++        return DEFAULT_SIZE_RULES.get((size_suffix, c))
+     return DEFAULT_RULES.get((m, c))
+ 
+ 
++OUT_DEMAND = 6
++OUT_PROVIDED = 7
++OUT_FLAG_Y = 9
++
++
++def _apply_group_y_flag(rows: list[list[str]]) -> list[list[str]]:
++    groups: dict[str, list[int]] = {}
++    for idx, row in enumerate(rows):
++        key = f"{_norm(row[1])}\0{_norm(row[2])}"
++        groups.setdefault(key, []).append(idx)
++    for indices in groups.values():
++        qualifies = bool(indices) and all(
++            _num(rows[i][OUT_DEMAND]) > 0 and _num(rows[i][OUT_PROVIDED]) >= _num(rows[i][OUT_DEMAND]) - 1e-9
++            for i in indices
++        )
++        for i in indices:
++            rows[i][OUT_FLAG_Y] = "Y" if qualifies else ""
++    return rows
++
++
+ def allocate(
+     excel1_rows: list[list[str]],
+     excel2_rows: list[list[str]],
+@@ -230,6 +283,7 @@ def allocate(
+         mother: next(iter(units)) for mother, units in r_by_mother.items()
+     }
+     child_unit_m: dict[tuple[str, str], str] = {}
++    mother_suffix: dict[str, str] = {}
+ 
+     for row in excel3_rows:
+         mother = _norm(row[COL_E3_MOTHER] if len(row) > COL_E3_MOTHER else "")
+@@ -237,6 +291,13 @@ def allocate(
+         if not mother:
+             continue
+         mothers_in_bom.add(mother)
++        suffix = _extract_size_suffix(row[COL_E3_DESC_F] if len(row) > COL_E3_DESC_F else "")
++        if suffix:
++            prev_suffix = mother_suffix.get(mother)
++            if prev_suffix and prev_suffix != suffix:
++                errors.append(f"Conflicting 3.F size suffix for {mother}: {prev_suffix} vs {suffix}")
++            else:
++                mother_suffix[mother] = suffix
+         if child:
+             children_by_mother.setdefault(mother, set()).add(child)
+             unit_m = _norm(row[COL_E3_UNIT_M] if len(row) > COL_E3_UNIT_M else "").upper()
+@@ -246,6 +307,9 @@ def allocate(
+             if prev_k is None or k > prev_k:
+                 stock_max[child] = k
+ 
++    if errors:
++        return OUTPUT_HEADERS, [], stock_max, errors
++
+     demand: dict[tuple[str, str], float] = {}
+     for row in excel2_rows:
+         so = _norm(row[COL_E2_SO] if len(row) > COL_E2_SO else "")
+@@ -262,11 +326,17 @@ def allocate(
+         cutting = sched[0] if sched else ""
+         cut_sort = sched[1] if sched else (1, "")
+         m_unit = mother_unit_r.get(mother, "")
++        suffix = mother_suffix.get(mother, "")
+         for child in sorted(children_by_mother.get(mother, set())):
+             c_unit = child_unit_m.get((mother, child), "")
+-            ratio = _ratio(m_unit, c_unit)
++            ratio = _ratio(m_unit, c_unit, suffix)
+             if ratio is None:
+-                errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
++                if m_unit.upper() == "SHT":
++                    errors.append(
++                        f"Missing size conversion {suffix or '?'}->{_child_unit(c_unit)} for {mother}/{child}"
++                    )
++                else:
++                    errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
+                 continue
+             expanded.append(
+                 {
+@@ -312,9 +382,10 @@ def allocate(
+                 _fmt(need),
+                 _fmt(provide),
+                 _fmt(next_rem),
+-                "Y" if provide > 0 else "",
++                "",
+             ]
+         )
++    _apply_group_y_flag(out_rows)
+     return OUTPUT_HEADERS, out_rows, stock_max, []
+ 
+ 
+diff --git a/.ai/handoffs/20260718-raw-mat-allocation-v2/verify_allocation.py b/.ai/handoffs/20260718-raw-mat-allocation-v2/verify_allocation.py
+index 84d011a..6988031 100644
+--- a/.ai/handoffs/20260718-raw-mat-allocation-v2/verify_allocation.py
++++ b/.ai/handoffs/20260718-raw-mat-allocation-v2/verify_allocation.py
+@@ -1,13 +1,15 @@
+ #!/usr/bin/env python3
+-"""Sanitized fixture verifier for RAW MAT allocation engine v2.1.
++"""Sanitized fixture verifier for RAW MAT allocation engine v2.2.
+ 
+ Proves: MAX(K), greedy, 1:1 when units match, MΓåÆYD conversion,
+-R vs H pre-check block, missing conversion block, Y flag, 10-column order.
++SHT size-suffix conversion (Excel3.F), R vs H pre-check block,
++missing conversion block, Y flag, 10-column order.
+ """
+ 
+ from __future__ import annotations
+ 
+ import csv
++import re
+ import sys
+ from pathlib import Path
+ 
+@@ -18,6 +20,7 @@ COL_E2_MOTHER = 5
+ COL_E2_QTY = 16
+ COL_E2_UNIT_R = 17
+ COL_E3_MOTHER = 4
++COL_E3_DESC_F = 5
+ COL_E3_UNIT_H = 7
+ COL_E3_CHILD = 8
+ COL_E3_STOCK = 10
+@@ -41,6 +44,20 @@ DEFAULT_RULES = {
+     ("YD", "M"): 0.9144,
+ }
+ 
++DEFAULT_SIZE_RULES = {
++    ("110x200cm", "M"): 2.0,
++    ("110x200cm", "YD"): 2.187227,
++    ("110x200cm", "SHT"): 1.0,
++    ("220x110cm", "M"): 2.0,
++    ("220x110cm", "YD"): 2.187227,
++    ("220x110cm", "SHT"): 1.0,
++    ("200x110cm", "M"): 2.2,
++    ("200x110cm", "YD"): 2.405949,
++    ("200x110cm", "SHT"): 1.0,
++}
++
++SIZE_SUFFIX_RE = re.compile(r"(\d+)\s*[x├ù*]\s*(\d+)\s*cm\s*$", re.I)
++
+ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+ 
+ 
+@@ -61,7 +78,25 @@ def _num(value: object) -> float:
+ def _fmt(value: float) -> str:
+     if abs(value - round(value)) < 1e-9:
+         return str(int(round(value)))
+-    return str(round(value, 6)).rstrip("0").rstrip(".") if "." in str(round(value, 6)) else str(value)
++    rounded = round(value, 6)
++    text = str(rounded)
++    if "." in text:
++        return text.rstrip("0").rstrip(".")
++    return text
++
++
++def _child_unit(unit: str) -> str:
++    u = unit.upper()
++    if u == "Y":
++        return "YD"
++    return u
++
++
++def _extract_size_suffix(text: object) -> str:
++    match = SIZE_SUFFIX_RE.search(_norm(text))
++    if not match:
++        return ""
++    return f"{match.group(1)}x{match.group(2)}cm".lower()
+ 
+ 
+ def _read_csv(path: Path) -> tuple[list[str], list[list[str]]]:
+@@ -76,14 +111,50 @@ def _read_csv(path: Path) -> tuple[list[str], list[list[str]]]:
+     return headers, data
+ 
+ 
+-def _ratio(mother_unit: str, child_unit: str, rules: dict[tuple[str, str], float]) -> float | None:
++def _ratio(
++    mother_unit: str,
++    child_unit: str,
++    rules: dict[tuple[str, str], float],
++    size_rules: dict[tuple[str, str], float],
++    size_suffix: str,
++) -> tuple[float | None, str]:
+     m = mother_unit.upper()
+-    c = child_unit.upper()
++    c = _child_unit(child_unit)
+     if not m or not c:
+-        return None
++        return None, "blank-unit"
+     if m == c:
+-        return 1.0
+-    return rules.get((m, c))
++        return 1.0, "ok"
++    if m == "SHT":
++        if not size_suffix:
++            return None, "missing-suffix"
++        hit = size_rules.get((size_suffix, c))
++        if hit is None:
++            return None, "missing-size-rule"
++        return hit, "ok"
++    hit = rules.get((m, c))
++    if hit is None:
++        return None, "missing"
++    return hit, "ok"
++
++
++OUT_DEMAND = 6
++OUT_PROVIDED = 7
++OUT_FLAG_Y = 9
++
++
++def _apply_group_y_flag(rows: list[list[str]]) -> list[list[str]]:
++    groups: dict[str, list[int]] = {}
++    for idx, row in enumerate(rows):
++        key = f"{_norm(row[1])}\0{_norm(row[2])}"
++        groups.setdefault(key, []).append(idx)
++    for indices in groups.values():
++        qualifies = bool(indices) and all(
++            _num(rows[i][OUT_DEMAND]) > 0 and _num(rows[i][OUT_PROVIDED]) >= _num(rows[i][OUT_DEMAND]) - 1e-9
++            for i in indices
++        )
++        for i in indices:
++            rows[i][OUT_FLAG_Y] = "Y" if qualifies else ""
++    return rows
+ 
+ 
+ def allocate(
+@@ -91,9 +162,11 @@ def allocate(
+     excel2_rows: list[list[str]],
+     excel3_rows: list[list[str]],
+     rules: dict[tuple[str, str], float] | None = None,
++    size_rules: dict[tuple[str, str], float] | None = None,
+ ) -> tuple[list[str], list[list[str]], dict[str, float], list[str]]:
+     """Return headers, rows, stock_max, errors (empty if ok)."""
+     rules = rules if rules is not None else dict(DEFAULT_RULES)
++    size_rules = size_rules if size_rules is not None else dict(DEFAULT_SIZE_RULES)
+     errors: list[str] = []
+ 
+     r_by_mother: dict[str, set[str]] = {}
+@@ -137,6 +210,7 @@ def allocate(
+     stock_max: dict[str, float] = {}
+     mother_unit_r: dict[str, str] = {}
+     child_unit_m: dict[tuple[str, str], str] = {}
++    mother_suffix: dict[str, str] = {}
+ 
+     for mother, units in r_by_mother.items():
+         mother_unit_r[mother] = next(iter(units))
+@@ -147,6 +221,13 @@ def allocate(
+         if not mother:
+             continue
+         mothers_in_bom.add(mother)
++        suffix = _extract_size_suffix(row[COL_E3_DESC_F] if len(row) > COL_E3_DESC_F else "")
++        if suffix:
++            prev_suffix = mother_suffix.get(mother)
++            if prev_suffix and prev_suffix != suffix:
++                errors.append(f"Conflicting 3.F size suffix for {mother}: {prev_suffix} vs {suffix}")
++            else:
++                mother_suffix[mother] = suffix
+         if not child:
+             continue
+         children_by_mother.setdefault(mother, set()).add(child)
+@@ -157,6 +238,9 @@ def allocate(
+         if prev_k is None or k > prev_k:
+             stock_max[child] = k
+ 
++    if errors:
++        return OUTPUT_HEADERS, [], stock_max, errors
++
+     demand: dict[tuple[str, str], float] = {}
+     for row in excel2_rows:
+         so = _norm(row[COL_E2_SO] if len(row) > COL_E2_SO else "")
+@@ -171,11 +255,19 @@ def allocate(
+     for (so, mother), qty in demand.items():
+         cutting = schedule.get(so, "")
+         m_unit = mother_unit_r.get(mother, "")
++        suffix = mother_suffix.get(mother, "")
+         for child in sorted(children_by_mother.get(mother, set())):
+             c_unit = child_unit_m.get((mother, child), "")
+-            ratio = _ratio(m_unit, c_unit, rules)
++            ratio, reason = _ratio(m_unit, c_unit, rules, size_rules, suffix)
+             if ratio is None:
+-                errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
++                if reason == "missing-suffix":
++                    errors.append(f"Missing size suffix in Excel3.F for {mother}")
++                elif reason == "missing-size-rule":
++                    errors.append(
++                        f"Missing size conversion {suffix or '?'}->{c_unit} for {mother}/{child}"
++                    )
++                else:
++                    errors.append(f"Missing conversion {m_unit}->{c_unit} for {mother}/{child}")
+                 continue
+             expanded.append(
+                 {
+@@ -220,9 +312,10 @@ def allocate(
+                 _fmt(need),
+                 _fmt(provide),
+                 _fmt(next_rem),
+-                "Y" if provide > 0 else "",
++                "",
+             ]
+         )
++    _apply_group_y_flag(out_rows)
+     return OUTPUT_HEADERS, out_rows, stock_max, []
+ 
+ 
+@@ -231,13 +324,17 @@ def _assert(condition: bool, message: str) -> None:
+         raise AssertionError(message)
+ 
+ 
++def _pad_row(cells: list[str], width: int) -> list[str]:
++    return cells + [""] * (width - len(cells))
++
++
+ def main() -> int:
+     _, e1 = _read_csv(FIXTURE_DIR / "excel1.csv")
+     _, e2 = _read_csv(FIXTURE_DIR / "excel2.csv")
+     _, e3 = _read_csv(FIXTURE_DIR / "excel3.csv")
+ 
+     headers, rows, stock_max, errors = allocate(e1, e2, e3)
+-    print("=== RAW MAT allocation v2.1 fixture verify ===")
++    print("=== RAW MAT allocation v2.2 fixture verify ===")
+     print(f"output_rows={len(rows)}")
+     print(f"stock_max={stock_max}")
+     for row in rows:
+@@ -254,8 +351,8 @@ def main() -> int:
+     expected = [
+         ["2026-07-01", "SO-A", "MOTHER-1", "M", "CHILD-1", "M", "10", "10", "10", "Y"],
+         ["2026-07-01", "SO-A", "MOTHER-1", "M", "CHILD-2", "M", "10", "10", "2", "Y"],
+-        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-1", "M", "5", "5", "5", "Y"],
+-        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-2", "M", "5", "2", "0", "Y"],
++        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-1", "M", "5", "5", "5", ""],
++        ["2026-07-03", "SO-B", "MOTHER-1", "M", "CHILD-2", "M", "5", "2", "0", ""],
+     ]
+     _assert(rows == expected, f"row mismatch:\n got={rows}\n exp={expected}")
+ 
+@@ -282,6 +379,32 @@ def main() -> int:
+     _, _, _, err_rh = allocate(e1, e2, e3_bad)
+     _assert(any("R/H mismatch" in e for e in err_rh), "R/H mismatch should block")
+ 
++    # SHT size-suffix conversion (Excel3.F mother name)
++    e1_sht = [["SO-S", "2026-07-05"]]
++    e2_sht = [_pad_row(["", "SO-S", "", "", "", "MOTHER-SHT", "", "", "", "", "", "", "", "", "", "", "3", "SHT"], 18)]
++    e3_sht = [
++        _pad_row(["", "", "", "", "MOTHER-SHT", "DEMO SHEET 110x200cm", "", "SHT", "CHILD-Y", "", "10", "", "YD"], 13),
++        _pad_row(["", "", "", "", "MOTHER-SHT", "DEMO SHEET 110x200cm", "", "SHT", "CHILD-S", "", "5", "", "SHT"], 13),
++    ]
++    _, rows_sht, _, err_sht = allocate(e1_sht, e2_sht, e3_sht)
++    _assert(not err_sht, f"SHT conversion errors: {err_sht}")
++    row_y = next(r for r in rows_sht if r[4] == "CHILD-Y")
++    row_s = next(r for r in rows_sht if r[4] == "CHILD-S")
++    _assert(abs(float(row_y[6]) - 3 * 2.187227) < 1e-6, f"SHTΓåÆYD demand got {row_y[6]}")
++    _assert(row_s[6] == "3", f"SHTΓåÆSHT should stay 1:1 got {row_s[6]}")
++
++    # Missing size rule blocks
++    _, _, _, err_size = allocate(e1_sht, e2_sht, e3_sht, size_rules={})
++    _assert(any("Missing size conversion" in e for e in err_size), "missing size conversion should block")
++
++    # Conflicting mother suffixes block
++    e3_conflict = [
++        _pad_row(["", "", "", "", "MOTHER-SHT", "A 110x200cm", "", "SHT", "CHILD-Y", "", "10", "", "YD"], 13),
++        _pad_row(["", "", "", "", "MOTHER-SHT", "B 220x110cm", "", "SHT", "CHILD-S", "", "5", "", "SHT"], 13),
++    ]
++    _, _, _, err_conflict = allocate(e1_sht, e2_sht, e3_conflict)
++    _assert(any("Conflicting 3.F size suffix" in e for e in err_conflict), "suffix conflict should block")
++
+     print("ALL CHECKS PASSED")
+     return 0
+ 
+diff --git a/README.md b/README.md
+index 2e049f2..fc6ce3c 100644
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,7 @@
+ 
+ µ£¼σ░êµíêµÿ»Σ╕ÇσÇïσ£¿Σ╜┐τö¿ΦÇàΘ¢╗ΦàªτÇÅΦª╜σÖ¿σàºσƒ╖ΦíîτÜäσû«Θáüσ╖Ñσà╖∩╝îΣ╛¥µá╕σçåµÑ¡σïÖΦªÅσëçσ░çµÄÆτ¿ï∩╝êExcel1∩╝ëπÇüΘ£Çµ▒é Open Quantity∩╝êExcel2∩╝ëΦêç BOM∩╝Åσ║½σ¡ÿ∩╝êExcel3∩╝ëσÉêΣ╜╡σ╛îσüÜ**σ║½σ¡ÿΦ▓¬σ⌐¬ΘàìτÖ╝**∩╝îΣ╕ªσî»σç║σÅ»µ»öσ░ìπÇîΘ£Çµ▒é vs Φâ╜µÅÉΣ╛¢πÇìΦêçπÇîµëúµ╕¢σ╛îσë⌐ΘñÿπÇìτÜäτ╡Éµ₧£πÇé
+ 
+-**τÅ╛Φíîτ¿ïσ╝ÅσàÑσÅú∩╝Ü`allocation-web.html`∩╝êv2.1.0∩╝ë**  
++**τÅ╛Φíîτ¿ïσ╝ÅσàÑσÅú∩╝Ü`allocation-web.html`∩╝êv2.2.0∩╝ë**  
+ ΦªÅµá╝∩╝Ü[docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)
+ 
+ Φêèµ¬ö `vlookup-web.html` τé║**σ╖▓µ╖ÿµ▒░τÜäσà⌐µ«╡σ╝ÅµƒÑµë╛σÄƒσ₧ï**∩╝îσâàΣ╛¢µ¡╖σÅ▓σ░ìτàº∩╝î**Σ╕ìµÿ»**τÅ╛Φíîτöóσôüµû╣σÉæπÇé
+@@ -13,28 +13,28 @@
+ 
+ This project is a browser-based, single-page allocation tool. It combines schedule (Excel1), Open Quantity demand (Excel2), and BOM/stock (Excel3) under approved business rules, then greedily allocates child stock and exports a result that compares demand vs provided and remaining stock after each row.
+ 
+-**Current app entry point: `allocation-web.html` (v2.1.0)**  
++**Current app entry point: `allocation-web.html` (v2.2.0)**  
+ Spec: [docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)
+ 
+ Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only ΓÇö it is **not** the current product direction.
+ 
+ ## τ¢«σëìτïÇµàï
+ 
+-- τïÇµàï∩╝ÜΘàìτÖ╝σ╝òµôÄ **v2.1.0**∩╝êσû«Σ╜ìΣ║ïσëìµ¬óµƒÑπÇüσÅ»τ╖¿Φ╝»µÅ¢τ«ùτÖ╜σÉìσû«πÇüτ»⌐Θü╕πÇüµûæΘª¼Φë▓πÇüY µ¼ä∩╝ëσ╖▓σ»ªΣ╜£∩╝¢fixture Θ⌐ùΦ¡ëΘÇÜΘüÄπÇé
+-- τ¿ïσ╝Åτëêµ£¼∩╝Ü`allocation-web.html` **2.1.0**πÇé
++- τïÇµàï∩╝ÜΘàìτÖ╝σ╝òµôÄ **v2.2.0**∩╝êσû«Σ╜ìΣ║ïσëìµ¬óµƒÑπÇüσû«Σ╜ìτÖ╜σÉìσû«πÇü**SHT µ£½τó╝µÅ¢τ«ù∩╝êσÅ»τ╖¿Φ╝»∩╝ë**πÇüτ»⌐Θü╕πÇüµûæΘª¼Φë▓πÇüY µ¼ä∩╝ëσ╖▓σ»ªΣ╜£∩╝¢fixture Θ⌐ùΦ¡ëΘÇÜΘüÄπÇé
++- τ¿ïσ╝Åτëêµ£¼∩╝Ü`allocation-web.html` **2.2.0**πÇé
+ - ΦêèµƒÑµë╛σ╖Ñσà╖∩╝Ü`vlookup-web.html` **1.1.0**∩╝êdeprecated∩╝ëπÇé
+ - Σ╜┐τö¿µû╣σ╝Å∩╝Üµ£¼µ⌐ƒΘ¢óτ╖Üσä¬σàê∩╝¢Φ│çµûÖΘéèτòîµá╕σçåσëìΣ╕ìσ╛ùµû░σó₧ΘüÖµ╕¼µêûΘüáτ½»µ£ìσïÖπÇé
+ - Φ¬₧Φ¿ÇΦªÅσëç∩╝Üσ░êµíêΦ¬¬µÿÄΦêçΦªÅµá╝µÄíτ╣üΘ½öΣ╕¡µûçσ£¿σëìπÇüΦï▒µûçτ╖èµÄÑ∩╝¢v2 UI τé║Φï▒µûçΦêçτ╣üΘ½öΣ╕¡µûçπÇé
+-- µ¡úσ╝ÅΣ╕èτ╖Üσêñσ«Ü∩╝Ü`NEEDS WORK`∩╝êσ╛àτ£ƒσ»ªµ¬ö UI Θ⌐ùµö╢∩╝¢τ£ƒσ»ªµ¬öΦïÑµ£ë SHTΓåöYD τ¡ëσû«Σ╜ìΘ£Çσ£¿µÅ¢τ«ùΦí¿Φú£ΦªÅσëç∩╝ëπÇé
++- µ¡úσ╝ÅΣ╕èτ╖Üσêñσ«Ü∩╝Ü`NEEDS WORK`∩╝êσ╛àτ£ƒσ»ªµ¬ö UI Θ⌐ùµö╢∩╝¢SHT µ»ìµûÖΦ½ïτó║Φ¬ì 3.F µ£½τó╝Φêçµ£½τó╝µÅ¢τ«ùΦí¿∩╝ëπÇé
+ 
+ ## Current status
+ 
+-- Status: Allocation engine **v2.1.0** (unit pre-check, editable conversion whitelist, filters, zebra rows, Y flag) is implemented; fixture verification passed.
+-- App version: `allocation-web.html` **2.1.0**.
++- Status: Allocation engine **v2.2.0** (unit pre-check, unit whitelist, **editable SHT size-suffix conversion**, filters, zebra rows, Y flag) is implemented; fixture verification passed.
++- App version: `allocation-web.html` **2.2.0**.
+ - Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
+ - Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
+ - Language rule: Project docs place Traditional Chinese first and English immediately after. The v2 UI languages are English and Traditional Chinese.
+-- Release assessment: Still `NEEDS WORK` pending real-file UI acceptance (add conversion rows for units such as SHTΓåöYD when prompted).
++- Release assessment: Still `NEEDS WORK` pending real-file UI acceptance (confirm Excel3.F suffixes and size-conversion table for SHT mothers).
+ 
+ ## ΘàìτÖ╝Φ│çµûÖµ╡üτ¿ï∩╝êv2∩╝ë
+ 
+diff --git a/allocation-manual.html b/allocation-manual.html
+new file mode 100644
+index 0000000..60fd630
+--- /dev/null
++++ b/allocation-manual.html
+@@ -0,0 +1,371 @@
++<!doctype html>
++<html lang="en">
++<head>
++  <meta charset="utf-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <title>RAW MAT Allocation ΓÇö Operation Manual</title>
++  <style>
++    :root {
++      --bg: #f3f6f8;
++      --ink: #17212b;
++      --muted: #5b6874;
++      --line: #d4dce3;
++      --panel: #ffffff;
++      --soft: #edf3f6;
++      --accent: #1f7a8c;
++      --accent-dark: #155c6b;
++    }
++    * { box-sizing: border-box; }
++    body {
++      margin: 0;
++      min-height: 100vh;
++      background: var(--bg);
++      color: var(--ink);
++      font: 15px/1.55 "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", sans-serif;
++    }
++    header {
++      background: var(--panel);
++      border-bottom: 1px solid var(--line);
++      padding: 18px clamp(16px, 4vw, 42px);
++    }
++    .topbar, main {
++      max-width: 900px;
++      margin: 0 auto;
++    }
++    .topbar {
++      display: flex;
++      justify-content: space-between;
++      align-items: center;
++      gap: 16px;
++      flex-wrap: wrap;
++    }
++    .top-actions {
++      display: flex;
++      align-items: center;
++      gap: 10px;
++      flex-wrap: wrap;
++    }
++    h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); }
++    main { padding: 24px clamp(16px, 4vw, 42px) 48px; }
++    section {
++      background: var(--panel);
++      border: 1px solid var(--line);
++      border-radius: 10px;
++      padding: 18px 20px;
++      margin-bottom: 16px;
++    }
++    h2 { margin: 0 0 10px; font-size: 18px; color: var(--accent-dark); }
++    p, li { margin: 0 0 8px; }
++    ul, ol { margin: 0 0 8px; padding-left: 1.4em; }
++    table {
++      width: 100%;
++      border-collapse: collapse;
++      font-size: 14px;
++      margin-top: 8px;
++    }
++    th, td {
++      border: 1px solid var(--line);
++      padding: 6px 8px;
++      text-align: left;
++      vertical-align: top;
++    }
++    th { background: var(--soft); }
++    a.app-link, a.manual-link {
++      display: inline-flex;
++      align-items: center;
++      padding: 6px 12px;
++      border: 1px solid var(--line);
++      border-radius: 8px;
++      background: var(--panel);
++      color: var(--accent);
++      text-decoration: none;
++      font-weight: 600;
++      font-size: 14px;
++    }
++    a.app-link:hover, a.manual-link:hover {
++      background: var(--soft);
++      border-color: var(--accent);
++    }
++    select {
++      min-height: 34px;
++      border: 1px solid var(--line);
++      border-radius: 8px;
++      padding: 4px 8px;
++      background: #fff;
++    }
++    .note {
++      background: var(--soft);
++      border-left: 4px solid var(--accent);
++      padding: 10px 12px;
++      border-radius: 0 8px 8px 0;
++      margin-top: 8px;
++      font-size: 14px;
++    }
++  </style>
++</head>
++<body>
++  <header>
++    <div class="topbar">
++      <h1 data-i18n="manualTitle">Operation Manual</h1>
++      <div class="top-actions">
++        <a href="allocation-web.html" class="app-link" data-i18n="backToApp">Back to app</a>
++        <select id="languageSelect" aria-label="Language">
++          <option value="en">English</option>
++          <option value="zh">τ╣üΘ½öΣ╕¡µûç</option>
++          <option value="my">ßÇÖßÇ╝ßÇößÇ║ßÇÖßÇ¼</option>
++        </select>
++      </div>
++    </div>
++  </header>
++
++  <main>
++    <section>
++      <p data-i18n="manualIntro">This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.</p>
++    </section>
++
++    <section>
++      <h2 data-i18n="step1Title">Step 1 ΓÇö Import Excel files</h2>
++      <ul>
++        <li data-i18n="step1a">Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.</li>
++        <li data-i18n="step1b">Column mapping is fixed by business rules (see table below).</li>
++        <li data-i18n="step1c">Use Sample data to try the tool without real files.</li>
++      </ul>
++    </section>
++
++    <section>
++      <h2 data-i18n="step2Title">Step 2 ΓÇö Mapping &amp; run allocation</h2>
++      <ul>
++        <li data-i18n="step2a">Review the fixed mapping table and detected headers.</li>
++        <li data-i18n="step2b">Unit whitelist: when mother unit Γëá child unit (non-SHT), add conversion ratios (default MΓåöYD).</li>
++        <li data-i18n="step2c">SHT size-suffix table: when mother unit is SHT, read size suffix from Excel3.F mother name (e.g. 110x200cm). Add or edit rows as needed.</li>
++        <li data-i18n="step2d">Click Run allocation. Missing rules or unit mismatches will block with an error message.</li>
++      </ul>
++    </section>
++
++    <section>
++      <h2 data-i18n="step3Title">Step 3 ΓÇö Filter, preview &amp; export</h2>
++      <ul>
++        <li data-i18n="step3a">Filter by SO, cutting date range, or mother material. Preview updates live.</li>
++        <li data-i18n="step3b">Checkboxes can hide zero-demand SOs or rows.</li>
++        <li data-i18n="step3c">Export CSV or Excel. Export uses the same filters as preview.</li>
++        <li data-i18n="step3d">If inputs change after a run, re-run allocation before exporting.</li>
++      </ul>
++    </section>
++
++    <section>
++      <h2 data-i18n="yTitle">Column Y (allocated flag)</h2>
++      <p data-i18n="yBody">For each sales order + mother material group: Y appears on all rows only when every child has demand &gt; 0 and provided ΓëÑ demand (fully allocated). If any child is short, the whole group shows blank.</p>
++    </section>
++
++    <section>
++      <h2 data-i18n="colsTitle">Fixed column mapping</h2>
++      <table>
++        <thead>
++          <tr>
++            <th data-i18n="colSource">Source</th>
++            <th data-i18n="colLetter">Column</th>
++            <th data-i18n="colMeaning">Meaning</th>
++          </tr>
++        </thead>
++        <tbody>
++          <tr><td>Excel1</td><td>A</td><td data-i18n="colSo">Sales order (so)</td></tr>
++          <tr><td>Excel1</td><td>B</td><td data-i18n="colCutting">Cutting / production date</td></tr>
++          <tr><td>Excel2</td><td>B</td><td data-i18n="colSd">SD Document (SO)</td></tr>
++          <tr><td>Excel2</td><td>F</td><td data-i18n="colMother">Mother material</td></tr>
++          <tr><td>Excel2</td><td>Q</td><td data-i18n="colQty">Open Quantity (demand)</td></tr>
++          <tr><td>Excel2</td><td>R</td><td data-i18n="colUnitR">Mother unit</td></tr>
++          <tr><td>Excel3</td><td>E</td><td data-i18n="colMother3">Mother material</td></tr>
++          <tr><td>Excel3</td><td>F</td><td data-i18n="colDescF">Mother full name (SHT size suffix)</td></tr>
++          <tr><td>Excel3</td><td>H</td><td data-i18n="colUnitH">Mother unit check (must match 2.R)</td></tr>
++          <tr><td>Excel3</td><td>I</td><td data-i18n="colChild">Child material</td></tr>
++          <tr><td>Excel3</td><td>M</td><td data-i18n="colUnitM">Child unit</td></tr>
++          <tr><td>Excel3</td><td>K</td><td data-i18n="colStock">Unrestricted stock (MAX per child)</td></tr>
++        </tbody>
++      </table>
++    </section>
++
++    <section>
++      <h2 data-i18n="troubleTitle">Troubleshooting</h2>
++      <ul>
++        <li data-i18n="trouble1">Unit pre-check failed: same mother must have matching Excel2.R and Excel3.H.</li>
++        <li data-i18n="trouble2">Missing conversion: add unit or SHT size-suffix rule in Step 2, then re-run.</li>
++        <li data-i18n="trouble3">SHT mother missing suffix: ensure Excel3.F mother name ends with size like 110x200cm.</li>
++        <li data-i18n="trouble4">Results stale: inputs changed ΓÇö run allocation again before export.</li>
++      </ul>
++      <div class="note" data-i18n="troubleNote">Data stays on your computer. Do not upload real business files to external services.</div>
++    </section>
++  </main>
++
++  <script>
++    const LANG_STORAGE_KEY = "rawmat.allocation.lang";
++
++    const translations = {
++      en: {
++        manualTitle: "Operation Manual",
++        backToApp: "Back to app",
++        manualIntro: "This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.",
++        step1Title: "Step 1 ΓÇö Import Excel files",
++        step1a: "Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.",
++        step1b: "Column mapping is fixed by business rules (see table below).",
++        step1c: "Use Sample data to try the tool without real files.",
++        step2Title: "Step 2 ΓÇö Mapping & run allocation",
++        step2a: "Review the fixed mapping table and detected headers.",
++        step2b: "Unit whitelist: when mother unit Γëá child unit (non-SHT), add conversion ratios (default MΓåöYD).",
++        step2c: "SHT size-suffix table: when mother unit is SHT, read size suffix from Excel3.F mother name (e.g. 110x200cm). Add or edit rows as needed.",
++        step2d: "Click Run allocation. Missing rules or unit mismatches will block with an error message.",
++        step3Title: "Step 3 ΓÇö Filter, preview & export",
++        step3a: "Filter by SO, cutting date range, or mother material. Preview updates live.",
++        step3b: "Checkboxes can hide zero-demand SOs or rows.",
++        step3c: "Export CSV or Excel. Export uses the same filters as preview.",
++        step3d: "If inputs change after a run, re-run allocation before exporting.",
++        yTitle: "Column Y (allocated flag)",
++        yBody: "For each sales order + mother material group: Y appears on all rows only when every child has demand > 0 and provided ΓëÑ demand (fully allocated). If any child is short, the whole group shows blank.",
++        colsTitle: "Fixed column mapping",
++        colSource: "Source",
++        colLetter: "Column",
++        colMeaning: "Meaning",
++        colSo: "Sales order (so)",
++        colCutting: "Cutting / production date",
++        colSd: "SD Document (SO)",
++        colMother: "Mother material",
++        colQty: "Open Quantity (demand)",
++        colUnitR: "Mother unit",
++        colMother3: "Mother material",
++        colDescF: "Mother full name (SHT size suffix)",
++        colUnitH: "Mother unit check (must match 2.R)",
++        colChild: "Child material",
++        colUnitM: "Child unit",
++        colStock: "Unrestricted stock (MAX per child)",
++        troubleTitle: "Troubleshooting",
++        trouble1: "Unit pre-check failed: same mother must have matching Excel2.R and Excel3.H.",
++        trouble2: "Missing conversion: add unit or SHT size-suffix rule in Step 2, then re-run.",
++        trouble3: "SHT mother missing suffix: ensure Excel3.F mother name ends with size like 110x200cm.",
++        trouble4: "Results stale: inputs changed ΓÇö run allocation again before export.",
++        troubleNote: "Data stays on your computer. Do not upload real business files to external services."
++      },
++      zh: {
++        manualTitle: "µôìΣ╜£µëïσåè",
++        backToApp: "Φ┐öσ¢₧τ¿ïσ╝Å",
++        manualIntro: "µ£¼µëïσåèΦ¬¬µÿÄσªéΣ╜òΣ╜┐τö¿ RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄ∩╝êΘ¢óτ╖ÜτÇÅΦª╜σÖ¿σ╖Ñσà╖∩╝ëπÇéΦ½ïσ£¿Σ╕èµû╣Θü╕µôçΦ¬₧τ│╗πÇé",
++        step1Title: "τ¼¼ 1 µ¡Ñ ΓÇö σî»σàÑ Excel",
++        step1a: "Σ╕èσé│µêûΦ▓╝Σ╕èΣ╕ëσÇïµ¬öµíê∩╝ÜExcel1 µÄÆτ¿ïπÇüExcel2 Θ£Çµ▒é∩╝êCOIS∩╝ëπÇüExcel3 BOM∩╝Åσ║½σ¡ÿπÇé",
++        step1b: "µ¼äΣ╜ìσ░ìµçëΣ╛¥µÑ¡σïÖΦªÅσëçσ¢║σ«Ü∩╝êΦªïΣ╕ïΦí¿∩╝ëπÇé",
++        step1c: "σÅ»Σ╜┐τö¿πÇîτ»äΣ╛ïΦ│çµûÖπÇìσ£¿Σ╕ìΣ╜┐τö¿τ£ƒσ»ªµ¬öτÜäµâàµ│üΣ╕ïΦ⌐ªτö¿πÇé",
++        step2Title: "τ¼¼ 2 µ¡Ñ ΓÇö σ░ìµçëΦêçσƒ╖ΦíîΘàìτÖ╝",
++        step2a: "µ¬óΦªûσ¢║σ«Üσ░ìµçëΦí¿Φêçσü╡µ╕¼σê░τÜäΦí¿Θá¡πÇé",
++        step2b: "σû«Σ╜ìτÖ╜σÉìσû«∩╝Üµ»ìσû«Σ╜ì Γëá σ¡Éσû«Σ╜ì∩╝êΘ¥₧ SHT∩╝ëµÖé∩╝îΦú£Σ╕èµÅ¢τ«ùσÇìτÄç∩╝êΘáÉΦ¿¡ MΓåöYD∩╝ëπÇé",
++        step2c: "SHT µ£½τó╝µÅ¢τ«ù∩╝Üµ»ìσû«Σ╜ìτé║ SHT µÖé∩╝îσ╛₧ Excel3.F µ»ìµûÖσà¿σÉìΦ«ÇσÅûµ£½τó╝∩╝êσªé 110x200cm∩╝ëπÇéΦ½ïΦç¬Φíîµû░σó₧µêûΣ┐«µö╣ΦªÅσëçπÇé",
++        step2d: "µîëπÇîσƒ╖ΦíîΘàìτÖ╝πÇìπÇéτ╝║ΦªÅσëçµêûσû«Σ╜ìΣ╕ìΣ╕ÇΦç┤µ£âΣ╗ÑΘî»Φ¬ñΦ¿èµü»Θÿ╗µôïπÇé",
++        step3Title: "τ¼¼ 3 µ¡Ñ ΓÇö τ»⌐Θü╕πÇüΘáÉΦª╜Φêçσî»σç║",
++        step3a: "σÅ»Σ╛¥ SOπÇücutting µùÑµ£ƒπÇüµ»ìµ¥ÉµûÖτ»⌐Θü╕∩╝¢ΘáÉΦª╜σì│µÖéµ¢┤µû░πÇé",
++        step3b: "σÅ»σï╛Θü╕ΘÜ▒ΦùÅΘ¢╢Θ£Çµ▒é SO µêûΘ¢╢Θ£Çµ▒éσêùπÇé",
++        step3c: "σî»σç║ CSV µêû Excel∩╝¢σî»σç║σàºσ«╣ΦêçΘáÉΦª╜τ»⌐Θü╕Σ╕ÇΦç┤πÇé",
++        step3d: "ΦïÑσƒ╖Φíîσ╛îσÅêΣ┐«µö╣Φ╝╕σàÑ∩╝îΦ½ïΘçìµû░ΘàìτÖ╝σåìσî»σç║πÇé",
++        yTitle: "Y µ¼ä∩╝êσ╖▓ΘàìτÖ╝µ¿ÖΦ¿ÿ∩╝ë",
++        yBody: "σÉîΣ╕ÇΦ¿éσû« + σÉîΣ╕Çµ»ìµ¥ÉµûÖ∩╝Üσâàτò╢µëÇµ£ëσ¡ÉµûÖ demand > 0 Σ╕ö provided ΓëÑ demand∩╝êσà¿µò╕Θàìµ╗┐∩╝ëµÖé∩╝îτ╛ñτ╡äσàºµ»ÅΣ╕ÇσêùµëìΘí»τñ║ Y∩╝¢Σ╗╗Σ╕Çσ¡ùµûÖτƒ¡τ╝║σëçµò┤τ╡äτ⌐║τÖ╜πÇé",
++        colsTitle: "σ¢║σ«Üµ¼äΣ╜ìσ░ìµçë",
++        colSource: "Σ╛åµ║É",
++        colLetter: "µ¼äΣ╜ì",
++        colMeaning: "Φ¬₧µäÅ",
++        colSo: "Φ¿éσû«∩╝êso∩╝ë",
++        colCutting: "µÄÆτ¿ïτöƒτöóµùÑ cutting",
++        colSd: "Φ¿éσû«∩╝êSD Document∩╝ë",
++        colMother: "µ»ìµ¥ÉµûÖ",
++        colQty: "Open Quantity∩╝êΘ£Çµ▒é∩╝ë",
++        colUnitR: "µ»ìσû«Σ╜ì∩╝ê2.R∩╝ë",
++        colMother3: "µ»ìµ¥ÉµûÖ",
++        colDescF: "µ»ìµûÖσà¿σÉì∩╝êSHT µ£½τó╝∩╝ë",
++        colUnitH: "µ»ìσû«Σ╜ìµ¬óµƒÑ∩╝êΘáêτ¡ëµû╝ 2.R∩╝ë",
++        colChild: "σ¡Éµ¥ÉµûÖ",
++        colUnitM: "σ¡Éσû«Σ╜ì∩╝ê3.M∩╝ë",
++        colStock: "Unrestricted σ║½σ¡ÿ∩╝êσÉîσ¡ÉµûÖσÅû MAX∩╝ë",
++        troubleTitle: "σ╕╕ΦªïσòÅΘíî",
++        trouble1: "σû«Σ╜ìΣ║ïσëìµ¬óµƒÑσñ▒µòù∩╝ÜσÉîµ»ìµûÖ Excel2.R Φêç Excel3.H σ┐àΘáêΣ╕ÇΦç┤πÇé",
++        trouble2: "τ╝║σ░æµÅ¢τ«ù∩╝Üσ£¿ Step 2 Φú£σû«Σ╜ìµêû SHT µ£½τó╝ΦªÅσëçσ╛îΘçìΦ╖æπÇé",
++        trouble3: "SHT µ»ìµûÖτäíµ£½τó╝∩╝ÜΦ½ïτó║Φ¬ì Excel3.F µ»ìµûÖσà¿σÉìµ£½σ░╛σÉ½ 110x200cm τ¡ëσ░║σ»╕πÇé",
++        trouble4: "τ╡Éµ₧£σ╖▓ΘüÄµ£ƒ∩╝ÜΦ╝╕σàÑσ╖▓Φ«èµ¢┤ ΓÇö Φ½ïΘçìµû░σƒ╖ΦíîΘàìτÖ╝σåìσî»σç║πÇé",
++        troubleNote: "Φ│çµûÖσâàτòÖσ£¿µ£¼µ⌐ƒΘ¢╗Φàª∩╝îΦ½ïσï┐σ░çτ£ƒσ»ªµÑ¡σïÖµ¬öΣ╕èσé│Φç│σñûΘâ¿µ£ìσïÖπÇé"
++      },
++      my: {
++        manualTitle: "ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇ£ßÇÇßÇ║ßÇàßÇ╜ßÇ▓",
++        backToApp: "ßÇíßÇÇßÇ║ßÇòßÇ║ßÇ₧ßÇ¡ßÇ»ßÇ╖ ßÇòßÇ╝ßÇößÇ║ßÇ₧ßÇ╜ßÇ¼ßÇ╕ßÇ¢ßÇößÇ║",
++        manualIntro: "ßÇñßÇ£ßÇÇßÇ║ßÇàßÇ╜ßÇ▓ßÇ₧ßÇèßÇ║ RAW MAT ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇíßÇäßÇ║ßÇéßÇ╗ßÇäßÇ║ (offline ßÇÿßÇ¢ßÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ¼ ßÇÇßÇ¡ßÇ¢ßÇ¡ßÇÜßÇ¼) ßÇÇßÇ¡ßÇ» ßÇíßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇòßÇ╝ßÇ»ßÇößÇèßÇ║ßÇ╕ßÇÇßÇ¡ßÇ» ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇòßÇ╝ßÇæßÇ¼ßÇ╕ßÇ₧ßÇèßÇ║ßüï ßÇíßÇòßÇ▒ßÇ½ßÇ║ßÇÉßÇ╜ßÇäßÇ║ ßÇÿßÇ¼ßÇ₧ßÇ¼ßÇàßÇÇßÇ¼ßÇ╕ ßÇ¢ßÇ╜ßÇ▒ßÇ╕ßÇüßÇ╗ßÇÜßÇ║ßÇòßÇ½ßüï",
++        step1Title: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüü ΓÇö Excel ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
++        step1a: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßüâ ßÇüßÇ» ßÇÉßÇäßÇ║ßÇòßÇ½ ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ ßÇÇßÇ░ßÇ╕ßÇæßÇèßÇ╖ßÇ║ßÇòßÇ½ ΓÇö Excel1 ßÇíßÇüßÇ╗ßÇ¡ßÇößÇ║ßÇçßÇÜßÇ¼ßÇ╕ßüè Excel2 ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ (COIS)ßüè Excel3 BOM/ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ßüï",
++        step1b: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ßÇ₧ßÇèßÇ║ ßÇ£ßÇ»ßÇòßÇ║ßÇäßÇößÇ║ßÇ╕ ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ßÇíßÇ¢ ßÇ₧ßÇÉßÇ║ßÇÖßÇ╛ßÇÉßÇ║ßÇæßÇ¼ßÇ╕ßÇ₧ßÇèßÇ║ (ßÇíßÇ▒ßÇ¼ßÇÇßÇ║ßÇçßÇÜßÇ¼ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ßÇòßÇ½)ßüï",
++        step1c: "ßÇíßÇàßÇÖßÇ║ßÇ╕ ßÇíßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇòßÇ╝ßÇ»ßÇ¢ßÇößÇ║ Sample data ßÇÇßÇ¡ßÇ» ßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║ßüï",
++        step2Title: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüé ΓÇö ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇößÇ║",
++        step2a: "ßÇ₧ßÇÉßÇ║ßÇÖßÇ╛ßÇÉßÇ║ßÇæßÇ¼ßÇ╕ßÇ₧ßÇ▒ßÇ¼ ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ ßÇçßÇÜßÇ¼ßÇ╕ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇÉßÇ╜ßÇ▒ßÇ╖ßÇ¢ßÇ╛ßÇ¡ßÇ₧ßÇ▒ßÇ¼ ßÇüßÇ▒ßÇ½ßÇäßÇ║ßÇ╕ßÇàßÇëßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇòßÇ½ßüï",
++        step2b: "ßÇÜßÇ░ßÇößÇàßÇ║ whitelist ΓÇö ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ Γëá ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║ (SHT ßÇÖßÇƒßÇ»ßÇÉßÇ║) ßÇåßÇ¡ßÇ»ßÇòßÇ½ßÇÇ ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» ßÇíßÇüßÇ╗ßÇ¡ßÇ»ßÇ╕ßÇÇßÇ¡ßÇ» ßÇæßÇèßÇ╖ßÇ║ßÇòßÇ½ (ßÇòßÇ»ßÇ╢ßÇÖßÇ╛ßÇößÇ║ MΓåöYD)ßüï",
++        step2c: "SHT ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕ ΓÇö ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ SHT ßÇûßÇ╝ßÇàßÇ║ßÇòßÇ½ßÇÇ Excel3.F ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇíßÇÖßÇèßÇ║ ßÇÖßÇ╛ ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ (ßÇÑßÇòßÇÖßÇ¼ 110x200cm) ßÇÇßÇ¡ßÇ» ßÇûßÇÉßÇ║ßÇòßÇ½ßüï ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇ₧ßÇ£ßÇ¡ßÇ» ßÇàßÇ¼ßÇ¢ßÇäßÇ║ßÇ╕ßÇæßÇèßÇ╖ßÇ║/ßÇòßÇ╝ßÇäßÇ║ßÇòßÇ½ßüï",
++        step2d: "Run allocation ßÇÇßÇ¡ßÇ» ßÇößÇ╛ßÇ¡ßÇòßÇ║ßÇòßÇ½ßüï ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ ßÇÖßÇòßÇ╝ßÇèßÇ╖ßÇ║ßÇÖßÇ«ßÇòßÇ½ßÇÇ ßÇíßÇÖßÇ╛ßÇ¼ßÇ╕ßÇòßÇ╝ßÇÖßÇèßÇ║ßüï",
++        step3Title: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüâ ΓÇö ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßüè ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║",
++        step3a: "SOßüè cutting ßÇ¢ßÇÇßÇ║ßÇàßÇ╜ßÇ▓ßüè ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ ßÇûßÇ╝ßÇäßÇ╖ßÇ║ ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║ßüï ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ßÇÖßÇ╛ßÇ» ßÇüßÇ╗ßÇÇßÇ║ßÇüßÇ╗ßÇäßÇ║ßÇ╕ ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇèßÇ║ßÇÖßÇ╜ßÇÖßÇ║ßÇ╕ßÇÖßÇ╢ßÇòßÇ½ßÇ₧ßÇèßÇ║ßüï",
++        step3b: "ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇ₧ßÇ»ßÇè ßÇûßÇ╝ßÇàßÇ║ßÇ₧ßÇ▒ßÇ¼ SO ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇûßÇ╗ßÇ▒ßÇ¼ßÇÇßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║ßüï",
++        step3c: "CSV ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ Excel ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇòßÇ½ßüï ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇÖßÇ╛ßÇ»ßÇ₧ßÇèßÇ║ ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ßÇÖßÇ╛ßÇ» ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßÇÖßÇ╛ßÇ»ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇÉßÇ░ßÇèßÇ«ßÇ₧ßÇèßÇ║ßüï",
++        step3d: "ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ßÇößÇ▒ßÇ¼ßÇÇßÇ║ ßÇæßÇèßÇ╖ßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇÖßÇ╛ßÇ» ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇòßÇ½ßÇÇ ßÇæßÇòßÇ║ßÇÖßÇ╢ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇòßÇ½ßüï",
++        yTitle: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ Y (ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇòßÇ╝ßÇ«ßÇ╕ ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕)",
++        yBody: "ßÇÉßÇàßÇ║ßÇàßÇ»ßÇ╢ßÇÉßÇàßÇ║ßÇ¢ßÇ¼ ßÇÖßÇ╛ßÇ¼ßÇÜßÇ░ßÇÖßÇ╛ßÇ» + ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ ßÇíßÇ»ßÇòßÇ║ßÇàßÇ»ßÇÉßÇàßÇ║ßÇüßÇ»ßÇ£ßÇ»ßÇ╢ßÇ╕ßÇíßÇÉßÇ╜ßÇÇßÇ║ ΓÇö ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ ßÇíßÇ¼ßÇ╕ßÇ£ßÇ»ßÇ╢ßÇ╕ demand > 0 ßÇößÇ╛ßÇäßÇ╖ßÇ║ provided ΓëÑ demand (ßÇòßÇ╝ßÇèßÇ╖ßÇ║ßÇàßÇ»ßÇ╢ßÇàßÇ╜ßÇ¼ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇòßÇ╝ßÇ«ßÇ╕) ßÇûßÇ╝ßÇàßÇ║ßÇÖßÇ╛ßÇ₧ßÇ¼ Y ßÇòßÇ╝ßÇÖßÇèßÇ║ßüï ßÇÉßÇàßÇ║ßÇüßÇ»ßÇüßÇ» ßÇÖßÇ£ßÇ»ßÇ╢ßÇ£ßÇ▒ßÇ¼ßÇÇßÇ║ßÇòßÇ½ßÇÇ ßÇíßÇ»ßÇòßÇ║ßÇàßÇ»ßÇ£ßÇ»ßÇ╢ßÇ╕ ßÇùßÇ£ßÇ¼ßÇûßÇ╝ßÇàßÇ║ßÇÖßÇèßÇ║ßüï",
++        colsTitle: "ßÇ₧ßÇÉßÇ║ßÇÖßÇ╛ßÇÉßÇ║ ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕",
++        colSource: "ßÇ¢ßÇäßÇ║ßÇ╕ßÇÖßÇ╝ßÇàßÇ║",
++        colLetter: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢",
++        colMeaning: "ßÇíßÇôßÇ¡ßÇòßÇ╣ßÇòßÇ¼ßÇÜßÇ║",
++        colSo: "ßÇÖßÇ╛ßÇ¼ßÇÜßÇ░ßÇÖßÇ╛ßÇ» (so)",
++        colCutting: "Cutting / ßÇæßÇ»ßÇÉßÇ║ßÇ£ßÇ»ßÇòßÇ║ßÇ¢ßÇÇßÇ║",
++        colSd: "SD Document (SO)",
++        colMother: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++        colQty: "Open Quantity (ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║)",
++        colUnitR: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║",
++        colMother3: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++        colDescF: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇíßÇÖßÇèßÇ║ ßÇíßÇòßÇ╝ßÇèßÇ╖ßÇ║ßÇíßÇàßÇ»ßÇ╢ (SHT ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕)",
++        colUnitH: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇÖßÇ╛ßÇ» (2.R ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇÉßÇ░ßÇèßÇ«ßÇ¢ßÇÖßÇèßÇ║)",
++        colChild: "ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++        colUnitM: "ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║",
++        colStock: "Unrestricted ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ (ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ßÇÉßÇàßÇ║ßÇüßÇ»ßÇ£ßÇ╗ßÇ╛ßÇäßÇ║ MAX)",
++        troubleTitle: "ßÇòßÇ╝ßÇ┐ßÇößÇ¼ ßÇûßÇ╝ßÇ▒ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇößÇèßÇ║ßÇ╕",
++        trouble1: "ßÇÜßÇ░ßÇößÇàßÇ║ ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇÖßÇ╛ßÇ» ßÇÖßÇíßÇ▒ßÇ¼ßÇäßÇ║ßÇÖßÇ╝ßÇäßÇ║ ΓÇö ßÇÉßÇ░ßÇèßÇ«ßÇ₧ßÇ▒ßÇ¼ ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ßÇÉßÇ╜ßÇäßÇ║ Excel2.R ßÇößÇ╛ßÇäßÇ╖ßÇ║ Excel3.H ßÇÉßÇ░ßÇèßÇ«ßÇ¢ßÇÖßÇèßÇ║ßüï",
++        trouble2: "ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» ßÇÖßÇ¢ßÇ╛ßÇ¡ ΓÇö ßÇíßÇåßÇäßÇ╖ßÇ║ ßüé ßÇÉßÇ╜ßÇäßÇ║ ßÇÜßÇ░ßÇößÇàßÇ║ ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ SHT ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕ ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ ßÇæßÇèßÇ╖ßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇ»ßÇòßÇ║ßÇòßÇ½ßüï",
++        trouble3: "SHT ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÉßÇ╜ßÇäßÇ║ ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕ ßÇÖßÇ¢ßÇ╛ßÇ¡ ΓÇö Excel3.F ßÇÉßÇ╜ßÇäßÇ║ 110x200cm ßÇÇßÇ▓ßÇ╖ßÇ₧ßÇ¡ßÇ»ßÇ╖ ßÇíßÇåßÇ»ßÇ╢ßÇ╕ßÇÉßÇ╜ßÇäßÇ║ ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ ßÇ¢ßÇ╛ßÇ¡ßÇ¢ßÇÖßÇèßÇ║ßüï",
++        trouble4: "ßÇ¢ßÇ£ßÇÆßÇ║ ßÇƒßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇößÇ▒ßÇòßÇ╝ßÇ« ΓÇö ßÇæßÇèßÇ╖ßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇÖßÇ╛ßÇ» ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇòßÇ╝ßÇ«ßÇ╕ ΓÇö ßÇæßÇòßÇ║ßÇÖßÇ╢ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇòßÇ½ßüï",
++        troubleNote: "ßÇÆßÇ▒ßÇÉßÇ¼ßÇ₧ßÇèßÇ║ ßÇ₧ßÇäßÇ╖ßÇ║ßÇÇßÇ╜ßÇößÇ║ßÇòßÇ╗ßÇ░ßÇÉßÇ¼ßÇÉßÇ╜ßÇäßÇ║ßÇ₧ßÇ¼ ßÇ¢ßÇ╛ßÇ¡ßÇ₧ßÇèßÇ║ßüï ßÇ£ßÇ»ßÇòßÇ║ßÇäßÇößÇ║ßÇ╕ ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇòßÇ╝ßÇäßÇ║ßÇò ßÇ¥ßÇößÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇÖßÇ╛ßÇ»ßÇ₧ßÇ¡ßÇ»ßÇ╖ ßÇÖßÇÉßÇäßÇ║ßÇòßÇ½ßÇößÇ╛ßÇäßÇ╖ßÇ║ßüï"
++      }
++    };
++
++    let lang = "en";
++    const languageSelect = document.getElementById("languageSelect");
++
++    function t(key) {
++      const table = translations[lang] || translations.en;
++      return table[key] || translations.en[key] || key;
++    }
++
++    function htmlLangFor(code) {
++      if (code === "zh") return "zh-Hant";
++      if (code === "my") return "my";
++      return "en";
++    }
++
++    function applyLanguage() {
++      document.documentElement.lang = htmlLangFor(lang);
++      document.querySelectorAll("[data-i18n]").forEach(node => {
++        node.textContent = t(node.dataset.i18n);
++      });
++      document.title = `${t("manualTitle")} ΓÇö RAW MAT`;
++      localStorage.setItem(LANG_STORAGE_KEY, lang);
++    }
++
++    const saved = localStorage.getItem(LANG_STORAGE_KEY);
++    if (saved && translations[saved]) {
++      lang = saved;
++      languageSelect.value = saved;
++    }
++
++    languageSelect.addEventListener("change", () => {
++      lang = languageSelect.value;
++      applyLanguage();
++    });
++
++    applyLanguage();
++  </script>
++</body>
++</html>
+diff --git a/allocation-web.html b/allocation-web.html
+index f7c7b9d..2f73ddf 100644
+--- a/allocation-web.html
++++ b/allocation-web.html
+@@ -34,7 +34,7 @@
+       min-height: 100vh;
+       background: var(--bg);
+       color: var(--ink);
+-      font: 15px/1.45 "Segoe UI", Arial, "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
++      font: 15px/1.45 "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+     }
+ 
+     button, input, select, textarea { font: inherit; }
+@@ -389,9 +389,9 @@
+       z-index: 1;
+     }
+ 
+-    table.result tr.so-even td { background: #f3f5f7; }
++    table.result tr.so-even td { background: #c5d3e0; }
+     table.result tr.so-odd td { background: #ffffff; }
+-    table.result tr.group-break td { box-shadow: inset 0 2px 0 #94a3b8; }
++    table.result tr.group-break td { box-shadow: inset 0 2px 0 #64748b; }
+ 
+     .filter-bar {
+       display: grid;
+@@ -443,7 +443,8 @@
+     }
+ 
+     .conv-box select,
+-    .conv-box input[type="number"] {
++    .conv-box input[type="number"],
++    .conv-box input[type="text"] {
+       width: 100%;
+       min-height: 32px;
+     }
+@@ -470,6 +471,28 @@
+       box-shadow: var(--shadow);
+       display: grid;
+       gap: 12px;
++      position: relative;
++    }
++
++    .error-modal-close-x {
++      position: absolute;
++      top: 10px;
++      right: 12px;
++      width: 34px;
++      height: 34px;
++      border: none;
++      background: transparent;
++      color: var(--muted);
++      font-size: 22px;
++      font-weight: 700;
++      line-height: 1;
++      cursor: pointer;
++      display: inline-grid;
++      place-items: center;
++    }
++
++    .error-modal-close-x:hover {
++      color: var(--accent);
+     }
+ 
+     .modal-card pre {
+@@ -519,6 +542,24 @@
+       transition: width 0.25s ease;
+     }
+ 
++    .manual-link {
++      display: inline-flex;
++      align-items: center;
++      padding: 6px 12px;
++      border: 1px solid var(--line);
++      border-radius: 8px;
++      background: var(--panel);
++      color: var(--accent);
++      text-decoration: none;
++      font-weight: 600;
++      font-size: 14px;
++    }
++
++    .manual-link:hover {
++      background: var(--soft);
++      border-color: var(--accent);
++    }
++
+     @media (max-width: 920px) {
+       .topbar { flex-direction: column; align-items: flex-start; }
+       .stepper, .three-col, .result-band { grid-template-columns: 1fr; }
+@@ -530,9 +571,11 @@
+     <div class="topbar">
+       <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
+       <div class="top-actions">
++        <a href="allocation-manual.html" class="manual-link" data-i18n="manualLink">Operation manual</a>
+         <select id="languageSelect" aria-label="Language">
+           <option value="en">English</option>
+           <option value="zh">τ╣üΘ½öΣ╕¡µûç</option>
++          <option value="my">ßÇÖßÇ╝ßÇößÇ║ßÇÖßÇ¼</option>
+         </select>
+         <div class="status" id="statusText">Ready</div>
+       </div>
+@@ -549,7 +592,7 @@
+     <section class="active" id="step1">
+       <div class="section-head">
+         <h2 data-i18n="importTitle">Step 1: Import Excel files</h2>
+-        <span class="sample">v2.1.1</span>
++        <span class="sample" id="appVersionBadge"></span>
+       </div>
+       <div class="section-body">
+         <div class="message" data-i18n="importHelp">Upload schedule (Excel1), COIS demand (Excel2), and ZRMm BOM/stock (Excel3). Column mapping is fixed by business rules.</div>
+@@ -636,6 +679,26 @@
+           </div>
+         </div>
+ 
++        <div class="conv-box">
++          <strong data-i18n="sizeConvTitle">SHT size-suffix conversion</strong>
++          <div class="message" data-i18n="sizeConvHelp">When mother unit (2.R) is SHT and child unit differs, demand = Q ├ù ratio from this table (suffix from Excel3.F mother name). SHTΓåÆSHT is always 1:1. Add / edit / remove rows as needed. Seeds are editable defaults, not hardcoded in the engine.</div>
++          <table>
++            <thead>
++              <tr>
++                <th data-i18n="sizeSuffix">Size suffix (from 3.F)</th>
++                <th data-i18n="sizeChildUnit">Child unit (3.M)</th>
++                <th data-i18n="convRatio">Ratio</th>
++                <th></th>
++              </tr>
++            </thead>
++            <tbody id="sizeConvBody"></tbody>
++          </table>
++          <div class="actions">
++            <button type="button" class="secondary" id="addSizeConvRow" data-i18n="sizeConvAdd">Add size rule</button>
++            <button type="button" class="secondary" id="resetSizeConv" data-i18n="sizeConvReset">Reset size defaults</button>
++          </div>
++        </div>
++
+         <div class="actions">
+           <button type="button" class="secondary" data-scroll-to="step1" data-i18n="back">Back to import</button>
+           <button type="button" id="runAllocate" data-i18n="runAllocate">Run allocation</button>
+@@ -704,6 +767,7 @@
+ 
+   <div class="modal-overlay" id="errorModal">
+     <div class="modal-card">
++      <button type="button" id="errorModalX" class="error-modal-close-x" aria-label="Close">├ù</button>
+       <strong id="errorModalTitle">Error</strong>
+       <pre id="errorModalBody"></pre>
+       <div class="actions">
+@@ -721,14 +785,18 @@
+   </div>
+ 
+   <script>
+-    const APP_VERSION = "2.1.1";
++    const APP_VERSION = "2.2.2";
++    const LANG_STORAGE_KEY = "rawmat.allocation.lang";
+     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
++    const SIZE_CONV_STORAGE_KEY = "rawmat.allocation.sizeConversionRules.v22";
++    const SIZE_SUFFIX_CUSTOM = "__CUSTOM__";
++    const SIZE_SUFFIX_RE = /(\d+)\s*[x├ù*]\s*(\d+)\s*cm\s*$/i;
+ 
+     // Fixed 0-based column indexes per locked business rules
+     const COL = {
+       excel1: { so: 0, cutting: 1 },
+       excel2: { so: 1, mother: 5, qty: 16, unitR: 17 },
+-      excel3: { mother: 4, child: 8, stock: 10, unitH: 7, unitM: 12 }
++      excel3: { mother: 4, descF: 5, child: 8, stock: 10, unitH: 7, unitM: 12 }
+     };
+ 
+     // Output indexes used by filters / Y flag
+@@ -750,6 +818,19 @@
+       { motherUnit: "YD", childUnit: "M", ratio: 0.9144 }
+     ];
+ 
++    // Seed only (editable / Reset). Engine never hardcodes these ratios.
++    const DEFAULT_SIZE_CONVERSION_RULES = [
++      { suffix: "110x200cm", childUnit: "M", ratio: 2 },
++      { suffix: "110x200cm", childUnit: "YD", ratio: 2.187227 },
++      { suffix: "110x200cm", childUnit: "SHT", ratio: 1 },
++      { suffix: "220x110cm", childUnit: "M", ratio: 2 },
++      { suffix: "220x110cm", childUnit: "YD", ratio: 2.187227 },
++      { suffix: "220x110cm", childUnit: "SHT", ratio: 1 },
++      { suffix: "200x110cm", childUnit: "M", ratio: 2.2 },
++      { suffix: "200x110cm", childUnit: "YD", ratio: 2.405949 },
++      { suffix: "200x110cm", childUnit: "SHT", ratio: 1 }
++    ];
++
+     const OUTPUT_HEADERS_EN = [
+       "cutting",
+       "so",
+@@ -776,6 +857,31 @@
+       "σ╖▓ΘàìτÖ╝∩╝êY∩╝ë"
+     ];
+ 
++    const OUTPUT_HEADERS_MY = [
++      "cutting",
++      "so",
++      "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++      "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ (2.R)",
++      "ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++      "ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║ (3.M)",
++      "ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║",
++      "ßÇòßÇ▒ßÇ╕ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇ▒ßÇ¼ ßÇòßÇÖßÇ¼ßÇÅ",
++      "ßÇÇßÇ╗ßÇößÇ║ßÇ¢ßÇ╛ßÇ¡ ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢",
++      "ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇòßÇ╝ßÇ«ßÇ╕ (Y)"
++    ];
++
++    function htmlLangFor(code) {
++      if (code === "zh") return "zh-Hant";
++      if (code === "my") return "my";
++      return "en";
++    }
++
++    function outputHeadersForLang(lang) {
++      if (lang === "zh") return OUTPUT_HEADERS_ZH;
++      if (lang === "my") return OUTPUT_HEADERS_MY;
++      return OUTPUT_HEADERS_EN;
++    }
++
+     function padHeaders(base, width) {
+       const headers = [];
+       for (let i = 0; i < width; i++) {
+@@ -813,13 +919,13 @@
+     ];
+ 
+     const sample3Headers = padHeaders([
+-      "A", "B", "C", "D", "Material", "F", "G", "OUn", "Article(Com.)", "J", "Unrestricted", "K2", "BUn"
++      "A", "B", "C", "D", "Material", "Material Full Description(EN)", "G", "OUn", "Article(Com.)", "J", "Unrestricted", "K2", "BUn"
+     ], 13);
+     const sample3Rows = [
+-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "", "7", "", "YD"], 13),
+-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-1", "", "20", "", "YD"], 13),
+-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "", "12", "", "YD"], 13),
+-      padRow(["", "", "", "", "MOTHER-1", "", "", "M", "CHILD-2", "", "4", "", "YD"], 13)
++      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-1", "", "7", "", "YD"], 13),
++      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-1", "", "20", "", "YD"], 13),
++      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-2", "", "12", "", "YD"], 13),
++      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-2", "", "4", "", "YD"], 13)
+     ];
+ 
+     const sampleLeft = sheetToTsv(sample1Headers, sample1Rows);
+@@ -829,6 +935,7 @@
+     const translations = {
+       en: {
+         appTitle: "RAW MAT Allocation Engine",
++        manualLink: "Operation manual",
+         ready: "Ready",
+         step1: "Import files",
+         step2: "Mapping & run",
+@@ -851,7 +958,7 @@
+         mapColumn: "Column",
+         mapMeaning: "Meaning",
+         mapDetected: "Detected header",
+-        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; else use conversion table (default MΓåöYD). Missing rule blocks run.",
++        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; if mother is SHT use size-suffix table (3.F mother name); else unit whitelist (default MΓåöYD). Missing rule blocks run.",
+         back: "Back",
+         runAllocate: "Run allocation",
+         resultTitle: "Filter, preview and export",
+@@ -892,6 +999,7 @@
+         mapQty: "Open Quantity (demand)",
+         mapUnitR: "Mother unit (2.R)",
+         mapMother3: "Mother material",
++        mapDescF: "Mother full description (size suffix)",
+         mapUnitH: "Mother unit check (3.H OUn)",
+         mapChild: "Child Article(Com.)",
+         mapUnitM: "Child unit (3.M BUn)",
+@@ -904,6 +1012,14 @@
+         convAdd: "Add conversion",
+         convReset: "Reset defaults",
+         convRemove: "Remove",
++        sizeConvTitle: "SHT size-suffix conversion",
++        sizeConvHelp: "When mother unit (2.R) is SHT and child unit differs, demand = Q ├ù ratio from this table (suffix from Excel3.F mother name). SHTΓåÆSHT is always 1:1. Add, edit ratio, or delete rows yourself. Seeds are editable defaults, not hardcoded in the engine.",
++        sizeSuffix: "Size suffix (from 3.F)",
++        sizeChildUnit: "Child unit (3.M)",
++        sizeConvAdd: "Add size rule",
++        sizeConvReset: "Reset size defaults",
++        sizeSuffixCustom: "CustomΓÇª",
++        sizeSuffixPlaceholder: "e.g. 110x200cm",
+         filterSo: "Filter SO",
+         filterCutting: "Cutting from / to",
+         filterMother: "Filter mother",
+@@ -917,6 +1033,7 @@
+       },
+       zh: {
+         appTitle: "RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄ",
++        manualLink: "µôìΣ╜£µëïσåè",
+         ready: "σ░▒τ╖Æ",
+         step1: "σî»σàÑµ¬öµíê",
+         step2: "σ░ìµçëΦêçσƒ╖Φíî",
+@@ -939,7 +1056,7 @@
+         mapColumn: "µ¼äΣ╜ì",
+         mapMeaning: "Φ¬₧µäÅ",
+         mapDetected: "σü╡µ╕¼σê░τÜäΦí¿Θá¡",
+-        mappingHelp: "Σ║ïσëìµ¬óµƒÑ∩╝ÜσÉîµ»ìµûÖ Excel2.R σ┐àΘáêτ¡ëµû╝ Excel3.HπÇéµÅ¢τ«ù∩╝Ü2.R=3.M σëç 1:1∩╝¢σÉªσëçµƒÑµÅ¢τ«ùΦí¿∩╝êΘáÉΦ¿¡ MΓåöYD∩╝ëπÇéτ╝║ΦªÅσëçσëçσü£µ¡óπÇé",
++        mappingHelp: "Σ║ïσëìµ¬óµƒÑ∩╝ÜσÉîµ»ìµûÖ Excel2.R σ┐àΘáêτ¡ëµû╝ Excel3.HπÇéµÅ¢τ«ù∩╝Ü2.R=3.M σëç 1:1∩╝¢µ»ìσû«Σ╜ìτé║ SHT σëçµƒÑµ£½τó╝Φí¿∩╝ê3.F µ»ìµûÖσà¿σÉì∩╝ë∩╝¢σÉªσëçµƒÑσû«Σ╜ìτÖ╜σÉìσû«∩╝êΘáÉΦ¿¡ MΓåöYD∩╝ëπÇéτ╝║ΦªÅσëçσëçσü£µ¡óπÇé",
+         back: "Φ┐öσ¢₧",
+         runAllocate: "σƒ╖ΦíîΘàìτÖ╝",
+         resultTitle: "τ»⌐Θü╕πÇüΘáÉΦª╜Φêçσî»σç║",
+@@ -980,6 +1097,7 @@
+         mapQty: "Open Quantity∩╝êΘ£Çµ▒é∩╝ë",
+         mapUnitR: "µ»ìσû«Σ╜ì∩╝ê2.R∩╝ë",
+         mapMother3: "µ»ìµ¥ÉµûÖ",
++        mapDescF: "µ»ìµûÖσà¿σÉì∩╝êµ£½τó╝σ░║σ»╕∩╝ë",
+         mapUnitH: "µ»ìσû«Σ╜ìµ¬óµƒÑ∩╝ê3.H OUn∩╝ë",
+         mapChild: "σ¡Éµ¥ÉµûÖ Article(Com.)",
+         mapUnitM: "σ¡Éσû«Σ╜ì∩╝ê3.M BUn∩╝ë",
+@@ -992,6 +1110,14 @@
+         convAdd: "µû░σó₧µÅ¢τ«ù",
+         convReset: "ΘéäσÄƒΘáÉΦ¿¡",
+         convRemove: "σê¬ΘÖñ",
++        sizeConvTitle: "SHT µ£½τó╝µÅ¢τ«ù",
++        sizeConvHelp: "µ»ìσû«Σ╜ì∩╝ê2.R∩╝ëτé║ SHT Σ╕öσ¡Éσû«Σ╜ìΣ╕ìσÉîµÖé∩╝îDemand = Q ├ù µ£¼Φí¿σÇìτÄç∩╝êµ£½τó╝σÅûΦç¬ Excel3.F µ»ìµûÖσà¿σÉì∩╝ëπÇéSHTΓåÆSHT Σ╕Çσ╛ï 1:1πÇéΦ½ïΦç¬Φíîµû░σó₧∩╝Åµö╣σÇìτÄç∩╝Åσê¬ΘÖñΣ╕ìΘ£ÇΦªüτÜäσêùπÇéΘáÉΦ¿¡τ¿«σ¡ÉσÅ»µö╣∩╝îσ╝òµôÄΣ╕ìσ»½µ¡╗σÇìτÄçπÇé",
++        sizeSuffix: "µ£½τó╝∩╝êΣ╛åΦç¬ 3.F∩╝ë",
++        sizeChildUnit: "σ¡Éσû«Σ╜ì∩╝ê3.M∩╝ë",
++        sizeConvAdd: "µû░σó₧µ£½τó╝ΦªÅσëç",
++        sizeConvReset: "ΘéäσÄƒµ£½τó╝ΘáÉΦ¿¡",
++        sizeSuffixCustom: "Φç¬Φ¿éΓÇª",
++        sizeSuffixPlaceholder: "Σ╛ïσªé 110x200cm",
+         filterSo: "τ»⌐Θü╕ SO",
+         filterCutting: "Cutting Φ╡╖Φ┐ä",
+         filterMother: "τ»⌐Θü╕µ»ìµ¥ÉµûÖ",
+@@ -1002,6 +1128,104 @@
+         errorConvTitle: "τ╝║σ░æµÅ¢τ«ùΦªÅσëç∩╝ê2.R vs 3.M∩╝ë",
+         errorPrecheckIntro: "σÉîµ»ìµûÖσû«Σ╜ìσ┐àΘáêΣ╕ÇΦç┤πÇéΦ½ïΣ┐«µ¡úσÄƒσºïΦ│çµûÖσ╛îΘçìΦ╖æπÇé",
+         errorConvIntro: "Φ½ïσ£¿µÅ¢τ«ùΦí¿Φú£Σ╕èτ╝║σ░æτÜäµ»ìΓåÆσ¡Éσû«Σ╜ìΣ╣ÿµò╕σ╛îσåìσƒ╖ΦíîπÇé"
++      },
++      my: {
++        appTitle: "RAW MAT ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇíßÇäßÇ║ßÇéßÇ╗ßÇäßÇ║",
++        manualLink: "ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇ£ßÇÇßÇ║ßÇàßÇ╜ßÇ▓",
++        ready: "ßÇíßÇåßÇäßÇ║ßÇ₧ßÇäßÇ╖ßÇ║",
++        step1: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
++        step2: "ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇößÇ║",
++        step3: "ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ßÇ¢ßÇößÇ║",
++        importTitle: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüü ΓÇö Excel ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
++        importHelp: "ßÇíßÇüßÇ╗ßÇ¡ßÇößÇ║ßÇçßÇÜßÇ¼ßÇ╕ (Excel1)ßüè ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ COIS (Excel2) ßÇößÇ╛ßÇäßÇ╖ßÇ║ BOM/ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ (Excel3) ßÇÇßÇ¡ßÇ» ßÇÉßÇäßÇ║ßÇòßÇ½ßüï ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ßÇ₧ßÇèßÇ║ ßÇ£ßÇ»ßÇòßÇ║ßÇäßÇößÇ║ßÇ╕ ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ßÇíßÇ¢ ßÇ₧ßÇÉßÇ║ßÇÖßÇ╛ßÇÉßÇ║ßÇæßÇ¼ßÇ╕ßÇ₧ßÇèßÇ║ßüï",
++        excel1: "Excel 1 ΓÇö ßÇíßÇüßÇ╗ßÇ¡ßÇößÇ║ßÇçßÇÜßÇ¼ßÇ╕",
++        excel2: "Excel 2 ΓÇö ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ (COIS)",
++        excel3: "Excel 3 ΓÇö BOM / ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢",
++        uploadFile: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÉßÇäßÇ║ßÇ¢ßÇößÇ║",
++        pasteExcel: "ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ Excel ßÇÖßÇ╛ ßÇÇßÇ░ßÇ╕ßÇæßÇèßÇ╖ßÇ║ßÇ¢ßÇößÇ║",
++        sampleData: "ßÇößÇÖßÇ░ßÇößÇ║ßÇÆßÇ▒ßÇÉßÇ¼",
++        clearExcel1: "Excel 1 ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
++        clearExcel2: "Excel 2 ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
++        clearExcel3: "Excel 3 ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
++        nextMapping: "ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇÉßÇàßÇ║ßÇåßÇäßÇ╖ßÇ║ ΓÇö ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕",
++        mappingTitle: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüé ΓÇö ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ»",
++        fixedMapping: "ßÇ₧ßÇÉßÇ║ßÇÖßÇ╛ßÇÉßÇ║ ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕",
++        mapSource: "ßÇ¢ßÇäßÇ║ßÇ╕ßÇÖßÇ╝ßÇàßÇ║",
++        mapColumn: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢",
++        mapMeaning: "ßÇíßÇôßÇ¡ßÇòßÇ╣ßÇòßÇ¼ßÇÜßÇ║",
++        mapDetected: "ßÇÉßÇ╜ßÇ▒ßÇ╖ßÇ¢ßÇ╛ßÇ¡ßÇ₧ßÇ▒ßÇ¼ ßÇüßÇ▒ßÇ½ßÇäßÇ║ßÇ╕ßÇàßÇëßÇ║",
++        mappingHelp: "ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇÖßÇ╛ßÇ» ΓÇö ßÇÉßÇ░ßÇèßÇ«ßÇ₧ßÇ▒ßÇ¼ ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ßÇÉßÇ╜ßÇäßÇ║ Excel2.R ßÇößÇ╛ßÇäßÇ╖ßÇ║ Excel3.H ßÇÉßÇ░ßÇèßÇ«ßÇ¢ßÇÖßÇèßÇ║ßüï 2.R=3.M ßÇåßÇ¡ßÇ»ßÇòßÇ½ßÇÇ 1:1ßüï ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ SHT ßÇåßÇ¡ßÇ»ßÇòßÇ½ßÇÇ Excel3.F ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕ ßÇçßÇÜßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇòßÇ½ßüï ßÇÖßÇƒßÇ»ßÇÉßÇ║ßÇòßÇ½ßÇÇ ßÇÜßÇ░ßÇößÇàßÇ║ whitelist (MΓåöYD)ßüï ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ ßÇÖßÇ¢ßÇ╛ßÇ¡ßÇòßÇ½ßÇÇ ßÇ¢ßÇòßÇ║ßÇÉßÇößÇ╖ßÇ║ßÇÖßÇèßÇ║ßüï",
++        back: "ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇ₧ßÇ¡ßÇ»ßÇ╖",
++        runAllocate: "ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇößÇ║",
++        resultTitle: "ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßüè ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║",
++        previewLimit: "ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ ßÇíßÇòßÇ▒ßÇ½ßÇ║ ßüâßüÇßüÇ ßÇíßÇÉßÇößÇ║ßÇ╕ ┬╖ ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßÇÖßÇ╛ßÇ» ßÇüßÇ╗ßÇÇßÇ║ßÇüßÇ╗ßÇäßÇ║ßÇ╕ ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇèßÇ║ßÇÖßÇ╜ßÇÖßÇ║ßÇ╕ßÇÖßÇ╢ßÇòßÇ½ßÇ₧ßÇèßÇ║",
++        filterLiveHelp: "ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßÇÖßÇ╛ßÇ»ßÇ₧ßÇèßÇ║ ßÇñßÇàßÇ¼ßÇÖßÇ╗ßÇÇßÇ║ßÇößÇ╛ßÇ¼ßÇÉßÇ╜ßÇäßÇ║ßÇ₧ßÇ¼ ßÇ¢ßÇ╛ßÇ¡ßÇ₧ßÇèßÇ║ßüï ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ»ßÇ₧ßÇèßÇ║ ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇÖßÇ╛ßÇ»ßÇÇßÇ¡ßÇ» ßÇüßÇ╗ßÇÇßÇ║ßÇüßÇ╗ßÇäßÇ║ßÇ╕ ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇèßÇ║ßÇÖßÇ╜ßÇÖßÇ║ßÇ╕ßÇÖßÇ╢ßÇòßÇ½ßÇ₧ßÇèßÇ║ßüï",
++        rowsExported: "ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ₧ßÇ▒ßÇ¼ ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕",
++        demandKeys: "ßÇæßÇ¡ßÇößÇ║ßÇ╕ßÇ₧ßÇ¡ßÇÖßÇ║ßÇ╕ßÇæßÇ¼ßÇ╕ßÇ₧ßÇ▒ßÇ¼ ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║",
++        mothersMatched: "ßÇÇßÇ¡ßÇ»ßÇÇßÇ║ßÇèßÇ«ßÇ₧ßÇ▒ßÇ¼ ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++        shortageRows: "ßÇÖßÇ£ßÇ»ßÇ╢ßÇ£ßÇ▒ßÇ¼ßÇÇßÇ║ßÇ₧ßÇ▒ßÇ¼ ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕",
++        resultEmpty: "ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇòßÇ½ßüï",
++        exportCsv: "CSV ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║",
++        exportExcel: "Excel ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║",
++        copyTable: "ßÇçßÇÜßÇ¼ßÇ╕ ßÇÇßÇ░ßÇ╕ßÇÜßÇ░ßÇ¢ßÇößÇ║",
++        loading: "ßÇûßÇ╜ßÇäßÇ╖ßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║",
++        importing: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║",
++        readingFile: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇûßÇÉßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
++        parsingFile: "ßÇçßÇÜßÇ¼ßÇ╕ ßÇüßÇ╜ßÇ▓ßÇüßÇ╝ßÇÖßÇ║ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
++        processing: "ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║",
++        expanding: "ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇûßÇößÇ║ßÇÉßÇ«ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
++        allocating: "ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
++        rendering: "ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ ßÇòßÇ╝ßÇäßÇ║ßÇåßÇäßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
++        loaded: "ßÇíßÇÉßÇößÇ║ßÇ╕ {rows} ßÇüßÇ»ßüè ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ {cols} ßÇüßÇ» ßÇÉßÇäßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ßÇòßÇ½ßÇòßÇ╝ßÇ«ßüï",
++        importError: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÖßÇûßÇÉßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇòßÇ½ ΓÇö {message}",
++        needBoth: "Excel 1ßüè Excel 2 ßÇößÇ╛ßÇäßÇ╖ßÇ║ Excel 3 ßÇÇßÇ¡ßÇ» ßÇíßÇ¢ßÇäßÇ║ ßÇÉßÇäßÇ║ßÇòßÇ½ßüï",
++        built: "ßÇíßÇÉßÇößÇ║ßÇ╕ {rows} ßÇüßÇ» ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇòßÇ╝ßÇ«ßÇ╕ (ßÇòßÇ╝ßÇ₧ßÇæßÇ¼ßÇ╕ßÇ₧ßÇèßÇ║ {shown})ßüï ßÇÖßÇ£ßÇ»ßÇ╢ßÇ£ßÇ▒ßÇ¼ßÇÇßÇ║ßÇ₧ßÇ▒ßÇ¼ ßÇíßÇÉßÇößÇ║ßÇ╕ {shortage}ßüï",
++        exported: "CSV ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇòßÇ╝ßÇ«ßÇ╕",
++        exportedExcel: "Excel ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇòßÇ╝ßÇ«ßÇ╕",
++        excelExportFailed: "Excel ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇÖßÇ╛ßÇ» ßÇÖßÇíßÇ▒ßÇ¼ßÇäßÇ║ßÇÖßÇ╝ßÇäßÇ║ ΓÇö {message}",
++        copied: "ßÇçßÇÜßÇ¼ßÇ╕ ßÇÇßÇ░ßÇ╕ßÇÜßÇ░ßÇòßÇ╝ßÇ«ßÇ╕",
++        copyUnavailable: "ßÇÇßÇ░ßÇ╕ßÇÜßÇ░ßüì ßÇÖßÇ¢ßÇòßÇ½",
++        resultStale: "ßÇæßÇèßÇ╖ßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇÖßÇ╛ßÇ» ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇòßÇ╝ßÇ«ßÇ╕ßüï ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇÖßÇ« ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇ»ßÇòßÇ║ßÇòßÇ½ßüï",
++        workbookUnsupported: "ßÇñßÇÿßÇ¢ßÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ¼ßÇ₧ßÇèßÇ║ .xlsx ßÇÖßÇûßÇÉßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇòßÇ½ßüï CSV ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ ßÇÇßÇ░ßÇ╕ßÇæßÇèßÇ╖ßÇ║ßÇÖßÇ╛ßÇ» ßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇòßÇ½ßüï",
++        missingHeader: "(ßÇíßÇèßÇ╜ßÇ╛ßÇößÇ║ßÇ╕ {index}ßüè ßÇüßÇ▒ßÇ½ßÇäßÇ║ßÇ╕ßÇàßÇëßÇ║ ßÇÖßÇ¢ßÇ╛ßÇ¡)",
++        mapSo: "ßÇÖßÇ╛ßÇ¼ßÇÜßÇ░ßÇÖßÇ╛ßÇ»",
++        mapCutting: "ßÇæßÇ»ßÇÉßÇ║ßÇ£ßÇ»ßÇòßÇ║ßÇ¢ßÇÇßÇ║ cutting",
++        mapSd: "ßÇÖßÇ╛ßÇ¼ßÇÜßÇ░ßÇÖßÇ╛ßÇ» (SD Document)",
++        mapMother2: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++        mapQty: "Open Quantity (ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║)",
++        mapUnitR: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ (2.R)",
++        mapMother3: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕",
++        mapDescF: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇíßÇÖßÇèßÇ║ ßÇíßÇòßÇ╝ßÇèßÇ╖ßÇ║ßÇíßÇàßÇ»ßÇ╢ (ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕)",
++        mapUnitH: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇÖßÇ╛ßÇ» (3.H)",
++        mapChild: "ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ Article(Com.)",
++        mapUnitM: "ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║ (3.M)",
++        mapStock: "Unrestricted (ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ßÇÉßÇàßÇ║ßÇüßÇ»ßÇ£ßÇ╗ßÇ╛ßÇäßÇ║ MAX)",
++        convTitle: "ßÇÜßÇ░ßÇößÇàßÇ║ ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» whitelist",
++        convHelp: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ ├ù ßÇíßÇüßÇ╗ßÇ¡ßÇ»ßÇ╕ = ßÇ₧ßÇ¼ßÇ╕ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ßüï ßÇòßÇ»ßÇ╢ßÇÖßÇ╛ßÇößÇ║ (ßÇòßÇ╝ßÇäßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║) MΓåÆYD=1.0936ßüè YDΓåÆM=0.9144ßüï ßÇÜßÇ░ßÇößÇàßÇ║ ßÇÉßÇ░ßÇèßÇ«ßÇòßÇ½ßÇÇ 1:1ßüï",
++        convMotherUnit: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ (2.R)",
++        convChildUnit: "ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║ (3.M)",
++        convRatio: "ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» ßÇíßÇüßÇ╗ßÇ¡ßÇ»ßÇ╕",
++        convAdd: "ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» ßÇæßÇèßÇ╖ßÇ║ßÇ¢ßÇößÇ║",
++        convReset: "ßÇòßÇ»ßÇ╢ßÇÖßÇ╛ßÇößÇ║ ßÇòßÇ╝ßÇößÇ║ßÇæßÇ¼ßÇ╕ßÇ¢ßÇößÇ║",
++        convRemove: "ßÇûßÇ╗ßÇÇßÇ║ßÇ¢ßÇößÇ║",
++        sizeConvTitle: "SHT ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕ ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ»",
++        sizeConvHelp: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇÜßÇ░ßÇößÇàßÇ║ (2.R) ßÇ₧ßÇèßÇ║ SHT ßÇûßÇ╝ßÇàßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║ ßÇÖßÇÉßÇ░ßÇèßÇ«ßÇòßÇ½ßÇÇ ΓÇö ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ = Q ├ù ßÇñßÇçßÇÜßÇ¼ßÇ╕ßÇíßÇüßÇ╗ßÇ¡ßÇ»ßÇ╕ (Excel3.F ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇíßÇÖßÇèßÇ║ ßÇÖßÇ╛ ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕)ßüï SHTΓåÆSHT ßÇ₧ßÇèßÇ║ 1:1ßüï ßÇàßÇ¼ßÇ¢ßÇäßÇ║ßÇ╕ßÇæßÇèßÇ╖ßÇ║/ßÇòßÇ╝ßÇäßÇ║/ßÇûßÇ╗ßÇÇßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║ßüï",
++        sizeSuffix: "ßÇößÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ»ßÇ╢ßÇ╕ßÇàßÇ¼ßÇ£ßÇ»ßÇ╢ßÇ╕ (3.F ßÇÖßÇ╛)",
++        sizeChildUnit: "ßÇ₧ßÇ¼ßÇ╕ßÇÜßÇ░ßÇößÇàßÇ║ (3.M)",
++        sizeConvAdd: "ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ ßÇæßÇèßÇ╖ßÇ║ßÇ¢ßÇößÇ║",
++        sizeConvReset: "ßÇíßÇ¢ßÇ╜ßÇÜßÇ║ßÇíßÇàßÇ¼ßÇ╕ ßÇòßÇ»ßÇ╢ßÇÖßÇ╛ßÇößÇ║ ßÇòßÇ╝ßÇößÇ║ßÇæßÇ¼ßÇ╕ßÇ¢ßÇößÇ║",
++        sizeSuffixCustom: "ßÇÇßÇ¡ßÇ»ßÇÜßÇ║ßÇòßÇ¡ßÇ»ßÇäßÇ║...",
++        sizeSuffixPlaceholder: "ßÇÑßÇòßÇÖßÇ¼ 110x200cm",
++        filterSo: "SO ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßÇ¢ßÇößÇ║",
++        filterCutting: "Cutting ßÇ¢ßÇÇßÇ║ßÇàßÇ╜ßÇ▓ ßÇíßÇà ΓÇö ßÇíßÇåßÇ»ßÇ╢ßÇ╕",
++        filterMother: "ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ ßÇàßÇàßÇ║ßÇæßÇ»ßÇÉßÇ║ßÇ¢ßÇößÇ║",
++        hideSoAllZero: "ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇ₧ßÇ»ßÇè ßÇûßÇ╝ßÇàßÇ║ßÇ₧ßÇ▒ßÇ¼ SO ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇûßÇ╗ßÇ▒ßÇ¼ßÇÇßÇ║ßÇ¢ßÇößÇ║",
++        hideRowZero: "ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇ₧ßÇ»ßÇè ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇûßÇ╗ßÇ▒ßÇ¼ßÇÇßÇ║ßÇ¢ßÇößÇ║",
++        errorClose: "ßÇíßÇ¡ßÇ»ßÇÇßÇ▒",
++        errorPrecheckTitle: "ßÇÜßÇ░ßÇößÇàßÇ║ ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇÖßÇ╛ßÇ» ßÇÖßÇíßÇ▒ßÇ¼ßÇäßÇ║ßÇÖßÇ╝ßÇäßÇ║ (2.R ßÇößÇ╛ßÇäßÇ╖ßÇ║ 3.H)",
++        errorConvTitle: "ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» ßÇàßÇèßÇ║ßÇ╕ßÇÖßÇ╗ßÇëßÇ║ßÇ╕ ßÇÖßÇ¢ßÇ╛ßÇ¡",
++        errorPrecheckIntro: "ßÇÉßÇ░ßÇèßÇ«ßÇ₧ßÇ▒ßÇ¼ ßÇÖßÇ¡ßÇüßÇäßÇ║ßÇòßÇàßÇ╣ßÇàßÇèßÇ║ßÇ╕ßÇÉßÇ╜ßÇäßÇ║ ßÇÜßÇ░ßÇößÇàßÇ║ ßÇÉßÇ░ßÇèßÇ«ßÇ¢ßÇÖßÇèßÇ║ßüï ßÇÆßÇ▒ßÇÉßÇ¼ ßÇòßÇ╝ßÇäßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇ»ßÇòßÇ║ßÇòßÇ½ßüï",
++        errorConvIntro: "ßÇòßÇ╝ßÇ▒ßÇ¼ßÇäßÇ║ßÇ╕ßÇ£ßÇ▓ßÇÖßÇ╛ßÇ» ßÇçßÇÜßÇ¼ßÇ╕ßÇÉßÇ╜ßÇäßÇ║ ßÇÖßÇ¡ßÇüßÇäßÇ║ΓåÆßÇ₧ßÇ¼ßÇ╕ ßÇÜßÇ░ßÇößÇàßÇ║ ßÇíßÇüßÇ╗ßÇ¡ßÇ»ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇæßÇèßÇ╖ßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ ßÇòßÇ╝ßÇößÇ║ßÇ£ßÇ»ßÇòßÇ║ßÇòßÇ½ßüï"
+       }
+     };
+ 
+@@ -1009,6 +1233,33 @@
+       return DEFAULT_CONVERSION_RULES.map(rule => ({ ...rule }));
+     }
+ 
++    function cloneDefaultSizeConversionRules() {
++      return DEFAULT_SIZE_CONVERSION_RULES.map(rule => ({ ...rule }));
++    }
++
++    function normalizeSizeSuffix(value) {
++      const text = String(value || "").trim().toLowerCase().replace(/\s+/g, "");
++      const match = text.match(/^(\d+)[x├ù*](\d+)cm$/i) || String(value || "").match(SIZE_SUFFIX_RE);
++      if (match && match[1] && match[2]) {
++        return `${match[1]}x${match[2]}cm`.toLowerCase();
++      }
++      if (!text) return "";
++      return text.replace(/[├ù*]/g, "x");
++    }
++
++    function extractSizeSuffix(text) {
++      const raw = String(text || "");
++      const match = raw.replace(/\s+/g, " ").trim().match(SIZE_SUFFIX_RE);
++      if (!match) return "";
++      return `${match[1]}x${match[2]}cm`.toLowerCase();
++    }
++
++    function normalizeChildUnit(unit) {
++      const u = normalize(unit).toUpperCase();
++      if (u === "Y") return "YD";
++      return u;
++    }
++
+     function loadConversionRules() {
+       try {
+         const raw = localStorage.getItem(CONV_STORAGE_KEY);
+@@ -1029,6 +1280,26 @@
+       localStorage.setItem(CONV_STORAGE_KEY, JSON.stringify(rules));
+     }
+ 
++    function loadSizeConversionRules() {
++      try {
++        const raw = localStorage.getItem(SIZE_CONV_STORAGE_KEY);
++        if (!raw) return cloneDefaultSizeConversionRules();
++        const parsed = JSON.parse(raw);
++        if (!Array.isArray(parsed) || !parsed.length) return cloneDefaultSizeConversionRules();
++        return parsed.map(rule => ({
++          suffix: normalizeSizeSuffix(rule.suffix) || String(rule.suffix || "").trim().toLowerCase(),
++          childUnit: normalizeChildUnit(rule.childUnit),
++          ratio: Number(rule.ratio) || 0
++        })).filter(rule => rule.suffix && rule.childUnit && rule.ratio > 0);
++      } catch {
++        return cloneDefaultSizeConversionRules();
++      }
++    }
++
++    function saveSizeConversionRules(rules) {
++      localStorage.setItem(SIZE_CONV_STORAGE_KEY, JSON.stringify(rules));
++    }
++
+     const state = {
+       lang: "en",
+       step: 1,
+@@ -1039,6 +1310,7 @@
+       resultRows: [],
+       allResultRows: [],
+       conversionRules: loadConversionRules(),
++      sizeConversionRules: loadSizeConversionRules(),
+       stats: { demandKeys: 0, mothers: 0, shortage: 0 }
+     };
+ 
+@@ -1057,6 +1329,7 @@
+       mappingBody: document.getElementById("mappingBody"),
+       mappingMessage: document.getElementById("mappingMessage"),
+       convBody: document.getElementById("convBody"),
++      sizeConvBody: document.getElementById("sizeConvBody"),
+       resultMessage: document.getElementById("resultMessage"),
+       resultHead: document.getElementById("resultHead"),
+       resultBody: document.getElementById("resultBody"),
+@@ -1075,6 +1348,7 @@
+       errorModalTitle: document.getElementById("errorModalTitle"),
+       errorModalBody: document.getElementById("errorModalBody"),
+       errorModalClose: document.getElementById("errorModalClose"),
++      errorModalX: document.getElementById("errorModalX"),
+       statRows: document.getElementById("statRows"),
+       statDemand: document.getElementById("statDemand"),
+       statMothers: document.getElementById("statMothers"),
+@@ -1095,17 +1369,16 @@
+     }
+ 
+     function applyLanguage() {
+-      document.documentElement.lang = state.lang === "zh" ? "zh-Hant" : "en";
++      document.documentElement.lang = htmlLangFor(state.lang);
+       document.querySelectorAll("[data-i18n]").forEach(node => {
+         node.textContent = t(node.dataset.i18n);
+       });
+       elements.statusText.textContent = t("ready");
+       refreshMappingTable();
+       if (state.allResultRows.length) {
+-        state.resultHeaders = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
++        state.resultHeaders = [...outputHeadersForLang(state.lang)];
+         applyViewFilters();
+       }
+-      renderConversionTable();
+       document.title = t("appTitle");
+     }
+ 
+@@ -1390,6 +1663,7 @@
+         ["Excel2", "Q", t("mapQty"), headerAt("right", COL.excel2.qty)],
+         ["Excel2", "R", t("mapUnitR"), headerAt("right", COL.excel2.unitR)],
+         ["Excel3", "E", t("mapMother3"), headerAt("third", COL.excel3.mother)],
++        ["Excel3", "F", t("mapDescF"), headerAt("third", COL.excel3.descF)],
+         ["Excel3", "H", t("mapUnitH"), headerAt("third", COL.excel3.unitH)],
+         ["Excel3", "I", t("mapChild"), headerAt("third", COL.excel3.child)],
+         ["Excel3", "M", t("mapUnitM"), headerAt("third", COL.excel3.unitM)],
+@@ -1399,6 +1673,7 @@
+         `<tr><td>${source}</td><td>${col}</td><td>${meaning}</td><td>${detected}</td></tr>`
+       ).join("");
+       renderConversionTable();
++      renderSizeConversionTable();
+     }
+ 
+     function collectUnitOptions() {
+@@ -1467,6 +1742,120 @@
+       });
+     }
+ 
++    function collectDetectedSizeSuffixes() {
++      const found = new Set();
++      for (const row of state.third.rows) {
++        const suffix = extractSizeSuffix(row[COL.excel3.descF]);
++        if (suffix) found.add(suffix);
++      }
++      for (const rule of state.sizeConversionRules) {
++        const suffix = normalizeSizeSuffix(rule.suffix);
++        if (suffix) found.add(suffix);
++      }
++      return [...found].sort();
++    }
++
++    function collectSizeChildUnitOptions() {
++      const units = new Set(["M", "YD", "SHT"]);
++      for (const row of state.third.rows) {
++        const u = normalizeChildUnit(row[COL.excel3.unitM]);
++        if (u) units.add(u);
++      }
++      for (const rule of state.sizeConversionRules) {
++        const u = normalizeChildUnit(rule.childUnit);
++        if (u) units.add(u);
++      }
++      return [...units].sort();
++    }
++
++    function renderSizeConversionTable() {
++      if (!elements.sizeConvBody) return;
++      const suffixes = collectDetectedSizeSuffixes();
++      const unitOptions = collectSizeChildUnitOptions();
++      elements.sizeConvBody.innerHTML = "";
++      state.sizeConversionRules.forEach((rule, index) => {
++        const tr = document.createElement("tr");
++        const suffixCell = document.createElement("td");
++        const suffixWrap = document.createElement("div");
++        suffixWrap.style.display = "grid";
++        suffixWrap.style.gap = "4px";
++        const suffixSelect = document.createElement("select");
++        const currentSuffix = normalizeSizeSuffix(rule.suffix) || rule.suffix;
++        for (const suffix of suffixes) {
++          suffixSelect.appendChild(new Option(suffix, suffix, false, suffix === currentSuffix));
++        }
++        if (currentSuffix && !suffixes.includes(currentSuffix)) {
++          suffixSelect.appendChild(new Option(currentSuffix, currentSuffix, true, true));
++        }
++        suffixSelect.appendChild(new Option(t("sizeSuffixCustom"), SIZE_SUFFIX_CUSTOM, false, false));
++        const suffixInput = document.createElement("input");
++        suffixInput.type = "text";
++        suffixInput.placeholder = t("sizeSuffixPlaceholder");
++        suffixInput.value = currentSuffix;
++        suffixInput.hidden = true;
++        const unitSelect = document.createElement("select");
++        for (const unit of unitOptions) {
++          unitSelect.appendChild(new Option(unit, unit, false, unit === normalizeChildUnit(rule.childUnit)));
++        }
++        if (rule.childUnit && !unitOptions.includes(normalizeChildUnit(rule.childUnit))) {
++          unitSelect.appendChild(new Option(rule.childUnit, rule.childUnit, true, true));
++        }
++        const ratioInput = document.createElement("input");
++        ratioInput.type = "number";
++        ratioInput.step = "any";
++        ratioInput.min = "0";
++        ratioInput.value = String(rule.ratio);
++        const sync = () => {
++          let suffix = suffixSelect.value;
++          if (suffix === SIZE_SUFFIX_CUSTOM) {
++            suffixInput.hidden = false;
++            suffix = normalizeSizeSuffix(suffixInput.value) || String(suffixInput.value || "").trim().toLowerCase();
++          } else {
++            suffixInput.hidden = true;
++            suffix = normalizeSizeSuffix(suffix) || suffix;
++          }
++          state.sizeConversionRules[index] = {
++            suffix,
++            childUnit: normalizeChildUnit(unitSelect.value) || unitSelect.value,
++            ratio: Number(ratioInput.value) || 0
++          };
++          saveSizeConversionRules(state.sizeConversionRules);
++          markResultDirty();
++        };
++        suffixSelect.addEventListener("change", () => {
++          if (suffixSelect.value === SIZE_SUFFIX_CUSTOM) {
++            suffixInput.hidden = false;
++            suffixInput.focus();
++          } else {
++            suffixInput.hidden = true;
++            suffixInput.value = suffixSelect.value;
++          }
++          sync();
++        });
++        suffixInput.addEventListener("change", sync);
++        unitSelect.addEventListener("change", sync);
++        ratioInput.addEventListener("change", sync);
++        const removeBtn = document.createElement("button");
++        removeBtn.type = "button";
++        removeBtn.className = "secondary";
++        removeBtn.textContent = t("convRemove");
++        removeBtn.addEventListener("click", () => {
++          state.sizeConversionRules.splice(index, 1);
++          saveSizeConversionRules(state.sizeConversionRules);
++          renderSizeConversionTable();
++          markResultDirty();
++        });
++        suffixWrap.appendChild(suffixSelect);
++        suffixWrap.appendChild(suffixInput);
++        suffixCell.appendChild(suffixWrap);
++        tr.appendChild(suffixCell);
++        tr.appendChild(document.createElement("td")).appendChild(unitSelect);
++        tr.appendChild(document.createElement("td")).appendChild(ratioInput);
++        tr.appendChild(document.createElement("td")).appendChild(removeBtn);
++        elements.sizeConvBody.appendChild(tr);
++      });
++    }
++
+     function showErrorModal(title, body) {
+       elements.errorModalTitle.textContent = title;
+       elements.errorModalBody.textContent = body;
+@@ -1477,12 +1866,27 @@
+       elements.errorModal.classList.remove("show");
+     }
+ 
+-    function conversionRatio(motherUnit, childUnit, rules) {
++    function conversionRatio(motherUnit, childUnit, unitRules, sizeRules, sizeSuffix) {
+       const m = normalize(motherUnit).toUpperCase();
+-      const c = normalize(childUnit).toUpperCase();
++      const c = normalizeChildUnit(childUnit);
+       if (!m || !c) return { ok: false, ratio: 0, reason: "blank-unit" };
+       if (m === c) return { ok: true, ratio: 1 };
+-      const hit = rules.find(rule => rule.motherUnit === m && rule.childUnit === c && rule.ratio > 0);
++      if (m === "SHT") {
++        const suffix = normalizeSizeSuffix(sizeSuffix);
++        if (!suffix) return { ok: false, ratio: 0, reason: "missing-suffix" };
++        const hit = (sizeRules || []).find(rule =>
++          normalizeSizeSuffix(rule.suffix) === suffix &&
++          normalizeChildUnit(rule.childUnit) === c &&
++          rule.ratio > 0
++        );
++        if (!hit) return { ok: false, ratio: 0, reason: "missing-size-rule" };
++        return { ok: true, ratio: hit.ratio };
++      }
++      const hit = (unitRules || []).find(rule =>
++        rule.motherUnit === m &&
++        normalizeChildUnit(rule.childUnit) === c &&
++        rule.ratio > 0
++      );
+       if (!hit) return { ok: false, ratio: 0, reason: "missing" };
+       return { ok: true, ratio: hit.ratio };
+     }
+@@ -1633,10 +2037,30 @@
+     }
+ 
+     /**
+-     * Core allocation engine v2.1.
++     * Core allocation engine v2.2.
+      * @returns {{ok: boolean, headers?: string[], rows?: string[][], stats?: object, errorTitle?: string, errorBody?: string}}
+      */
+-    function runAllocationEngine(excel1, excel2, excel3, conversionRules) {
++    function applyGroupYFlag(rows) {
++      const groups = new Map();
++      rows.forEach((row, idx) => {
++        const key = `${normalize(row[OUT.so])}\u0000${normalize(row[OUT.mother])}`;
++        if (!groups.has(key)) groups.set(key, []);
++        groups.get(key).push(idx);
++      });
++      for (const indices of groups.values()) {
++        const qualifies = indices.length > 0 && indices.every(i => {
++          const demand = parseNumber(rows[i][OUT.demand]);
++          const provided = parseNumber(rows[i][OUT.provided]);
++          return demand > 0 && provided >= demand - 1e-9;
++        });
++        for (const i of indices) {
++          rows[i][OUT.flagY] = qualifies ? "Y" : "";
++        }
++      }
++      return rows;
++    }
++
++    function runAllocationEngine(excel1, excel2, excel3, conversionRules, sizeConversionRules) {
+       const preErrors = precheckUnitRH(excel2, excel3);
+       if (preErrors.length) {
+         return {
+@@ -1665,6 +2089,8 @@
+       const motherUnitH = new Map();
+       const childUnitM = new Map();
+       const childUnitConflicts = [];
++      const motherSuffix = new Map();
++      const suffixConflicts = [];
+ 
+       excel3.rows.forEach((row, idx) => {
+         const mother = normalize(row[COL.excel3.mother]);
+@@ -1673,11 +2099,21 @@
+         mothersInBom.add(mother);
+         const unitH = normalize(row[COL.excel3.unitH]).toUpperCase();
+         if (!motherUnitH.has(mother) && unitH) motherUnitH.set(mother, unitH);
++        const suffix = extractSizeSuffix(row[COL.excel3.descF]);
++        if (suffix) {
++          if (motherSuffix.has(mother) && motherSuffix.get(mother) !== suffix) {
++            suffixConflicts.push(
++              `Excel3 row ${idx + 2}: mother ${mother} has conflicting 3.F size suffix (${motherSuffix.get(mother)} vs ${suffix})`
++            );
++          } else if (!motherSuffix.has(mother)) {
++            motherSuffix.set(mother, suffix);
++          }
++        }
+         if (!child) return;
+         if (!childrenByMother.has(mother)) childrenByMother.set(mother, new Set());
+         childrenByMother.get(mother).add(child);
+-        const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
+         const pairKey = `${mother}\u0000${child}`;
++        const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
+         if (!childUnitM.has(pairKey)) childUnitM.set(pairKey, unitM);
+         else if (childUnitM.get(pairKey) !== unitM) {
+           childUnitConflicts.push(`Excel3 row ${idx + 2}: mother ${mother} child ${child} has conflicting 3.M (${childUnitM.get(pairKey)} vs ${unitM})`);
+@@ -1687,6 +2123,14 @@
+         if (k > prev) stockMax.set(child, k);
+       });
+ 
++      if (suffixConflicts.length) {
++        return {
++          ok: false,
++          errorTitle: t("errorPrecheckTitle"),
++          errorBody: `${t("errorPrecheckIntro")}\n\n${[...new Set(suffixConflicts)].slice(0, 80).join("\n")}`
++        };
++      }
++
+       if (childUnitConflicts.length) {
+         return {
+           ok: false,
+@@ -1716,12 +2160,28 @@
+         const cutting = sched ? sched.cutting : "";
+         const sortCutting = sched ? sched.sortKey : "\uffff";
+         const motherUnit = motherUnitR.get(mother) || "";
++        const sizeSuffix = motherSuffix.get(mother) || "";
+         const children = [...(childrenByMother.get(mother) || [])].sort();
+         for (const child of children) {
+-          const childUnit = childUnitM.get(`${mother}\u0000${child}`) || "";
+-          const conv = conversionRatio(motherUnit, childUnit, conversionRules);
++          const pairKey = `${mother}\u0000${child}`;
++          const childUnit = childUnitM.get(pairKey) || "";
++          const conv = conversionRatio(
++            motherUnit,
++            childUnit,
++            conversionRules,
++            sizeConversionRules,
++            sizeSuffix
++          );
+           if (!conv.ok) {
+-            missingRules.push(`Mother ${mother} (${motherUnit || "?"}) ΓåÆ Child ${child} (${childUnit || "?"})`);
++            if (conv.reason === "missing-suffix") {
++              missingRules.push(`Mother ${mother} (SHT): missing size suffix in Excel3.F`);
++            } else if (conv.reason === "missing-size-rule") {
++              missingRules.push(
++                `Mother ${mother} (SHT / ${sizeSuffix || "?"}) ΓåÆ Child ${child} (${childUnit || "?"})`
++              );
++            } else {
++              missingRules.push(`Mother ${mother} (${motherUnit || "?"}) ΓåÆ Child ${child} (${childUnit || "?"})`);
++            }
+             continue;
+           }
+           expanded.push({
+@@ -1777,11 +2237,13 @@
+           formatQty(item.need),
+           formatQty(provide),
+           formatQty(nextRem),
+-          provide > 0 ? "Y" : ""
++          ""
+         ]);
+       }
+ 
+-      const headers = state.lang === "zh" ? [...OUTPUT_HEADERS_ZH] : [...OUTPUT_HEADERS_EN];
++      applyGroupYFlag(outRows);
++
++      const headers = [...outputHeadersForLang(state.lang)];
+       return {
+         ok: true,
+         headers,
+@@ -1877,7 +2339,13 @@
+ 
+       updateProgress(t("allocating"), 60);
+       await waitFrame();
+-      const result = runAllocationEngine(state.left, state.right, state.third, state.conversionRules);
++      const result = runAllocationEngine(
++        state.left,
++        state.right,
++        state.third,
++        state.conversionRules,
++        state.sizeConversionRules
++      );
+       if (!result.ok) {
+         elements.progressOverlay.classList.remove("show");
+         showErrorModal(result.errorTitle, result.errorBody);
+@@ -2107,12 +2575,12 @@
+         `<fills count="4">` +
+         `<fill><patternFill patternType="none"/></fill>` +
+         `<fill><patternFill patternType="gray125"/></fill>` +
+-        `<fill><patternFill patternType="solid"><fgColor rgb="FFF3F5F7"/></patternFill></fill>` +
++        `<fill><patternFill patternType="solid"><fgColor rgb="FFC5D3E0"/></patternFill></fill>` +
+         `<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill>` +
+         `</fills>` +
+         `<borders count="2">` +
+         `<border><left/><right/><top/><bottom/><diagonal/></border>` +
+-        `<border><left/><right/><top style="medium"><color rgb="FF94A3B8"/></top><bottom/><diagonal/></border>` +
++        `<border><left/><right/><top style="medium"><color rgb="FF64748B"/></top><bottom/><diagonal/></border>` +
+         `</borders>` +
+         `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
+         `<cellXfs count="5">` +
+@@ -2353,6 +2821,7 @@
+ 
+     elements.languageSelect.addEventListener("change", () => {
+       state.lang = elements.languageSelect.value;
++      localStorage.setItem(LANG_STORAGE_KEY, state.lang);
+       applyLanguage();
+     });
+     elements.leftFile.addEventListener("change", () => loadFile("left", elements.leftFile.files[0]));
+@@ -2369,6 +2838,7 @@
+     elements.exportXlsx.addEventListener("click", downloadXlsx);
+     elements.copyTable.addEventListener("click", copyTable);
+     elements.errorModalClose.addEventListener("click", hideErrorModal);
++    if (elements.errorModalX) elements.errorModalX.addEventListener("click", hideErrorModal);
+     bindPrefixSuggest(elements.filterSo, elements.soSuggest, "so");
+     bindPrefixSuggest(elements.filterMother, elements.motherSuggest, "mother");
+     document.getElementById("addConvRow").addEventListener("click", () => {
+@@ -2388,6 +2858,24 @@
+       renderConversionTable();
+       markResultDirty();
+     });
++    document.getElementById("addSizeConvRow").addEventListener("click", () => {
++      const suffixes = collectDetectedSizeSuffixes();
++      const units = collectSizeChildUnitOptions();
++      state.sizeConversionRules.push({
++        suffix: suffixes[0] || "110x200cm",
++        childUnit: units.includes("YD") ? "YD" : (units[0] || "YD"),
++        ratio: 1
++      });
++      saveSizeConversionRules(state.sizeConversionRules);
++      renderSizeConversionTable();
++      markResultDirty();
++    });
++    document.getElementById("resetSizeConv").addEventListener("click", () => {
++      state.sizeConversionRules = cloneDefaultSizeConversionRules();
++      saveSizeConversionRules(state.sizeConversionRules);
++      renderSizeConversionTable();
++      markResultDirty();
++    });
+     [
+       elements.filterCuttingFrom,
+       elements.filterCuttingTo,
+@@ -2399,6 +2887,14 @@
+     });
+     // SO / mother inputs already call applyViewFilters via bindPrefixSuggest
+ 
++    const savedLang = localStorage.getItem(LANG_STORAGE_KEY);
++    if (savedLang && translations[savedLang]) {
++      state.lang = savedLang;
++      elements.languageSelect.value = savedLang;
++    }
++    const versionBadge = document.getElementById("appVersionBadge");
++    if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
++
+     elements.leftData.value = sampleLeft;
+     elements.rightData.value = sampleRight;
+     elements.thirdData.value = sampleThird;
+diff --git a/docs/06-allocation-engine-spec.md b/docs/06-allocation-engine-spec.md
+index 28d48df..655b8d4 100644
+--- a/docs/06-allocation-engine-spec.md
++++ b/docs/06-allocation-engine-spec.md
+@@ -3,8 +3,8 @@
+ > µ£¼µûçΣ╗╢τé║**σ╖▓µá╕σçåµÑ¡σïÖΦªÅσëç**τÜäτöóσôüΦªÅµá╝∩╝î**σÅûΣ╗ú**Φêèσà⌐µ«╡σ╝Å VLOOKUP∩╝ê`vlookup-web.html`∩╝ëΣ╜£τé║τöóσôüµû╣σÉæπÇé  
+ > This document is the **approved business-rules** product specification and **supersedes** the old two-stage VLOOKUP (`vlookup-web.html`) as the product direction.
+ 
+-**τïÇµàï / Status∩╝Ü** LOCKED∩╝êΦªÅσëçΘÄûσ«Ü∩╝ë∩╝ï v2.1 σû«Σ╜ì∩╝Åτ»⌐Θü╕µô┤σàà  
+-**σ░ìµçëτ¿ïσ╝Å / App∩╝Ü** `allocation-web.html` **v2.1.0**  
++**τïÇµàï / Status∩╝Ü** LOCKED∩╝êΦªÅσëçΘÄûσ«Ü∩╝ë∩╝ï v2.2 SHT µ£½τó╝µÅ¢τ«ù  
++**σ░ìµçëτ¿ïσ╝Å / App∩╝Ü** `allocation-web.html` **v2.2.0**  
+ **µùÑµ£ƒ / Date∩╝Ü** 2026-07-20
+ 
+ ---
+@@ -32,17 +32,20 @@ Using schedule (Excel1), demand (Excel2 Open Quantity), and stock snapshot (Exce
+ | Excel2 | Q `Open Quantity` | **Θ£Çµ▒éµò╕ΘçÅ**∩╝êσèáτ╕╜∩╝ë/ **Demand qty** (summed) |
+ | Excel2 | R `Base Unit of Measure` | µ»ìσû«Σ╜ì∩╝êΣ║ïσëìµ¬óµƒÑ∩╝ïµÅ¢τ«ù∩╝ë/ Mother unit |
+ | Excel3 | E `Material` | µ»ìµ¥ÉµûÖ / Mother material |
++| Excel3 | F `Material Full Description(EN)` | µ»ìµûÖσà¿σÉì∩╝¢SHT µ£½τó╝Σ╛åµ║É / Mother full name; SHT size-suffix source |
+ | Excel3 | H `OUn` | µ»ìσû«Σ╜ìΣ║ïσëìµ¬óµƒÑ∩╝êΘáêτ¡ëµû╝ 2.R∩╝ë/ Mother unit pre-check |
+ | Excel3 | I `Article(Com.)` | σ¡Éµ¥ÉµûÖ / Child material |
+ | Excel3 | M `BUn` | σ¡Éσû«Σ╜ì∩╝êµÅ¢τ«ù∩╝ë/ Child unit for conversion |
+ | Excel3 | K `Unrestricted` | σ║½σ¡ÿσ┐½τàºµ¼ä∩╝¢σÉîσ¡ÉµûÖσÅû **MAX(K)** / Stock snapshot; **MAX(K)** per child |
+ 
+-### v2.1 σû«Σ╜ìΦªÅσëç / Unit rules
++### v2.1 / v2.2 σû«Σ╜ìΦªÅσëç / Unit rules
+ 
+ 1. **Σ║ïσëìµ¬óµƒÑ**∩╝ÜσÉîµ»ìµûÖ∩╝ê2.F=3.E∩╝ëµÖé **2.R σ┐àΘáêτ¡ëµû╝ 3.H**∩╝¢σÉªσëçσ╜êΘî»Φ¬ñΣ╕ªσü£µ¡óπÇé  
+-2. **µÅ¢τ«ù**∩╝Üµ»öΦ╝â **2.R vs 3.M**πÇéτ¢╕σÉî ΓåÆ Demand **1:1**∩╝¢Σ╕ìσÉî ΓåÆ µƒÑτÖ╜σÉìσû«∩╝êΘáÉΦ¿¡ MΓåÆYD=1.0936πÇüYDΓåÆM=0.9144∩╝ë∩╝¢τ╝║ΦªÅσëç ΓåÆ σü£µ¡óπÇé  
+-3. **Φ╝╕σç║ 10 µ¼ä**∩╝Ücutting, so, mother, mother unit, child, child unit, demand, provided, remaining, Y∩╝êprovided>0∩╝ëπÇé  
+-4. **UI**∩╝ÜΘáéΘâ¿σÅ»τ»⌐ SO∩╝Åcutting∩╝Åµ»ìµûÖ∩╝¢σÅ»σï╛Θü╕ΘÜ▒ΦùÅΘ¢╢Θ£Çµ▒é∩╝¢ΘáÉΦª╜ SO τü░τÖ╜µûæΘª¼πÇé
++2. **µÅ¢τ«ù**∩╝Üµ»öΦ╝â **2.R vs 3.M**πÇéτ¢╕σÉî ΓåÆ Demand **1:1**πÇé  
++3. **µ»ìσû«Σ╜ìτé║ SHT**∩╝êΣ╕öσ¡Éσû«Σ╜ìΣ╕ìσÉî∩╝ë∩╝ÜΦç¬ Excel3.**F** µ»ìµûÖσà¿σÉìµô╖σÅûµ£½τó╝∩╝êσªé `110x200cm`∩╝ë∩╝îµƒÑσÅ»τ╖¿Φ╝»πÇîSHT µ£½τó╝µÅ¢τ«ùπÇìΦí¿∩╝êΘáÉΦ¿¡τ¿«σ¡ÉσÅ»µö╣∩╝¢Σ╜┐τö¿ΦÇàΦç¬Φíîµû░σó₧∩╝Åµö╣σÇìτÄç∩╝Åσê¬ΘÖñ∩╝îσ¡ÿ localStorage∩╝¢σ╝òµôÄΣ╕ìσ»½µ¡╗σÇìτÄç∩╝ëπÇéτ╝║µ£½τó╝µêûτ╝║ΦªÅσëç ΓåÆ σü£µ¡óπÇé`Y` Φêç `YD` Φªûτé║σÉîΣ╕Çσ¡Éσû«Σ╜ìΘì╡πÇéσÉîµ»ìΦïÑ F µ£½τó╝Σ╕ìΣ╕ÇΦç┤ ΓåÆ σü£µ¡óπÇé  
++4. **σà╢Σ╗ûσû«Σ╜ìσ░ì**∩╝ÜµƒÑσû«Σ╜ìτÖ╜σÉìσû«∩╝êΘáÉΦ¿¡ MΓåÆYD=1.0936πÇüYDΓåÆM=0.9144∩╝ë∩╝¢τ╝║ΦªÅσëç ΓåÆ σü£µ¡óπÇé  
++5. **Φ╝╕σç║ 10 µ¼ä**∩╝Ücutting, so, mother, mother unit, child, child unit, demand, provided, remaining, Y∩╝êσÉî SO+µ»ìµûÖτ╛ñτ╡ä∩╝Üσà¿Θâ¿σ¡ÉµûÖ demand>0 Σ╕ö providedΓëÑdemand µëìµ¿Ö Y∩╝ëπÇé  
++6. **UI**∩╝ÜΘáéΘâ¿σÅ»τ»⌐ SO∩╝Åcutting∩╝Åµ»ìµûÖ∩╝¢σÅ»σï╛Θü╕ΘÜ▒ΦùÅΘ¢╢Θ£Çµ▒é∩╝¢ΘáÉΦª╜ SO τü░τÖ╜µûæΘª¼∩╝¢µ£½τó╝Σ╕ïµïë = µ¬öµíêσü╡µ╕¼ Γê¬ µùóµ£ëΦªÅσëç Γê¬ Φç¬Φ¿éπÇé
+ 
+ **ΘçìΦªüΦ¬¬µÿÄ / Important notes**
+ 
+@@ -113,7 +116,7 @@ Using schedule (Excel1), demand (Excel2 Open Quantity), and stock snapshot (Exce
+ | 7 | demand qty | µÅ¢τ«ùσ╛îσ¡ÉµûÖΘ£Çµ▒é / converted child demand |
+ | 8 | provided qty | `min(demand, remaining)` |
+ | 9 | remaining stock after this row | µëúµ╕¢σ╛îσë⌐Θñÿ / post-allocate remaining |
+-| 10 | allocated (Y) | provided > 0 ΓåÆ `Y` |
++| 10 | allocated (Y) | σÉî SO+µ»ìµûÖ∩╝Üσà¿Θâ¿σ¡ÉµûÖ demand>0 Σ╕ö providedΓëÑdemand ΓåÆ `Y` |
+ 
+ µ»öσ░ìµû╣σ╝Å∩╝ÜσÉîΣ╕ÇσêùΦïÑτ¼¼ 7 µ¼ä == τ¼¼ 8 µ¼ä ΓåÆ Φ⌐▓σ¡ÉµûÖΘ£Çµ▒éΘàìσ╣│∩╝¢τ¼¼ 8 < τ¼¼ 7 ΓåÆ τƒ¡τ╝║πÇé  
+ Compare: on the same row, col7 == col8 means demand met; col8 < col7 means shortage.
