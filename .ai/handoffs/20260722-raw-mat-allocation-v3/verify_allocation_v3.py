@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Fixture verifier for RAW MAT allocation engine v3.
 
-Covers: dual-header field names, J/L/39* filters, outside max(0,ΣJ−ΣP),
-MB52 SUM, mother expand + child direct add, mother self not double-counted,
-segment lock, greedy by cutting, Y flag, 17-column output.
+Covers: dual-header field names, J/L/39* filters, MB52 SUM,
+mother expand + child direct add, mother self not double-counted,
+segment lock, greedy by cutting, Y flag, 16-column output.
 Optional: smoke New_0722/ workbooks when present.
 """
 
@@ -23,15 +23,14 @@ OUTPUT_HEADERS = [
     "child material",
     "child batch",
     "child unit",
-    "demand from mother",
+    "child demand",
     "demand direct",
     "demand qty",
-    "stock MB52",
-    "stock outside",
+    "child stock",
     "stock available",
     "provided qty",
     "remaining stock after this row",
-    "allocated (Y)",
+    "pending allocation (Y)",
 ]
 
 DEFAULT_RULES = {
@@ -138,7 +137,7 @@ def storage_excluded(storage: object) -> bool:
     return _norm(storage).startswith("39")
 
 
-def child_excluded(child: object) -> bool:
+def is_mh04_child(child: object) -> bool:
     return _norm(child).upper().startswith("MH04")
 
 
@@ -165,9 +164,6 @@ def run_engine(
         if not prev or sort_key < prev["sort_key"]:
             schedule_map[so] = {"cutting": cutting, "sort_key": sort_key}
 
-    outside_pair: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
-        lambda: {"j": 0.0, "p": 0.0}
-    )
     children_by_mother_seg: dict[tuple[str, str], dict[str, dict]] = defaultdict(dict)
     mother_suffix: dict[str, str] = {}
     mother_unit_h: dict[str, str] = {}
@@ -176,13 +172,6 @@ def run_engine(
         mother = _norm(row.get("mother"))
         child = _norm(row.get("child"))
         if not mother or not child:
-            continue
-        if child_excluded(child):
-            continue
-        j = _num(row.get("gi_j"))
-        l = _num(row.get("vendor_l"))
-        p = _num(row.get("gr_p"))
-        if j == 0 or l == 0:
             continue
         if storage_excluded(row.get("storage")):
             continue
@@ -195,14 +184,9 @@ def run_engine(
         suffix = _extract_size_suffix(desc)
         if suffix and mother not in mother_suffix:
             mother_suffix[mother] = suffix
-        outside_pair[(mother, child, batch)]["j"] += j
-        outside_pair[(mother, child, batch)]["p"] += p
+        # BOM always (non-39*); J/L no longer gate expand or output columns
         if child not in children_by_mother_seg[(mother, batch)]:
             children_by_mother_seg[(mother, batch)][child] = {"bun": bun, "oun": oun}
-
-    outside_by_child: dict[tuple[str, str], float] = defaultdict(float)
-    for (mother, child, seg), agg in outside_pair.items():
-        outside_by_child[(child, seg)] += max(0.0, agg["j"] - agg["p"])
 
     stock_mb52: dict[tuple[str, str], float] = defaultdict(float)
     for row in mb52:
@@ -328,22 +312,24 @@ def run_engine(
         )
     )
 
-    remaining: dict[tuple[str, str], float] = {}
-    all_keys = set(stock_mb52) | set(outside_by_child)
-    for key in all_keys:
-        remaining[key] = max(0.0, stock_mb52.get(key, 0.0) - outside_by_child.get(key, 0.0))
+    remaining_plant: dict[tuple[str, str], float] = {}
+    remaining_pool: dict[tuple[str, str], float] = {}
+    for key, mb in stock_mb52.items():
+        remaining_plant[key] = mb
+        remaining_pool[key] = max(0.0, mb)
 
     out_rows: list[list] = []
     for item in expanded:
         demand_total = item["demand_from_mother"] + item["demand_direct"]
         key = (item["child"], item["segment"])
-        mb = stock_mb52.get(key, 0.0)
-        out = outside_by_child.get(key, 0.0)
-        initial_pool = max(0.0, mb - out)
-        available = remaining.get(key, initial_pool)
-        provide = min(demand_total, max(0.0, available))
-        next_rem = available - provide
-        remaining[key] = next_rem
+        mb0 = stock_mb52.get(key, 0.0)
+        plant_before = remaining_plant.get(key, mb0)
+        pool_before = remaining_pool.get(key, max(0.0, mb0))
+        provide = min(demand_total, max(0.0, pool_before))
+        plant_after = plant_before - provide
+        pool_after = pool_before - provide
+        remaining_plant[key] = plant_after
+        remaining_pool[key] = pool_after
         out_rows.append(
             [
                 item["cutting"],
@@ -357,11 +343,10 @@ def run_engine(
                 _fmt(item["demand_from_mother"]),
                 _fmt(item["demand_direct"]),
                 _fmt(demand_total),
-                _fmt(mb),
-                _fmt(out),
-                _fmt(initial_pool),
+                _fmt(plant_before),
+                _fmt(pool_before),
                 _fmt(provide),
-                _fmt(next_rem),
+                _fmt(pool_after),
                 "",
             ]
         )
@@ -376,12 +361,16 @@ def run_engine(
         gkey = f"{so}\0{mother}\0{segment}" if mother else f"{so}\0\0{segment}\0{child}"
         groups[gkey].append(idx)
     for indices in groups.values():
-        qualifies = indices and all(
-            _num(out_rows[i][10]) > 0 and _num(out_rows[i][14]) >= _num(out_rows[i][10]) - 1e-9
+        to_check = [
+            i
             for i in indices
+            if not is_mh04_child(out_rows[i][5]) and _num(out_rows[i][10]) > 0
+        ]
+        qualifies = bool(to_check) and all(
+            _num(out_rows[i][13]) >= _num(out_rows[i][10]) - 1e-9 for i in to_check
         )
         for i in indices:
-            out_rows[i][16] = "Y" if qualifies else ""
+            out_rows[i][15] = "Y" if qualifies else ""
 
     return {"ok": True, "headers": OUTPUT_HEADERS, "rows": out_rows}
 
@@ -392,7 +381,7 @@ def _assert(cond: bool, msg: str) -> None:
 
 
 def test_expand_plus_direct_and_outside() -> None:
-    """Mother expand + child direct; outside reduces pool; greedy early cutting first."""
+    """Mother expand + child direct; pool = MB52; greedy early cutting first."""
     result = run_engine(
         schedule=[
             {"so": "10100001", "cutting": "2026-07-01"},
@@ -419,7 +408,7 @@ def test_expand_plus_direct_and_outside() -> None:
                 "bun": "M",
                 "desc": "fabric 110x200cm",
             },
-            # filtered: J=0
+            # J=0: still in BOM expand, but not in outside
             {
                 "mother": "MOTHER_A",
                 "child": "CHILD_B",
@@ -432,7 +421,7 @@ def test_expand_plus_direct_and_outside() -> None:
                 "bun": "M",
                 "desc": "",
             },
-            # filtered: storage 39*
+            # filtered: storage 39* — not in BOM
             {
                 "mother": "MOTHER_A",
                 "child": "CHILD_C",
@@ -451,33 +440,80 @@ def test_expand_plus_direct_and_outside() -> None:
             {"material": "CHILD_A", "segment": "FLT", "storage": "1002", "stock": 20},  # SUM=50
             {"material": "CHILD_A", "segment": "FLT", "storage": "3900", "stock": 999},  # excluded
             {"material": "CHILD_A", "segment": "MTF", "storage": "1001", "stock": 500},  # other seg
+            {"material": "CHILD_B", "segment": "FLT", "storage": "1001", "stock": 100},
         ],
     )
     _assert(result["ok"], str(result))
     rows = result["rows"]
-    _assert(len(result["headers"]) == 17, "17 headers")
-    # outside = max(0,20-8)=12; MB52 SUM FLT=50; pool=38
+    _assert(len(result["headers"]) == 16, "16 headers")
+    # MB52 SUM FLT=50; pool=50
     so1 = [r for r in rows if r[1] == "10100001"]
-    _assert(len(so1) == 1, f"SO1 should be one merged mother×child row, got {len(so1)}")
-    r = so1[0]
+    _assert(len(so1) == 2, f"SO1 should expand to CHILD_A + CHILD_B, got {len(so1)} {[r[5] for r in so1]}")
+    r = next(x for x in so1 if x[5] == "CHILD_A")
     _assert(r[2] == "MOTHER_A", "mother")
     _assert(r[3] == "FLT" and r[6] == "FLT", "batches")
-    _assert(_num(r[8]) == 10, f"demand from mother expected 10 got {r[8]}")
+    _assert(_num(r[8]) == 10, f"child demand expected 10 got {r[8]}")
     _assert(_num(r[9]) == 5, f"demand direct expected 5 got {r[9]}")
     _assert(_num(r[10]) == 15, "demand total 15")
-    _assert(_num(r[11]) == 50, "MB52 SUM")
-    _assert(_num(r[12]) == 12, "outside")
-    _assert(_num(r[13]) == 38, "initial pool")
-    _assert(_num(r[14]) == 15, "provided full")
-    _assert(_num(r[15]) == 23, "remaining after SO1")
-    _assert(r[16] == "Y", "Y when fully provided")
+    _assert(_num(r[11]) == 50, "child plant before SO1")
+    _assert(_num(r[12]) == 50, "allocatable before SO1 (= MB52)")
+    _assert(_num(r[13]) == 15, "provided full")
+    _assert(_num(r[14]) == 35, "remaining after SO1")
+    _assert(r[15] == "Y", "Y when fully provided")
+    rb = next(x for x in so1 if x[5] == "CHILD_B")
+    _assert(_num(rb[8]) == 10, "CHILD_B also expanded from mother despite J=0")
 
     so2 = [r for r in rows if r[1] == "10100002"]
     _assert(len(so2) == 1, "SO2 one direct row")
     r2 = so2[0]
     _assert(r2[2] == "", "no mother on direct-only")
-    _assert(_num(r2[14]) == 23, f"SO2 gets remaining pool 23, got {r2[14]}")
-    _assert(r2[16] == "", "not Y when short")
+    _assert(_num(r2[11]) == 35, f"SO2 plant remaining after SO1 provide 15, got {r2[11]}")
+    _assert(_num(r2[12]) == 35, f"SO2 allocatable remaining 35, got {r2[12]}")
+    _assert(_num(r2[13]) == 35, f"SO2 gets remaining pool 35, got {r2[13]}")
+    _assert(r2[15] == "", "not Y when short")
+
+
+def test_bom_expand_when_vendor_stock_l_is_zero() -> None:
+    """L=0 still allows mother expand to that child (MTF MH04 case)."""
+    result = run_engine(
+        schedule=[{"so": "10186827", "cutting": "2026-07-01"}],
+        coois=[
+            {"so": "10186827", "material": "MN010011097", "qty": 10, "segment": "MTF", "unit": "YD"},
+        ],
+        zrmm=[
+            {
+                "mother": "MN010011097",
+                "child": "MH040007537",
+                "gi_j": 1292.494,
+                "vendor_l": 0,
+                "gr_p": 1292.494,
+                "storage": "31GH",
+                "batch": "MTF",
+                "oun": "YD",
+                "bun": "YD",
+                "desc": "",
+            },
+            {
+                "mother": "MN010011097",
+                "child": "MP190000562",
+                "gi_j": 1292.494,
+                "vendor_l": 3937,
+                "gr_p": 1292.494,
+                "storage": "31GH",
+                "batch": "MTF",
+                "oun": "YD",
+                "bun": "YD",
+                "desc": "",
+            },
+        ],
+        mb52=[
+            {"material": "MH040007537", "segment": "MTF", "storage": "1001", "stock": 100},
+            {"material": "MP190000562", "segment": "MTF", "storage": "1001", "stock": 100},
+        ],
+    )
+    _assert(result["ok"], str(result))
+    children = sorted(r[5] for r in result["rows"])
+    _assert(children == ["MH040007537", "MP190000562"], f"both children, got {children}")
 
 
 def test_mother_not_double_counted() -> None:
@@ -557,20 +593,19 @@ def test_segment_lock_blank() -> None:
     _assert(result["rows"] == [], result["rows"])
 
 
-def test_mh04_child_and_non_bom_coois_skipped() -> None:
-    """MH04* Article dropped; COOIS materials not in 0028.F (HC/HU) not calculated."""
+def test_mh04_kept_but_ignored_for_y_kit() -> None:
+    """MH04* Article kept in rows; HC/HU not in 0028.F skipped; Y ignores MH04 stock."""
     result = run_engine(
         schedule=[{"so": "10100050", "cutting": "2026-07-01"}],
         coois=[
-            {"so": "10100050", "material": "MOTHER_OK", "qty": 2, "segment": "FLT", "unit": "M"},
+            {"so": "10100050", "material": "MN050022618", "qty": 1, "segment": "FLT", "unit": "M"},
             {"so": "10100050", "material": "HC0100000025956006", "qty": 99, "segment": "FLT", "unit": "M"},
             {"so": "10100050", "material": "HU999", "qty": 88, "segment": "FLT", "unit": "M"},
-            {"so": "10100050", "material": "CHILD_OK", "qty": 3, "segment": "FLT", "unit": "M"},
         ],
         zrmm=[
             {
-                "mother": "MOTHER_OK",
-                "child": "CHILD_OK",
+                "mother": "MN050022618",
+                "child": "MH040001138",
                 "gi_j": 1,
                 "vendor_l": 1,
                 "gr_p": 0,
@@ -581,8 +616,20 @@ def test_mh04_child_and_non_bom_coois_skipped() -> None:
                 "desc": "",
             },
             {
-                "mother": "MOTHER_OK",
-                "child": "MH04ABCDEF",
+                "mother": "MN050022618",
+                "child": "MPO80002175",
+                "gi_j": 1,
+                "vendor_l": 1,
+                "gr_p": 0,
+                "storage": "1001",
+                "batch": "FLT",
+                "oun": "M",
+                "bun": "M",
+                "desc": "",
+            },
+            {
+                "mother": "MN050022618",
+                "child": "MP190000407",
                 "gi_j": 1,
                 "vendor_l": 1,
                 "gr_p": 0,
@@ -594,16 +641,22 @@ def test_mh04_child_and_non_bom_coois_skipped() -> None:
             },
         ],
         mb52=[
-            {"material": "CHILD_OK", "segment": "FLT", "storage": "1001", "stock": 100},
-            {"material": "MH04ABCDEF", "segment": "FLT", "storage": "1001", "stock": 100},
+            # MH04 has no stock — must not block Y
+            {"material": "MPO80002175", "segment": "FLT", "storage": "1001", "stock": 10},
+            {"material": "MP190000407", "segment": "FLT", "storage": "1001", "stock": 10},
             {"material": "HC0100000025956006", "segment": "FLT", "storage": "1001", "stock": 100},
         ],
     )
     _assert(result["ok"], str(result))
-    children = [r[5] for r in result["rows"]]
-    _assert(children == ["CHILD_OK"], f"only CHILD_OK expected, got {children}")
-    _assert(_num(result["rows"][0][8]) == 2, "expand from mother")
-    _assert(_num(result["rows"][0][9]) == 3, "direct on valid child")
+    children = sorted(r[5] for r in result["rows"])
+    _assert(
+        children == ["MH040001138", "MP190000407", "MPO80002175"],
+        f"all three children expected, got {children}",
+    )
+    mh04 = next(r for r in result["rows"] if r[5] == "MH040001138")
+    _assert(_num(mh04[13]) == 0, "MH04 provided may be 0")
+    for r in result["rows"]:
+        _assert(r[15] == "Y", f"Y when non-MH04 kit complete, got {r[5]}={r[15]}")
 
 
 def test_find_col_open_quantity() -> None:
@@ -892,20 +945,18 @@ def test_flt_mtf_stock_never_mixed() -> None:
     by_seg = {r[6]: r for r in result["rows"]}
     _assert("FLT" in by_seg and "MTF" in by_seg, by_seg.keys())
     flt, mtf = by_seg["FLT"], by_seg["MTF"]
-    # FLT: MB52 = 100+20=120 (case-normalized), outside=10, avail=110, provide=30
-    _assert(_num(flt[11]) == 120, f"FLT MB52 {flt[11]}")
-    _assert(_num(flt[12]) == 10, f"FLT outside {flt[12]}")
-    _assert(_num(flt[13]) == 110, f"FLT avail {flt[13]}")
-    _assert(_num(flt[14]) == 30, f"FLT provided {flt[14]}")
-    # MTF must NOT see FLT stock: MB52=7, outside=1, avail=6, provide=5
-    _assert(_num(mtf[11]) == 7, f"MTF MB52 must not include FLT, got {mtf[11]}")
-    _assert(_num(mtf[12]) == 1, f"MTF outside {mtf[12]}")
-    _assert(_num(mtf[13]) == 6, f"MTF avail {mtf[13]}")
-    _assert(_num(mtf[14]) == 5, f"MTF provided {mtf[14]}")
+    # FLT: plant=120, pool=120, provide=30
+    _assert(_num(flt[11]) == 120, f"FLT plant {flt[11]}")
+    _assert(_num(flt[12]) == 120, f"FLT avail {flt[12]}")
+    _assert(_num(flt[13]) == 30, f"FLT provided {flt[13]}")
+    # MTF must NOT see FLT stock: plant=7, pool=7, provide=5
+    _assert(_num(mtf[11]) == 7, f"MTF plant must not include FLT, got {mtf[11]}")
+    _assert(_num(mtf[12]) == 7, f"MTF avail {mtf[12]}")
+    _assert(_num(mtf[13]) == 5, f"MTF provided {mtf[13]}")
 
 
-def test_available_pool_never_negative() -> None:
-    """When outside > MB52, stock available shows 0 (not negative)."""
+def test_available_pool_ignores_outside() -> None:
+    """Large ZRMM outside does not reduce allocatable pool (= MB52)."""
     result = run_engine(
         schedule=[{"so": "10100040", "cutting": "2026-07-01"}],
         coois=[
@@ -931,22 +982,23 @@ def test_available_pool_never_negative() -> None:
     )
     _assert(result["ok"], str(result))
     r = result["rows"][0]
-    _assert(_num(r[11]) == 20, f"MB52 {r[11]}")
-    _assert(_num(r[12]) == 90, f"outside {r[12]}")  # max(0,100-10)
-    _assert(_num(r[13]) == 0, f"available must be 0 not negative, got {r[13]}")
-    _assert(_num(r[14]) == 0, f"provided {r[14]}")
+    _assert(_num(r[11]) == 20, f"plant {r[11]}")
+    _assert(_num(r[12]) == 20, f"avail must equal MB52, got {r[12]}")
+    _assert(_num(r[13]) == 5, f"provided {r[13]}")
+    _assert(_num(r[14]) == 15, f"remaining {r[14]}")
 
 
 def main() -> int:
     tests = [
         test_find_col_open_quantity,
         test_expand_plus_direct_and_outside,
+        test_bom_expand_when_vendor_stock_l_is_zero,
         test_mother_not_double_counted,
         test_segment_lock_blank,
-        test_mh04_child_and_non_bom_coois_skipped,
+        test_mh04_kept_but_ignored_for_y_kit,
         test_mother_rows_sort_before_direct_within_so,
         test_flt_mtf_stock_never_mixed,
-        test_available_pool_never_negative,
+        test_available_pool_ignores_outside,
     ]
     failed = 0
     for fn in tests:

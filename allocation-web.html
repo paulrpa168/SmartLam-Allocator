@@ -1399,7 +1399,7 @@
   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
 
   <script>
-    const APP_VERSION = "3.0.0";
+    const APP_VERSION = "3.1.3";
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
@@ -1508,7 +1508,7 @@
       }
     };
 
-    // Output indexes (17 columns)
+    // Output indexes (16 columns; F/G/P stock-outside display cols removed)
     const OUT = {
       cutting: 0,
       so: 1,
@@ -1522,11 +1522,10 @@
       demandDirect: 9,
       demand: 10,
       stockMb52: 11,
-      stockOutside: 12,
-      stockAvailable: 13,
-      provided: 14,
-      remaining: 15,
-      flagY: 16
+      stockAvailable: 12,
+      provided: 13,
+      remaining: 14,
+      flagY: 15
     };
 
     const DEFAULT_CONVERSION_RULES = [
@@ -1556,15 +1555,14 @@
       "child material",
       "child batch",
       "child unit",
-      "demand from mother",
+      "child demand",
       "demand direct",
       "demand qty",
-      "stock MB52",
-      "stock outside",
+      "child stock",
       "stock available",
       "provided qty",
       "remaining stock after this row",
-      "allocated (Y)"
+      "pending allocation (Y)"
     ];
 
     const OUTPUT_HEADERS_ZH = [
@@ -1576,15 +1574,14 @@
       "子材料",
       "子材料 BATCH",
       "子單位",
-      "母料展開需求",
+      "子材料需求",
       "子料直接需求",
       "需求合計",
-      "廠內庫存 MB52",
-      "廠外庫存",
+      "子材料庫存",
       "可配發庫存",
       "能提供數量",
       "扣減後剩餘",
-      "已配發（Y）"
+      "待配發（Y）"
     ];
 
     const OUTPUT_HEADERS_MY = [
@@ -1596,15 +1593,14 @@
       "သားပစ္စည်း",
       "သား BATCH",
       "သားယူနစ်",
-      "မိခင်မှ လိုအပ်ချက်",
+      "သားပစ္စည်း လိုအပ်ချက်",
       "တိုက်ရိုက် လိုအပ်ချက်",
       "လိုအပ်ချက် စုစုပေါင်း",
-      "MB52 သိုလှောင်ရုံ",
-      "ပြင်ပ သိုလှောင်ရုံ",
+      "သားပစ္စည်း သိုလှောင်",
       "ခွဲဝေနိုင်သော စတော့",
       "ပေးနိုင်သော ပမာဏ",
       "ကျန်ရှိ သိုလှောင်ရုံ",
-      "ခွဲဝေပြီး (Y)"
+      "ခွဲဝေရန် (Y)"
     ];
 
     const OUTPUT_TIP_KEYS = [
@@ -1620,7 +1616,6 @@
       "tipColDemandDirect",
       "tipColDemand",
       "tipColStockMb52",
-      "tipColStockOutside",
       "tipColStockAvailable",
       "tipColProvided",
       "tipColRemaining",
@@ -1885,15 +1880,14 @@
         tipColChild: "Child material allocated against stock.",
         tipColChildBatch: "Child stock segment (FLT/MTF).",
         tipColChildUnit: "Child unit (ZRMM BUn or COOIS/MB52 unit).",
-        tipColDemandFromMother: "Demand expanded from mother Open Quantity × conversion.",
+        tipColDemandFromMother: "Child demand from mother expansion (Open Quantity × conversion).",
         tipColDemandDirect: "Direct Open Quantity on this material.",
-        tipColDemand: "demand from mother + demand direct.",
-        tipColStockMb52: "MB52 Unrestricted SUM for child + segment (excl. 39*).",
-        tipColStockOutside: "Outside stock max(0, ΣJ−ΣP) for this child + segment.",
-        tipColStockAvailable: "Initial pool = max(0, MB52 − outside).",
+        tipColDemand: "child demand + demand direct.",
+        tipColStockMb52: "Child plant stock remaining before this row (MB52 − prior provided). Decreases down the list by cutting/SO order.",
+        tipColStockAvailable: "Allocatable pool remaining before this row = child MB52 after prior provided. Decreases as stock is provided.",
         tipColProvided: "Quantity allocated to this row from remaining pool.",
-        tipColRemaining: "Pool remaining after this row (clamp allocate from max(0, available)).",
-      tipColY: "Y when every demand>0 row in the SO+mother+segment group is fully provided.",
+        tipColRemaining: "Allocatable pool remaining after this row.",
+        tipColY: "Y when every non-MH04 demand>0 row in the SO+mother+segment group is fully provided (MH04 children ignored for kit). Column label: pending allocation.",
         dualMatLegend: "Blue material codes = dual identity (appears as both mother and child in ZRMM0028). Also applied in Excel export.",
         errorClose: "OK",
         errorPrecheckTitle: "Unit pre-check failed (COOIS unit vs ZRMM OUn)",
@@ -2056,15 +2050,14 @@
         tipColChild: "對庫存配發的子材料。",
         tipColChildBatch: "子料庫存區段（FLT/MTF）。",
         tipColChildUnit: "子單位（ZRMM BUn 或 COOIS/MB52）。",
-        tipColDemandFromMother: "母料展開需求（Open Quantity × 換算）。",
+        tipColDemandFromMother: "子材料需求（母料展開：Open Quantity × 換算）。",
         tipColDemandDirect: "此料號的直接 Open Quantity。",
-        tipColDemand: "母料展開 + 直接需求合計。",
-        tipColStockMb52: "MB52 Unrestricted SUM（排除 39*）。",
-        tipColStockOutside: "廠外 max(0, ΣJ−ΣP)。",
-        tipColStockAvailable: "可配發池 = max(0, MB52 − 廠外)。",
+        tipColDemand: "子材料需求 + 直接需求合計。",
+        tipColStockMb52: "子材料廠內剩餘（本列配發前）= MB52 − 先前已配發量；依 cutting／SO 往下遞減。",
+        tipColStockAvailable: "可配發剩餘（本列配發前）= 子料 MB52 扣除先前配發後。",
         tipColProvided: "本列自剩餘池配到的數量。",
-        tipColRemaining: "本列扣減後剩餘（配發自 max(0, available)）。",
-        tipColY: "同 SO+母料+Segment 群組全部 demand>0 且 provided≥demand 時標 Y。",
+        tipColRemaining: "本列扣減後可配發剩餘。",
+        tipColY: "同 SO+母料+Segment：非 MH04 且 demand>0 列皆 fully provided 時標 Y（MH04 子料不參與配套判定）。欄名：待配發。",
         dualMatLegend: "藍色料號＝雙重身分（在 ZRMM0028 中既可當母料也可當子料）；預覽與匯出 Excel 皆會標藍。",
         errorClose: "確定",
         errorPrecheckTitle: "單位事前檢查失敗（COOIS 單位 vs ZRMM OUn）",
@@ -2227,15 +2220,14 @@
         tipColChild: "သားပစ္စည်း။",
         tipColChildBatch: "သား Segment။",
         tipColChildUnit: "သားယူနစ် (BUn)။",
-        tipColDemandFromMother: "မိခင်မှ ချဲ့ထားသော လိုအပ်ချက်။",
+        tipColDemandFromMother: "သားပစ္စည်း လိုအပ်ချက် (မိခင်မှ ချဲ့ထားသော)။",
         tipColDemandDirect: "တိုက်ရိုက် Open Quantity။",
         tipColDemand: "လိုအပ်ချက် စုစုပေါင်း။",
-        tipColStockMb52: "MB52 Unrestricted SUM။",
-        tipColStockOutside: "Outside max(0, sumJ-sumP).",
-        tipColStockAvailable: "Initial pool = max(0, MB52 − outside).",
+        tipColStockMb52: "သား စက်ရုံသိုလှောင် (ဤအတန်းမီ) — ယခင် provided နှုတ်ပြီး cutting/SO အလိုက် လျော့သည်။",
+        tipColStockAvailable: "ခွဲဝေနိုင်သော ကျန် (ဤအတန်းမီ) = MB52 − ယခင် provided။",
         tipColProvided: "ခွဲဝေပေးသော ပမာဏ။",
-        tipColRemaining: "ကျန်ရှိ သိုလှောင်ရုံ။",
-        tipColY: "SO+မိခင်+Segment အုပ်စု အပြည့် ခွဲဝေပြီးမှ Y။",
+        tipColRemaining: "ဤအတန်းပြီး ခွဲဝေနိုင်သော ကျန်။",
+        tipColY: "SO+မိခင်+Segment အုပ်စုတွင် MH04 မဟုတ်သော demand>0 အတန်းများ အပြည့် ခွဲဝေပြီးမှ Y (MH04 ကို ကျော်သည်)။ ကော်လံအမည်: ခွဲဝေရန်။",
         dualMatLegend: "အပြာရောင် ကုဒ် = မိခင်နှင့် သား နှစ်မျိုးလုံး ဖြစ်နိုင်သော ပစ္စည်း (ZRMM0028)။",
         errorClose: "အိုကေ",
         errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (COOIS vs ZRMM OUn)",
@@ -3621,6 +3613,7 @@
 
     /**
      * Y flag: group by so+mother+segment; mother="" groups per child alone.
+     * MH04* children are kept in output but ignored for kit completeness (配套).
      */
     function applyGroupYFlag(rows) {
       const groups = new Map();
@@ -3636,10 +3629,14 @@
         groups.get(key).push(idx);
       });
       for (const indices of groups.values()) {
-        const qualifies = indices.length > 0 && indices.every(i => {
+        const toCheck = indices.filter(i => {
+          if (isMh04Child(rows[i][OUT.child])) return false;
+          return parseNumber(rows[i][OUT.demand]) > 0;
+        });
+        const qualifies = toCheck.length > 0 && toCheck.every(i => {
           const demand = parseNumber(rows[i][OUT.demand]);
           const provided = parseNumber(rows[i][OUT.provided]);
-          return demand > 0 && provided >= demand - 1e-9;
+          return provided >= demand - 1e-9;
         });
         for (const i of indices) {
           rows[i][OUT.flagY] = qualifies ? "Y" : "";
@@ -3652,8 +3649,8 @@
       return normalize(storage).startsWith("39");
     }
 
-    /** ZRMM0028 Article (child): drop MH04* — not used for BOM / outside / demand. */
-    function childExcluded(child) {
+    /** MH04* child: still allocated/exported; ignored only for pending allocation (Y) kit check. */
+    function isMh04Child(child) {
       return normalize(child).toUpperCase().startsWith("MH04");
     }
 
@@ -3692,8 +3689,7 @@
         }
       }
 
-      // ZRMM filtered rows + outside + BOM
-      const outsidePair = new Map(); // mother\0child\0seg -> {j,p}
+      // ZRMM filtered rows + BOM
       const childrenByMotherSeg = new Map(); // mother\0seg -> Map(child -> meta)
       const motherSuffix = new Map();
       const motherUnitH = new Map();
@@ -3704,12 +3700,7 @@
         const mother = normalize(row[zc.mother]);
         const child = normalize(row[zc.child]);
         if (!mother || !child) return;
-        if (childExcluded(child)) return;
-        const j = parseNumber(row[zc.giJ]);
-        const l = parseNumber(row[zc.vendorL]);
-        const p = parseNumber(row[zc.grP]);
         const storage = zc.storage >= 0 ? row[zc.storage] : "";
-        if (j === 0 || l === 0) return;
         if (storageExcluded(storage)) return;
         const batch = zc.batch >= 0 ? normalizeSegment(row[zc.batch]) : "";
         const oun = zc.oun >= 0 ? normalize(row[zc.oun]).toUpperCase() : "";
@@ -3728,12 +3719,7 @@
           }
         }
 
-        const pairSeg = `${mother}\u0000${child}\u0000${batch}`;
-        if (!outsidePair.has(pairSeg)) outsidePair.set(pairSeg, { j: 0, p: 0 });
-        const agg = outsidePair.get(pairSeg);
-        agg.j += j;
-        agg.p += p;
-
+        // BOM / 合貼：只要母子+Batch 存在且非 39* 儲位就展開；不因 J/L=0 丢掉關係
         const msKey = `${mother}\u0000${batch}`;
         if (!childrenByMotherSeg.has(msKey)) childrenByMotherSeg.set(msKey, new Map());
         const childMap = childrenByMotherSeg.get(msKey);
@@ -3761,14 +3747,6 @@
         };
       }
 
-      const outsideByChild = new Map(); // child\0seg  (seg locked — FLT/MTF never mixed)
-      for (const [key, { j, p }] of outsidePair.entries()) {
-        const [mother, child, seg] = key.split("\u0000");
-        const outside = Math.max(0, j - p);
-        const ck = poolKey(child, seg);
-        outsideByChild.set(ck, (outsideByChild.get(ck) || 0) + outside);
-      }
-
       // MB52 stock SUM by Material + Stock Segment only (never mix FLT with MTF)
       const stockMb52 = new Map();
       for (const row of mb52.rows) {
@@ -3782,7 +3760,7 @@
         stockMb52.set(key, (stockMb52.get(key) || 0) + stock);
       }
 
-      // Valid child codes from ZRMM Article (after MH04 / J-L / 39* filters)
+      // Valid child codes from ZRMM Article (after J-L / 39* filters; MH04 kept)
       const validChildren = new Set();
       for (const childMap of childrenByMotherSeg.values()) {
         for (const child of childMap.keys()) validChildren.add(child);
@@ -3950,13 +3928,13 @@
         return 0;
       });
 
-      // Pool remaining = max(0, MB52 − outside); never allocate or show negative available
-      const remaining = new Map();
-      const allPoolKeys = new Set([...stockMb52.keys(), ...outsideByChild.keys()]);
-      for (const key of allPoolKeys) {
-        const mb = stockMb52.get(key) || 0;
-        const out = outsideByChild.get(key) || 0;
-        remaining.set(key, Math.max(0, mb - out));
+      // Running balances (same child+segment): decrease as earlier cutting/SO rows consume stock.
+      // Allocatable pool = MB52 only (outside not subtracted; outside columns removed from output).
+      const remainingPlant = new Map();
+      const remainingPool = new Map();
+      for (const [key, mb] of stockMb52.entries()) {
+        remainingPlant.set(key, mb);
+        remainingPool.set(key, Math.max(0, mb));
       }
 
       const outRows = [];
@@ -3964,13 +3942,14 @@
       for (const item of expanded) {
         const demandTotal = item.demandFromMother + item.demandDirect;
         const key = poolKey(item.child, item.segment);
-        const mb = stockMb52.get(key) || 0;
-        const out = outsideByChild.get(key) || 0;
-        const initialPool = Math.max(0, mb - out);
-        const available = remaining.has(key) ? remaining.get(key) : initialPool;
-        const provide = Math.min(demandTotal, Math.max(0, available));
-        const nextRem = available - provide;
-        remaining.set(key, nextRem);
+        const mb0 = stockMb52.get(key) || 0;
+        const plantBefore = remainingPlant.has(key) ? remainingPlant.get(key) : mb0;
+        const poolBefore = remainingPool.has(key) ? remainingPool.get(key) : Math.max(0, mb0);
+        const provide = Math.min(demandTotal, Math.max(0, poolBefore));
+        const plantAfter = plantBefore - provide;
+        const poolAfter = poolBefore - provide;
+        remainingPlant.set(key, plantAfter);
+        remainingPool.set(key, poolAfter);
         if (provide < demandTotal - 1e-9) shortage += 1;
         outRows.push([
           item.cutting,
@@ -3984,11 +3963,10 @@
           formatQty(item.demandFromMother),
           formatQty(item.demandDirect),
           formatQty(demandTotal),
-          formatQty(mb),
-          formatQty(out),
-          formatQty(initialPool),
+          formatQty(plantBefore),
+          formatQty(poolBefore),
           formatQty(provide),
-          formatQty(nextRem),
+          formatQty(poolAfter),
           ""
         ]);
       }
@@ -4187,7 +4165,7 @@
         const mother = normalize(row[motherIdx]);
         const child = normalize(row[childIdx]);
         if (mother) mothers.add(mother);
-        if (child && !childExcluded(child)) children.add(child);
+        if (child) children.add(child);
       }
       const dual = new Set();
       for (const code of mothers) {
