@@ -1,10 +1,11 @@
 <!doctype html>
 <!--
   RAW MAT Allocation Engine
-  Version: 2.4.0
+  Version: 3.0.0
   Product direction: inventory allocation (supersedes two-stage VLOOKUP)
-  Spec: docs/06-allocation-engine-spec.md
+  Spec: docs/07-allocation-v3-spec.md
   UI: Mill Ops (default) / Soft Enterprise theme toggle + L2 one-step screens
+  Inputs: Schedule + COOIS + ZRMM0028 + MB52 (header-name resolution, no fixed A/B/C)
 -->
 <html lang="en" data-theme="mill">
 <head>
@@ -431,10 +432,17 @@
       gap: 16px;
     }
 
-    .three-col {
+    .three-col,
+    .four-col {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
+    }
+
+    @media (min-width: 1100px) {
+      .four-col {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
     }
 
     .card {
@@ -825,6 +833,13 @@
     table.result tr.so-even td { background: var(--stripe-even); }
     table.result tr.so-odd td { background: var(--stripe-odd); }
     table.result tr.group-break td { box-shadow: inset 0 2px 0 var(--group-rule); }
+    table.result td.mat-dual {
+      color: #1565c0;
+      font-weight: 700;
+    }
+    html[data-theme="soft"] table.result td.mat-dual {
+      color: #0d47a1;
+    }
 
     .filter-bar {
       display: grid;
@@ -1099,7 +1114,7 @@
 
     @media (max-width: 920px) {
       .topbar { flex-direction: column; align-items: flex-start; }
-      .stepper, .three-col, .result-band, .filter-bar { grid-template-columns: 1fr; }
+      .stepper, .three-col, .four-col, .result-band, .filter-bar { grid-template-columns: 1fr; }
       .filter-panel { top: 8px; }
     }
   </style>
@@ -1145,41 +1160,52 @@
         <span class="sample" id="appVersionBadge"></span>
       </div>
       <div class="section-body">
-        <div class="message hint-brand" data-i18n="importHelp">Upload schedule (Excel1), COIS demand (Excel2), and ZRMm BOM/stock (Excel3). Column mapping is fixed by business rules.</div>
-        <div class="three-col">
+        <div class="message hint-brand" data-i18n="importHelp">Upload Schedule, COOIS demand, ZRMM0028 BOM/outside, and MB52 stock. Columns are resolved by English header names (aliases allowed).</div>
+        <div class="four-col">
           <div class="card">
-            <h3 data-i18n="excel1">Excel 1 — Schedule</h3>
-            <label for="leftFile" data-i18n="uploadFile">Upload file</label>
-            <input id="leftFile" type="file" accept=".xlsx,.xls,.csv,.txt">
-            <label for="leftData" data-i18n="pasteExcel">Or paste from Excel</label>
-            <textarea id="leftData" spellcheck="false"></textarea>
+            <h3 data-i18n="sideSchedule">Schedule</h3>
+            <label for="scheduleFile" data-i18n="uploadFile">Upload file</label>
+            <input id="scheduleFile" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="scheduleData" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="scheduleData" spellcheck="false"></textarea>
             <div class="actions">
               <button type="button" id="loadSample" data-i18n="sampleData">Sample data</button>
-              <button type="button" class="secondary" data-clear="left" data-i18n="clearExcel1">Clear Excel 1</button>
+              <button type="button" class="secondary" data-clear="schedule" data-i18n="clearSchedule">Clear Schedule</button>
             </div>
-            <div class="message" id="leftMessage"></div>
+            <div class="message" id="scheduleMessage"></div>
           </div>
           <div class="card">
-            <h3 data-i18n="excel2">Excel 2 — Demand (COIS)</h3>
-            <label for="rightFile" data-i18n="uploadFile">Upload file</label>
-            <input id="rightFile" type="file" accept=".xlsx,.xls,.csv,.txt">
-            <label for="rightData" data-i18n="pasteExcel">Or paste from Excel</label>
-            <textarea id="rightData" spellcheck="false"></textarea>
+            <h3 data-i18n="sideCoois">COOIS — Demand</h3>
+            <label for="cooisFile" data-i18n="uploadFile">Upload file</label>
+            <input id="cooisFile" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="cooisData" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="cooisData" spellcheck="false"></textarea>
             <div class="actions">
-              <button type="button" class="secondary" data-clear="right" data-i18n="clearExcel2">Clear Excel 2</button>
+              <button type="button" class="secondary" data-clear="coois" data-i18n="clearCoois">Clear COOIS</button>
             </div>
-            <div class="message" id="rightMessage"></div>
+            <div class="message" id="cooisMessage"></div>
           </div>
           <div class="card">
-            <h3 data-i18n="excel3">Excel 3 — BOM / Stock</h3>
-            <label for="thirdFile" data-i18n="uploadFile">Upload file</label>
-            <input id="thirdFile" type="file" accept=".xlsx,.xls,.csv,.txt">
-            <label for="thirdData" data-i18n="pasteExcel">Or paste from Excel</label>
-            <textarea id="thirdData" spellcheck="false"></textarea>
+            <h3 data-i18n="sideZrmm">ZRMM0028 — BOM / Outside</h3>
+            <label for="zrmmFile" data-i18n="uploadFile">Upload file</label>
+            <input id="zrmmFile" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="zrmmData" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="zrmmData" spellcheck="false"></textarea>
             <div class="actions">
-              <button type="button" class="secondary" data-clear="third" data-i18n="clearExcel3">Clear Excel 3</button>
+              <button type="button" class="secondary" data-clear="zrmm" data-i18n="clearZrmm">Clear ZRMM0028</button>
             </div>
-            <div class="message" id="thirdMessage"></div>
+            <div class="message" id="zrmmMessage"></div>
+          </div>
+          <div class="card">
+            <h3 data-i18n="sideMb52">MB52 — Stock</h3>
+            <label for="mb52File" data-i18n="uploadFile">Upload file</label>
+            <input id="mb52File" type="file" accept=".xlsx,.xls,.csv,.txt">
+            <label for="mb52Data" data-i18n="pasteExcel">Or paste from Excel</label>
+            <textarea id="mb52Data" spellcheck="false"></textarea>
+            <div class="actions">
+              <button type="button" class="secondary" data-clear="mb52" data-i18n="clearMb52">Clear MB52</button>
+            </div>
+            <div class="message" id="mb52Message"></div>
           </div>
         </div>
         <div class="actions">
@@ -1207,7 +1233,7 @@
             <tbody id="mappingBody"></tbody>
           </table>
         </div>
-        <div class="message" id="mappingMessage" data-i18n="mappingHelp">Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; else use conversion table (default M↔YD). Missing rule blocks run.</div>
+        <div class="message" id="mappingMessage" data-i18n="mappingHelp">Pre-check: COOIS Base Unit must match ZRMM OUn for same mother. Conversion: same units 1:1; SHT uses size-suffix table (ZRMM description); else unit whitelist (default M↔YD). Missing rule blocks run.</div>
 
         <div class="conv-box">
           <strong data-i18n="convTitle">Unit conversion whitelist</strong>
@@ -1215,8 +1241,8 @@
           <table>
             <thead>
               <tr>
-                <th data-i18n="convMotherUnit">Mother unit (2.R)</th>
-                <th data-i18n="convChildUnit">Child unit (3.M)</th>
+                <th data-i18n="convMotherUnit">Mother unit</th>
+                <th data-i18n="convChildUnit">Child unit</th>
                 <th data-i18n="convRatio">Ratio</th>
                 <th></th>
               </tr>
@@ -1231,12 +1257,12 @@
 
         <div class="conv-box">
           <strong data-i18n="sizeConvTitle">SHT size-suffix conversion</strong>
-          <div class="message" data-i18n="sizeConvHelp">When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.F mother name). SHT→SHT is always 1:1. Add / edit / remove rows as needed. Seeds are editable defaults, not hardcoded in the engine.</div>
+          <div class="message" data-i18n="sizeConvHelp">When mother unit is SHT and child unit differs, demand = Q × ratio from this table (suffix from ZRMM Material Full Description). SHT→SHT is always 1:1. Seeds are editable defaults, not hardcoded in the engine.</div>
           <table>
             <thead>
               <tr>
-                <th data-i18n="sizeSuffix">Size suffix (from 3.F)</th>
-                <th data-i18n="sizeChildUnit">Child unit (3.M)</th>
+                <th data-i18n="sizeSuffix">Size suffix (from ZRMM description)</th>
+                <th data-i18n="sizeChildUnit">Child unit</th>
                 <th data-i18n="convRatio">Ratio</th>
                 <th></th>
               </tr>
@@ -1295,8 +1321,8 @@
             </div>
           </div>
           <div class="check-row">
-            <label class="has-tip" data-i18n-tip="tipHideSoAllZero"><input id="hideSoAllZero" type="checkbox"> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
-            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox"> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
+            <label class="has-tip" data-i18n-tip="tipHideSoAllZero"><input id="hideSoAllZero" type="checkbox" checked> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
+            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox" checked> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
           </div>
         </div>
         <div class="result-band">
@@ -1334,6 +1360,7 @@
           </div>
         </div>
         <div class="message" id="resultMessage" data-i18n="resultEmpty">Run allocation to preview and export.</div>
+        <div class="message" id="dualMatLegend" data-i18n="dualMatLegend" hidden>Blue material codes = dual identity (appears as both mother and child in ZRMM0028).</div>
         <div class="table-wrap thin-scroll">
           <table class="result">
             <thead><tr id="resultHead"></tr></thead>
@@ -1372,7 +1399,7 @@
   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
 
   <script>
-    const APP_VERSION = "2.4.0";
+    const APP_VERSION = "3.0.0";
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
@@ -1380,26 +1407,126 @@
     const SIZE_SUFFIX_CUSTOM = "__CUSTOM__";
     const SIZE_SUFFIX_RE = /(\d+)\s*[x×*]\s*(\d+)\s*cm\s*$/i;
     const PREVIEW_ROW_LIMIT = 300;
+    const SIDES = ["schedule", "coois", "zrmm", "mb52"];
 
-    // Fixed 0-based column indexes per locked business rules
-    const COL = {
-      excel1: { so: 0, cutting: 1 },
-      excel2: { so: 1, mother: 5, qty: 16, unitR: 17 },
-      excel3: { mother: 4, descF: 5, child: 8, stock: 10, unitH: 7, unitM: 12 }
+    // Resolve columns by English header names (aliases). Never hardcode A/B/C for business logic.
+    const FIELD_ALIASES = {
+      schedule: {
+        so: ["order", "so", "訂單", "order no", "order no.", "sd document"],
+        cutting: ["cutting", "production", "裁斷", "cutting process"]
+      },
+      coois: {
+        so: ["sd document"],
+        material: ["material"],
+        qty: ["open quantity"],
+        segment: ["requirement segment"],
+        unit: ["base unit of measure"]
+      },
+      zrmm: {
+        mother: ["material"],
+        child: ["article(com.)", "article (com.)", "article"],
+        giJ: ["gi sc(541/542)"],
+        vendorL: ["stock of vendor"],
+        grP: ["gr sc(543/544)"],
+        storage: ["storage location"],
+        batch: ["batch"],
+        oun: ["oun"],
+        bun: ["bun"],
+        desc: [
+          "material full description(cn)",
+          "material full description(en)",
+          "material full description"
+        ]
+      },
+      mb52: {
+        material: ["material"],
+        segment: ["stock segment"],
+        storage: ["storage location"],
+        stock: ["unrestricted"],
+        unit: ["base unit of measure"]
+      }
     };
 
-    // Output indexes used by filters / Y flag
+    const ENGLISH_HEADER_HINTS = [
+      "sd document",
+      "article(com.)",
+      "open quantity",
+      "material",
+      "unrestricted",
+      "stock segment",
+      "requirement segment",
+      "gi sc(541/542)",
+      "stock of vendor",
+      "base unit of measure",
+      "storage location"
+    ];
+
+    const IMPORT_GUARDS = {
+      schedule: {
+        labelKey: "sideSchedule",
+        minCols: 2,
+        fields: [
+          { key: "so", kind: "so", label: "SO / Order" },
+          { key: "cutting", kind: "date", label: "cutting" }
+        ]
+      },
+      coois: {
+        labelKey: "sideCoois",
+        minCols: 5,
+        fields: [
+          { key: "so", kind: "so", label: "SD Document" },
+          { key: "material", kind: null, label: "Material" },
+          { key: "qty", kind: "number", label: "Open Quantity" },
+          { key: "segment", kind: null, label: "Requirement Segment" },
+          { key: "unit", kind: "unit", label: "Base Unit of Measure" }
+        ]
+      },
+      zrmm: {
+        labelKey: "sideZrmm",
+        minCols: 8,
+        fields: [
+          { key: "mother", kind: null, label: "Material" },
+          { key: "child", kind: null, label: "Article(Com.)" },
+          { key: "giJ", kind: "number", label: "GI SC(541/542)" },
+          { key: "vendorL", kind: "number", label: "Stock of Vendor" },
+          { key: "grP", kind: "number", label: "GR SC(543/544)" },
+          { key: "storage", kind: null, label: "Storage Location" },
+          { key: "batch", kind: null, label: "Batch" },
+          { key: "oun", kind: "unit", label: "OUn" },
+          { key: "bun", kind: "unit", label: "BUn" }
+        ]
+      },
+      mb52: {
+        labelKey: "sideMb52",
+        minCols: 4,
+        fields: [
+          { key: "material", kind: null, label: "Material" },
+          { key: "segment", kind: null, label: "Stock Segment" },
+          { key: "storage", kind: null, label: "Storage Location" },
+          { key: "stock", kind: "number", label: "Unrestricted" }
+        ]
+      }
+    };
+
+    // Output indexes (17 columns)
     const OUT = {
       cutting: 0,
       so: 1,
       mother: 2,
-      motherUnit: 3,
-      child: 4,
-      childUnit: 5,
-      demand: 6,
-      provided: 7,
-      remaining: 8,
-      flagY: 9
+      motherBatch: 3,
+      motherUnit: 4,
+      child: 5,
+      childBatch: 6,
+      childUnit: 7,
+      demandFromMother: 8,
+      demandDirect: 9,
+      demand: 10,
+      stockMb52: 11,
+      stockOutside: 12,
+      stockAvailable: 13,
+      provided: 14,
+      remaining: 15,
+      flagY: 16
     };
 
     const DEFAULT_CONVERSION_RULES = [
@@ -1424,10 +1551,17 @@
       "cutting",
       "so",
       "mother material",
-      "mother unit (2.R)",
+      "mother batch",
+      "mother unit",
       "child material",
-      "child unit (3.M)",
+      "child batch",
+      "child unit",
+      "demand from mother",
+      "demand direct",
       "demand qty",
+      "stock MB52",
+      "stock outside",
+      "stock available",
       "provided qty",
       "remaining stock after this row",
       "allocated (Y)"
@@ -1437,10 +1571,17 @@
       "cutting（生產日）",
       "so（訂單）",
       "母材料",
-      "母單位（2.R）",
+      "母材料 BATCH",
+      "母單位",
       "子材料",
-      "子單位（3.M）",
-      "需求數量",
+      "子材料 BATCH",
+      "子單位",
+      "母料展開需求",
+      "子料直接需求",
+      "需求合計",
+      "廠內庫存 MB52",
+      "廠外庫存",
+      "可配發庫存",
       "能提供數量",
       "扣減後剩餘",
       "已配發（Y）"
@@ -1450,10 +1591,17 @@
       "cutting",
       "so",
       "မိခင်ပစ္စည်း",
-      "မိခင်ယူနစ် (2.R)",
+      "မိခင် BATCH",
+      "မိခင်ယူနစ်",
       "သားပစ္စည်း",
-      "သားယူနစ် (3.M)",
-      "လိုအပ်ချက်",
+      "သား BATCH",
+      "သားယူနစ်",
+      "မိခင်မှ လိုအပ်ချက်",
+      "တိုက်ရိုက် လိုအပ်ချက်",
+      "လိုအပ်ချက် စုစုပေါင်း",
+      "MB52 သိုလှောင်ရုံ",
+      "ပြင်ပ သိုလှောင်ရုံ",
+      "ခွဲဝေနိုင်သော စတော့",
       "ပေးနိုင်သော ပမာဏ",
       "ကျန်ရှိ သိုလှောင်ရုံ",
       "ခွဲဝေပြီး (Y)"
@@ -1463,10 +1611,17 @@
       "tipColCutting",
       "tipColSo",
       "tipColMother",
+      "tipColMotherBatch",
       "tipColMotherUnit",
       "tipColChild",
+      "tipColChildBatch",
       "tipColChildUnit",
+      "tipColDemandFromMother",
+      "tipColDemandDirect",
       "tipColDemand",
+      "tipColStockMb52",
+      "tipColStockOutside",
+      "tipColStockAvailable",
       "tipColProvided",
       "tipColRemaining",
       "tipColY"
@@ -1502,37 +1657,76 @@
       return [headers, ...rows].map(row => row.map(cell => String(cell ?? "")).join("\t")).join("\n");
     }
 
-    // Sample: enough columns for fixed letter indexes; sanitized demo data
-    const sample1Headers = padHeaders(["so", "cutting"], 2);
-    const sample1Rows = [
+    // Sanitized dual-header-friendly samples for all four sides
+    const sampleScheduleHeaders = ["Order", "cutting"];
+    const sampleScheduleRows = [
       ["SO-A", "2026-07-01"],
       ["SO-B", "2026-07-03"],
       ["SO-A", "2026-07-10"]
     ];
 
-    const sample2Headers = padHeaders([
-      "A", "SD Document", "C", "D", "E", "Material", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Open Quantity", "Base Unit of Measure"
-    ], 18);
-    const sample2Rows = [
-      padRow(["", "SO-A", "", "", "", "MOTHER-1", "", "", "", "", "", "", "", "", "", "", "8", "M"], 18),
-      padRow(["", "SO-A", "", "", "", "MOTHER-1", "", "", "", "", "", "", "", "", "", "", "2", "M"], 18),
-      padRow(["", "SO-B", "", "", "", "MOTHER-1", "", "", "", "", "", "", "", "", "", "", "5", "M"], 18),
-      padRow(["", "SO-B", "", "", "", "MOTHER-X", "", "", "", "", "", "", "", "", "", "", "3", "M"], 18)
+    const sampleCooisHeaders = [
+      "Plnt", "SD Document", "Item (SD)", "Order", "Pegged Requirement", "Material",
+      "Material Description", "Unit of measure", "Total Order Quantity", "Order Quantity",
+      "Delivered quantity", "Scrap quantity", "Item component list", "Component No.",
+      "Component Name", "Requirement Quantity", "Quantity withdrawn", "Open Quantity",
+      "Base Unit of Measure", "Requirement Segment"
+    ];
+    const sampleCooisZh = [
+      "工廠", "銷售與配銷文件", "項目", "訂單", "需求溯源", "物料", "物料說明", "計量單位",
+      "總訂單數量", "訂單數量", "已交貨", "廢品", "項目元件", "部位", "部位名", "需求數量",
+      "領料數量", "未結數量", "基礎計量單位", "需求區段"
+    ];
+    const sampleCooisRows = [
+      padRow(["B150", "SO-A", "10", "", "", "MOTHER-1", "demo mother", "", "0", "0", "0", "0", "", "", "", "0", "0", "10", "M", "FLT"], 20),
+      padRow(["B150", "SO-A", "20", "", "", "CHILD-1", "demo child direct", "", "0", "0", "0", "0", "", "", "", "0", "0", "3", "YD", "FLT"], 20),
+      padRow(["B150", "SO-B", "10", "", "", "MOTHER-1", "demo mother", "", "0", "0", "0", "0", "", "", "", "0", "0", "5", "M", "FLT"], 20),
+      padRow(["B150", "SO-B", "20", "", "", "CHILD-ONLY", "direct only child", "", "0", "0", "0", "0", "", "", "", "0", "0", "4", "YD", "MTF"], 20)
     ];
 
-    const sample3Headers = padHeaders([
-      "A", "B", "C", "D", "Material", "Material Full Description(EN)", "G", "OUn", "Article(Com.)", "J", "Unrestricted", "K2", "BUn"
-    ], 13);
-    const sample3Rows = [
-      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-1", "", "7", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-1", "", "20", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-2", "", "12", "", "YD"], 13),
-      padRow(["", "", "", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "M", "CHILD-2", "", "4", "", "YD"], 13)
+    const sampleZrmmHeaders = [
+      "Pur. Doc.", "Item", "Material", "Material Full Description(CN)", "PO Quantity",
+      "Article(Com.)", "Mtl.Full Desc. (Com.)(CH)", "Reqmnt qty", "Unrestricted",
+      "GI SC(541/542)", "Diff. Req/GI Qty.", "Stock of Vendor", "OUn", "Storage Location",
+      "BUn", "GR SC(543/544)", "x", "Storage Location", "Batch"
+    ];
+    const sampleZrmmZh = [
+      "採購文件", "項目", "物料號碼", "母階料號完整說明(中文)", "訂單數量", "子階物料號碼",
+      "子階說明", "需求數量", "未限制", "已委外發料", "差異", "外包庫存", "採購單位",
+      "儲存位置", "基礎單位", "領料", "", "儲存位置2", "批次"
+    ];
+    const sampleZrmmRows = [
+      padRow(["", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "CHILD-1", "", "", "", "20", "", "5", "M", "31GH", "YD", "8", "", "31G5", "FLT"], 19),
+      padRow(["", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "CHILD-2", "", "", "", "15", "", "3", "M", "31GH", "YD", "5", "", "31G5", "FLT"], 19),
+      padRow(["", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "CHILD-1", "", "", "", "0", "", "0", "M", "31GH", "YD", "0", "", "31G5", "FLT"], 19),
+      padRow(["", "", "MOTHER-1", "FABRIC DEMO 110x200cm", "", "CHILD-1", "", "", "", "10", "", "2", "M", "39AA", "YD", "1", "", "39AA", "FLT"], 19)
     ];
 
-    const sampleLeft = sheetToTsv(sample1Headers, sample1Rows);
-    const sampleRight = sheetToTsv(sample2Headers, sample2Rows);
-    const sampleThird = sheetToTsv(sample3Headers, sample3Rows);
+    const sampleMb52Headers = [
+      "Descr. of Storage Loc.", "Material", "Stock Segment", "Material Description",
+      "Plant", "Storage Location", "Base Unit of Measure", "Unrestricted"
+    ];
+    const sampleMb52Rows = [
+      ["Leather", "CHILD-1", "FLT", "child 1", "B15N", "31G4", "YD", "25"],
+      ["Leather", "CHILD-1", "FLT", "child 1", "B15N", "31G5", "YD", "5"],
+      ["Leather", "CHILD-2", "FLT", "child 2", "B15N", "31G4", "YD", "12"],
+      ["Leather", "CHILD-ONLY", "MTF", "child only", "B15N", "31G4", "YD", "10"],
+      ["Leather", "CHILD-1", "FLT", "child 1", "B15N", "39XX", "YD", "99"]
+    ];
+
+    const sampleSchedule = sheetToTsv(sampleScheduleHeaders, sampleScheduleRows);
+    const sampleCoois = [
+      sampleCooisZh.join("\t"),
+      sampleCooisHeaders.join("\t"),
+      ...sampleCooisRows.map(r => r.join("\t"))
+    ].join("\n");
+    const sampleZrmm = [
+      sampleZrmmZh.join("\t"),
+      sampleZrmmHeaders.join("\t"),
+      ...sampleZrmmRows.map(r => r.join("\t"))
+    ].join("\n");
+    const sampleMb52 = sheetToTsv(sampleMb52Headers, sampleMb52Rows);
+
 
     const translations = {
       en: {
@@ -1546,16 +1740,24 @@
         step2: "Mapping & run",
         step3: "Filter & preview",
         importTitle: "Step 1: Import Excel files",
-        importHelp: "Upload schedule (Excel1), COIS demand (Excel2), and ZRMm BOM/stock (Excel3). Column mapping is fixed by business rules.",
-        excel1: "Excel 1 — Schedule",
-        excel2: "Excel 2 — Demand (COIS)",
-        excel3: "Excel 3 — BOM / Stock",
+        importHelp: "Upload Schedule, COOIS demand, ZRMM0028 BOM/outside, and MB52 stock. Columns are resolved by English header names (aliases allowed).",
+        sideSchedule: "Schedule",
+        sideCoois: "COOIS — Demand",
+        sideZrmm: "ZRMM0028 — BOM / Outside",
+        sideMb52: "MB52 — Stock",
+        excel1: "Schedule",
+        excel2: "COOIS",
+        excel3: "ZRMM0028",
         uploadFile: "Upload file",
         pasteExcel: "Or paste from Excel",
         sampleData: "Sample data",
-        clearExcel1: "Clear Excel 1",
-        clearExcel2: "Clear Excel 2",
-        clearExcel3: "Clear Excel 3",
+        clearSchedule: "Clear Schedule",
+        clearCoois: "Clear COOIS",
+        clearZrmm: "Clear ZRMM0028",
+        clearMb52: "Clear MB52",
+        clearExcel1: "Clear Schedule",
+        clearExcel2: "Clear COOIS",
+        clearExcel3: "Clear ZRMM0028",
         nextMapping: "Next: mapping & run",
         backToTop: "↑ Top",
         mappingTitle: "Step 2: Fixed mapping & allocate",
@@ -1564,7 +1766,7 @@
         mapColumn: "Column",
         mapMeaning: "Meaning",
         mapDetected: "Detected header",
-        mappingHelp: "Pre-check: Excel2.R must equal Excel3.H for same mother. Conversion: if 2.R=3.M then 1:1; if mother is SHT use size-suffix table (3.F mother name); else unit whitelist (default M↔YD). Missing rule blocks run.",
+        mappingHelp: "Pre-check: COOIS Base Unit must match ZRMM OUn for same mother. Conversion: same units 1:1; SHT uses size-suffix table (ZRMM description); else unit whitelist (default M↔YD). Missing rule blocks run.",
         back: "Back",
         runAllocate: "Run allocation",
         resultTitle: "Filter, preview and export",
@@ -1588,7 +1790,20 @@
         rendering: "Rendering preview...",
         loaded: "Loaded {rows} rows and {cols} columns.",
         importError: "Could not read file: {message}",
-        needBoth: "Please load Excel 1, Excel 2, and Excel 3 first.",
+        importValidateTitle: "{file} format check failed",
+        importValidateRunTitle: "Fix import errors before allocation",
+        importValidateBlocked: "Fix the Step 1 import errors before running allocation.",
+        importValidateEmpty: "{file}: no usable header/data rows found.",
+        importValidateMinCols: "{file}: expected at least {need} columns, got {got}.",
+        importValidateHeader: "{file}: column {col} header does not look right ({header}).",
+        importValidateBlankColumn: "{file}: column {col} is blank in sampled rows.",
+        importValidateUnitLikeWrong: "{file}: column {col} should be a unit column, but sample value looks wrong ({sample}).",
+        importValidateColumnType: "{file}: column {col} does not look like {type}.",
+        importTypeUnit: "a unit",
+        importTypeSo: "an SO number",
+        importTypeDate: "a date",
+        importTypeNumber: "a numeric quantity",
+        needBoth: "Please load Schedule, COOIS, ZRMM0028, and MB52 first.",
         built: "Allocated {rows} rows · filtered/export {shown} · table preview {preview}/{limit}{capNote} · shortage (full run) {shortage}",
         builtCapNote: " (export still includes all filtered rows)",
         exported: "CSV exported",
@@ -1599,37 +1814,53 @@
         resultStale: "Inputs changed. Run allocation again before exporting.",
         workbookUnsupported: "This browser cannot read .xlsx files. Save as CSV or paste data instead.",
         missingHeader: "(index {index}, header missing)",
-        mapSo: "Sales order",
+        mapSo: "Sales order / Order",
         mapCutting: "Production / cutting date",
         mapSd: "SO (SD Document)",
-        mapMother2: "Mother material",
+        mapMaterial: "Material (COOIS)",
         mapQty: "Open Quantity (demand)",
-        mapUnitR: "Mother unit (2.R)",
-        mapMother3: "Mother material",
-        mapDescF: "Mother full description (size suffix)",
-        mapUnitH: "Mother unit check (3.H OUn)",
+        mapUnitCoois: "Base Unit of Measure (COOIS)",
+        mapSegment: "Requirement Segment",
+        mapMother: "Mother Material (ZRMM)",
         mapChild: "Child Article(Com.)",
-        mapUnitM: "Child unit (3.M BUn)",
-        mapStock: "Unrestricted (MAX for init stock)",
+        mapGiJ: "GI SC(541/542)",
+        mapVendorL: "Stock of Vendor",
+        mapGrP: "GR SC(543/544)",
+        mapStorage: "Storage Location",
+        mapBatch: "Batch",
+        mapOun: "OUn (mother unit)",
+        mapBun: "BUn (child unit)",
+        mapDesc: "Material Full Description (size suffix)",
+        mapMb52Material: "Material (MB52)",
+        mapStockSegment: "Stock Segment",
+        mapMb52Storage: "Storage Location (MB52)",
+        mapStock: "Unrestricted (SUM)",
+        mapMb52Unit: "Base Unit of Measure (MB52)",
+        mapMother2: "Material (COOIS)",
+        mapUnitR: "Base Unit (COOIS)",
+        mapMother3: "Mother Material (ZRMM)",
+        mapDescF: "Description (size suffix)",
+        mapUnitH: "OUn",
+        mapUnitM: "BUn",
         convTitle: "Unit conversion whitelist",
         convHelp: "Mother unit × ratio = child demand. Defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always use 1:1.",
-        convMotherUnit: "Mother unit (2.R)",
-        convChildUnit: "Child unit (3.M)",
+        convMotherUnit: "Mother unit",
+        convChildUnit: "Child unit",
         convRatio: "Ratio",
         convAdd: "Add conversion",
         convReset: "Reset defaults",
         convRemove: "Remove",
         sizeConvTitle: "SHT size-suffix conversion",
-        sizeConvHelp: "When mother unit (2.R) is SHT and child unit differs, demand = Q × ratio from this table (suffix from Excel3.F mother name). SHT→SHT is always 1:1. Add, edit ratio, or delete rows yourself. Seeds are editable defaults, not hardcoded in the engine.",
-        sizeSuffix: "Size suffix (from 3.F)",
-        sizeChildUnit: "Child unit (3.M)",
+        sizeConvHelp: "When mother unit is SHT and child unit differs, demand = Q × ratio from this table (suffix from ZRMM Material Full Description). SHT→SHT is always 1:1. Seeds are editable defaults, not hardcoded in the engine.",
+        sizeSuffix: "Size suffix (from ZRMM description)",
+        sizeChildUnit: "Child unit",
         sizeConvAdd: "Add size rule",
         sizeConvReset: "Reset size defaults",
         sizeSuffixCustom: "Custom…",
         sizeSuffixPlaceholder: "e.g. 110x200cm",
         filterSo: "Filter SO",
         filterCutting: "Cutting from / to",
-        filterMother: "Filter mother",
+        filterMother: "Filter mother / child",
         filterMotherPlaceholder: "Type prefix, Enter or pick from list",
         filterMotherClear: "Clear all",
         filterMotherCount: "{count} selected",
@@ -1637,28 +1868,36 @@
         hideSoAllZero: "Hide SO when all demand qty = 0",
         hideRowZero: "Hide rows where demand qty = 0",
         tipRowsExported: "Rows in the current filtered preview. Same set is used for CSV/Excel export.",
-        tipDemandKeys: "Count of unique (SO + mother) demand keys kept after matching Excel2 to BOM mothers in Excel3.",
-        tipMothersMatched: "Count of mother materials in Excel3 that have at least one child (BOM coverage).",
-        tipShortageRows: "Count of rows in the full allocation result where provided qty < demand qty (stock short for that child row). This number does not change when you filter SO / mother / cutting above.",
+        tipDemandKeys: "Count of unique allocation demand keys (SO + segment + mother + child) after expansion and direct demand merge.",
+        tipMothersMatched: "Count of ZRMM mother materials that have at least one child after filters.",
+        tipShortageRows: "Count of rows in the full allocation result where provided qty < demand qty. Filters do not change this number.",
         tipHelpAria: "Explain this metric",
         tipFilterSo: "Type an SO prefix or comma-separated list. Preview and export update immediately.",
         tipFilterCutting: "Keep rows whose cutting date is within this range (inclusive).",
         tipFilterMother: "Selected mothers appear as chips above (wrap to the right). Type a prefix and press Enter or pick a suggestion; click × to remove one.",
-        tipHideSoAllZero: "Hide every row of an SO when that SO’s total demand is zero.",
-        tipHideRowZero: "Hide individual rows whose demand qty is zero.",
-        tipColCutting: "Production / cutting date from Excel1 for this SO.",
+        tipHideSoAllZero: "Hide every row of an SO when that SO’s total demand is zero. Default on. Uncheck to include those SOs in preview/export.",
+        tipHideRowZero: "Hide individual rows whose demand qty is zero. Default on. Uncheck to include zero-demand rows in preview/export.",
+        tipColCutting: "Earliest cutting date from Schedule for this SO.",
         tipColSo: "Sales order number.",
-        tipColMother: "Mother material code.",
-        tipColMotherUnit: "Mother unit from Excel2 column R.",
-        tipColChild: "Child material under this mother (Excel3).",
-        tipColChildUnit: "Child unit from Excel3 column M.",
-        tipColDemand: "Converted demand for this child (Q × conversion ratio).",
-        tipColProvided: "Quantity allocated to this row from remaining child stock.",
-        tipColRemaining: "Child stock left after this row’s allocation.",
-        tipColY: "Group flag: Y only when every child under the same SO + mother has demand > 0 and provided ≥ demand.",
+        tipColMother: "Mother material (blank for direct-only demand).",
+        tipColMotherBatch: "Mother / requirement segment (FLT/MTF).",
+        tipColMotherUnit: "Mother unit (ZRMM OUn or COOIS unit).",
+        tipColChild: "Child material allocated against stock.",
+        tipColChildBatch: "Child stock segment (FLT/MTF).",
+        tipColChildUnit: "Child unit (ZRMM BUn or COOIS/MB52 unit).",
+        tipColDemandFromMother: "Demand expanded from mother Open Quantity × conversion.",
+        tipColDemandDirect: "Direct Open Quantity on this material.",
+        tipColDemand: "demand from mother + demand direct.",
+        tipColStockMb52: "MB52 Unrestricted SUM for child + segment (excl. 39*).",
+        tipColStockOutside: "Outside stock max(0, ΣJ−ΣP) for this child + segment.",
+        tipColStockAvailable: "Initial pool = max(0, MB52 − outside).",
+        tipColProvided: "Quantity allocated to this row from remaining pool.",
+        tipColRemaining: "Pool remaining after this row (clamp allocate from max(0, available)).",
+      tipColY: "Y when every demand>0 row in the SO+mother+segment group is fully provided.",
+        dualMatLegend: "Blue material codes = dual identity (appears as both mother and child in ZRMM0028). Also applied in Excel export.",
         errorClose: "OK",
-        errorPrecheckTitle: "Unit pre-check failed (2.R vs 3.H)",
-        errorConvTitle: "Missing conversion rules (2.R vs 3.M)",
+        errorPrecheckTitle: "Unit pre-check failed (COOIS unit vs ZRMM OUn)",
+        errorConvTitle: "Missing conversion rules (mother unit vs child unit)",
         errorPrecheckIntro: "Same mother material must have matching units. Fix source data then re-run.",
         errorConvIntro: "Add the missing mother→child unit ratios in the conversion table, then re-run."
       },
@@ -1673,16 +1912,24 @@
         step2: "對應與執行",
         step3: "篩選與預覽",
         importTitle: "第 1 步：匯入 Excel 檔案",
-        importHelp: "請上傳排程（Excel1）、COIS 需求（Excel2）與 ZRMm BOM／庫存（Excel3）。欄位對應依業務規則固定。",
-        excel1: "Excel 1 — 排程",
-        excel2: "Excel 2 — 需求（COIS）",
-        excel3: "Excel 3 — BOM／庫存",
+        importHelp: "請上傳 Schedule、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。欄位以英文表頭名稱解析（可用 alias）。",
+        sideSchedule: "Schedule 排程",
+        sideCoois: "COOIS — 需求",
+        sideZrmm: "ZRMM0028 — BOM／廠外",
+        sideMb52: "MB52 — 庫存",
+        excel1: "Schedule",
+        excel2: "COOIS",
+        excel3: "ZRMM0028",
         uploadFile: "上傳檔案",
         pasteExcel: "或從 Excel 貼上",
         sampleData: "範例資料",
-        clearExcel1: "清除 Excel 1",
-        clearExcel2: "清除 Excel 2",
-        clearExcel3: "清除 Excel 3",
+        clearSchedule: "清除 Schedule",
+        clearCoois: "清除 COOIS",
+        clearZrmm: "清除 ZRMM0028",
+        clearMb52: "清除 MB52",
+        clearExcel1: "清除 Schedule",
+        clearExcel2: "清除 COOIS",
+        clearExcel3: "清除 ZRMM0028",
         nextMapping: "下一步：對應與執行",
         backToTop: "↑ 回到頂端",
         mappingTitle: "第 2 步：固定對應與配發",
@@ -1691,7 +1938,7 @@
         mapColumn: "欄位",
         mapMeaning: "語意",
         mapDetected: "偵測到的表頭",
-        mappingHelp: "事前檢查：同母料 Excel2.R 必須等於 Excel3.H。換算：2.R=3.M 則 1:1；母單位為 SHT 則查末碼表（3.F 母料全名）；否則查單位白名單（預設 M↔YD）。缺規則則停止。",
+        mappingHelp: "事前檢查：同母料 COOIS 單位必須等於 ZRMM OUn。換算：單位相同則 1:1；母單位為 SHT 則查末碼表（ZRMM 說明）；否則查單位白名單（預設 M↔YD）。缺規則則停止。",
         back: "返回",
         runAllocate: "執行配發",
         resultTitle: "篩選、預覽與匯出",
@@ -1715,7 +1962,20 @@
         rendering: "正在產生預覽…",
         loaded: "已載入 {rows} 列、{cols} 欄。",
         importError: "無法讀取檔案：{message}",
-        needBoth: "請先載入 Excel 1、Excel 2 與 Excel 3。",
+        importValidateTitle: "{file} 格式檢查失敗",
+        importValidateRunTitle: "請先修正匯入錯誤，再執行配發",
+        importValidateBlocked: "請先修正第 1 步的匯入錯誤，再執行配發。",
+        importValidateEmpty: "{file}：找不到可用的表頭或資料列。",
+        importValidateMinCols: "{file}：至少需要 {need} 欄，目前只有 {got} 欄。",
+        importValidateHeader: "{file}：第 {col} 欄表頭看起來不正確（{header}）。",
+        importValidateBlankColumn: "{file}：抽樣資料中第 {col} 欄為空白。",
+        importValidateUnitLikeWrong: "{file}：第 {col} 欄應為單位，但樣本值看起來不對（{sample}）。",
+        importValidateColumnType: "{file}：第 {col} 欄看起來不像 {type}。",
+        importTypeUnit: "單位",
+        importTypeSo: "SO 訂單號",
+        importTypeDate: "日期",
+        importTypeNumber: "數量",
+        needBoth: "請先載入 Schedule、COOIS、ZRMM0028 與 MB52。",
         built: "已配發 {rows} 列 · 篩選後可匯出 {shown} 列 · 表格預覽 {preview}/{limit}{capNote} · 短缺列（全量）{shortage}",
         builtCapNote: "（匯出仍含篩選後全部列）",
         exported: "CSV 已匯出",
@@ -1726,65 +1986,89 @@
         resultStale: "輸入已變更。請重新執行配發後再匯出。",
         workbookUnsupported: "此瀏覽器無法讀取 .xlsx。請另存為 CSV 或貼上資料。",
         missingHeader: "（索引 {index}，表頭缺失）",
-        mapSo: "訂單",
+        mapSo: "訂單 / Order",
         mapCutting: "排程生產日 cutting",
         mapSd: "訂單（SD Document）",
-        mapMother2: "母材料",
+        mapMaterial: "物料（COOIS）",
         mapQty: "Open Quantity（需求）",
-        mapUnitR: "母單位（2.R）",
-        mapMother3: "母材料",
-        mapDescF: "母料全名（末碼尺寸）",
-        mapUnitH: "母單位檢查（3.H OUn）",
+        mapUnitCoois: "基礎計量單位（COOIS）",
+        mapSegment: "需求區段 Requirement Segment",
+        mapMother: "母材料（ZRMM）",
         mapChild: "子材料 Article(Com.)",
-        mapUnitM: "子單位（3.M BUn）",
-        mapStock: "Unrestricted（初始庫存取 MAX）",
+        mapGiJ: "GI SC(541/542)",
+        mapVendorL: "Stock of Vendor",
+        mapGrP: "GR SC(543/544)",
+        mapStorage: "儲存位置",
+        mapBatch: "Batch",
+        mapOun: "OUn（母單位）",
+        mapBun: "BUn（子單位）",
+        mapDesc: "物料完整說明（末碼尺寸）",
+        mapMb52Material: "物料（MB52）",
+        mapStockSegment: "Stock Segment",
+        mapMb52Storage: "儲存位置（MB52）",
+        mapStock: "Unrestricted（SUM）",
+        mapMb52Unit: "基礎計量單位（MB52）",
+        mapMother2: "物料（COOIS）",
+        mapUnitR: "單位（COOIS）",
+        mapMother3: "母材料（ZRMM）",
+        mapDescF: "說明（末碼）",
+        mapUnitH: "OUn",
+        mapUnitM: "BUn",
         convTitle: "單位換算白名單",
         convHelp: "母單位 × 乘數 = 子料 Demand。預設（可改）：M→YD=1.0936、YD→M=0.9144。單位相同一律 1:1。",
-        convMotherUnit: "母單位（2.R）",
-        convChildUnit: "子單位（3.M）",
+        convMotherUnit: "母單位",
+        convChildUnit: "子單位",
         convRatio: "換算乘數",
         convAdd: "新增換算",
         convReset: "還原預設",
         convRemove: "刪除",
         sizeConvTitle: "SHT 末碼換算",
-        sizeConvHelp: "母單位（2.R）為 SHT 且子單位不同時，Demand = Q × 本表倍率（末碼取自 Excel3.F 母料全名）。SHT→SHT 一律 1:1。請自行新增／改倍率／刪除不需要的列。預設種子可改，引擎不寫死倍率。",
-        sizeSuffix: "末碼（來自 3.F）",
-        sizeChildUnit: "子單位（3.M）",
+        sizeConvHelp: "母單位為 SHT 且子單位不同時，Demand = Q × 本表倍率（末碼取自 ZRMM 物料完整說明）。SHT→SHT 一律 1:1。預設種子可改，引擎不寫死倍率。",
+        sizeSuffix: "末碼（來自 ZRMM 說明）",
+        sizeChildUnit: "子單位",
         sizeConvAdd: "新增末碼規則",
         sizeConvReset: "還原末碼預設",
         sizeSuffixCustom: "自訂…",
         sizeSuffixPlaceholder: "例如 110x200cm",
         filterSo: "篩選 SO",
         filterCutting: "Cutting 起迄",
-        filterMother: "篩選母材料",
+        filterMother: "篩選母／子材料",
         filterMotherPlaceholder: "輸入前綴後按 Enter，或從清單挑選",
         filterMotherClear: "全部清除",
         filterMotherCount: "已選 {count} 筆",
         hideSoAllZero: "隱藏：整張 SO 需求皆為 0",
         hideRowZero: "隱藏：單列需求 = 0",
         tipRowsExported: "目前篩選後的預覽列數；匯出 CSV／Excel 也使用同一組列。",
-        tipDemandKeys: "Excel2 需求彙總後保留的 (SO + 母料) 組合數（母料須存在於 Excel3 BOM）。",
-        tipMothersMatched: "Excel3 中至少有一個子料的母料種數（BOM 涵蓋）。",
-        tipShortageRows: "整次配發結果中，能提供數量 < 需求數量的列數（該子料列庫存不足）。上方 SO／母料／日期篩選不會改變此數字。",
+        tipDemandKeys: "展開與直接需求合併後的配發鍵數（SO + segment + 母 + 子）。",
+        tipMothersMatched: "過濾後 ZRMM 中至少有一個子料的母料種數。",
+        tipShortageRows: "全量結果中 provided < demand 的列數；篩選不改變此數字。",
         tipHelpAria: "說明此統計意義",
         tipFilterSo: "輸入 SO 前綴或以逗號分隔多筆；預覽與匯出即時更新。",
         tipFilterCutting: "只保留 cutting 日期在此區間（含起迄）的列。",
         tipFilterMother: "已選母料以標籤顯示在輸入框上方（往右換行）。輸入前綴後按 Enter 或點選建議；點 × 可移除單筆。",
-        tipHideSoAllZero: "若某張 SO 的需求加總為 0，隱藏該 SO 的所有列。",
-        tipHideRowZero: "隱藏需求數量為 0 的單列。",
-        tipColCutting: "此 SO 在 Excel1 的生產／cutting 日期。",
+        tipHideSoAllZero: "若某張 SO 的需求加總為 0，隱藏該 SO 的所有列（預設勾選）。取消勾選後，這些 SO 會出現在預覽／匯出。",
+        tipHideRowZero: "隱藏需求數量為 0 的單列（預設勾選）。取消勾選後，需求=0 的列會出現在預覽／匯出。",
+        tipColCutting: "此 SO 在 Schedule 的最早 cutting 日期。",
         tipColSo: "銷售訂單號碼。",
-        tipColMother: "母材料代號。",
-        tipColMotherUnit: "母單位（Excel2 欄 R）。",
-        tipColChild: "此母料下的子材料（Excel3）。",
-        tipColChildUnit: "子單位（Excel3 欄 M）。",
-        tipColDemand: "換算後的子料需求（Q × 換算倍率）。",
-        tipColProvided: "本列自剩餘子料庫存配到的數量。",
-        tipColRemaining: "本列配發後，該子料剩餘庫存。",
-        tipColY: "群組標記：同 SO + 母料下，全部子料 demand > 0 且 provided ≥ demand 時才標 Y。",
+        tipColMother: "母材料（僅直接需求時可空白）。",
+        tipColMotherBatch: "母料／需求區段（FLT/MTF）。",
+        tipColMotherUnit: "母單位（ZRMM OUn 或 COOIS）。",
+        tipColChild: "對庫存配發的子材料。",
+        tipColChildBatch: "子料庫存區段（FLT/MTF）。",
+        tipColChildUnit: "子單位（ZRMM BUn 或 COOIS/MB52）。",
+        tipColDemandFromMother: "母料展開需求（Open Quantity × 換算）。",
+        tipColDemandDirect: "此料號的直接 Open Quantity。",
+        tipColDemand: "母料展開 + 直接需求合計。",
+        tipColStockMb52: "MB52 Unrestricted SUM（排除 39*）。",
+        tipColStockOutside: "廠外 max(0, ΣJ−ΣP)。",
+        tipColStockAvailable: "可配發池 = max(0, MB52 − 廠外)。",
+        tipColProvided: "本列自剩餘池配到的數量。",
+        tipColRemaining: "本列扣減後剩餘（配發自 max(0, available)）。",
+        tipColY: "同 SO+母料+Segment 群組全部 demand>0 且 provided≥demand 時標 Y。",
+        dualMatLegend: "藍色料號＝雙重身分（在 ZRMM0028 中既可當母料也可當子料）；預覽與匯出 Excel 皆會標藍。",
         errorClose: "確定",
-        errorPrecheckTitle: "單位事前檢查失敗（2.R vs 3.H）",
-        errorConvTitle: "缺少換算規則（2.R vs 3.M）",
+        errorPrecheckTitle: "單位事前檢查失敗（COOIS 單位 vs ZRMM OUn）",
+        errorConvTitle: "缺少換算規則（母單位 vs 子單位）",
         errorPrecheckIntro: "同母料單位必須一致。請修正原始資料後重跑。",
         errorConvIntro: "請在換算表補上缺少的母→子單位乘數後再執行。"
       },
@@ -1799,16 +2083,24 @@
         step2: "အမှတ်အသား နှင့် လုပ်ဆောင်ရန်",
         step3: "စစ်ထုတ် နှင့် အစမ်းကြည့်ရန်",
         importTitle: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
-        importHelp: "အချိန်ဇယား (Excel1)၊ လိုအပ်ချက် COIS (Excel2) နှင့် BOM/သိုလှောင်ရုံ (Excel3) ကို တင်ပါ။ ကော်လံ အမှတ်အသားသည် လုပ်ငန်း စည်းမျဉ်းအရ သတ်မှတ်ထားသည်။",
-        excel1: "Excel 1 — အချိန်ဇယား",
-        excel2: "Excel 2 — လိုအပ်ချက် (COIS)",
-        excel3: "Excel 3 — BOM / သိုလှောင်ရုံ",
+        importHelp: "Schedule၊ COOIS၊ ZRMM0028 နှင့် MB52 ကို တင်ပါ။ ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ရှာသည်။",
+        sideSchedule: "Schedule",
+        sideCoois: "COOIS — Demand",
+        sideZrmm: "ZRMM0028 — BOM / Outside",
+        sideMb52: "MB52 — Stock",
+        excel1: "Schedule",
+        excel2: "COOIS",
+        excel3: "ZRMM0028",
         uploadFile: "ဖိုင် တင်ရန်",
         pasteExcel: "သို့မဟုတ် Excel မှ ကူးထည့်ရန်",
         sampleData: "နမူန်ဒေတာ",
-        clearExcel1: "Excel 1 ရှင်းရန်",
-        clearExcel2: "Excel 2 ရှင်းရန်",
-        clearExcel3: "Excel 3 ရှင်းရန်",
+        clearSchedule: "Schedule ရှင်းရန်",
+        clearCoois: "COOIS ရှင်းရန်",
+        clearZrmm: "ZRMM0028 ရှင်းရန်",
+        clearMb52: "MB52 ရှင်းရန်",
+        clearExcel1: "Schedule ရှင်းရန်",
+        clearExcel2: "COOIS ရှင်းရန်",
+        clearExcel3: "ZRMM0028 ရှင်းရန်",
         nextMapping: "နောက်တစ်ဆင့် — အမှတ်အသား",
         backToTop: "↑ အပေါ်သို့",
         mappingTitle: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု",
@@ -1817,7 +2109,7 @@
         mapColumn: "ကော်လံ",
         mapMeaning: "အဓိပ္ပာယ်",
         mapDetected: "တွေ့ရှိသော ခေါင်းစဉ်",
-        mappingHelp: "စစ်ဆေးမှု — တူညီသော မိခင်ပစ္စည်းတွင် Excel2.R နှင့် Excel3.H တူညီရမည်။ 2.R=3.M ဆိုပါက 1:1။ မိခင်ယူနစ် SHT ဆိုပါက Excel3.F နောက်ဆုံးစာလုံး ဇယားကို သုံးပါ။ မဟုတ်ပါက ယူနစ် whitelist (M↔YD)။ စည်းမျဉ်း မရှိပါက ရပ်တန့်မည်။",
+        mappingHelp: "စစ်ဆေးမှု — COOIS ယူနစ်နှင့် ZRMM OUn တူညီရမည်။ ယူနစ်တူ 1:1။ SHT ဆိုပါက ZRMM ဖော်ပြချက် နောက်ဆုံးစာလုံး။",
         back: "နောက်သို့",
         runAllocate: "ခွဲဝေမှု လုပ်ဆောင်ရန်",
         resultTitle: "စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
@@ -1841,7 +2133,20 @@
         rendering: "အစမ်းကြည့် ပြင်ဆင်နေသည်...",
         loaded: "အတန်း {rows} ခု၊ ကော်လံ {cols} ခု တင်ပြီးပါပြီ။",
         importError: "ဖိုင် မဖတ်နိုင်ပါ — {message}",
-        needBoth: "Excel 1၊ Excel 2 နှင့် Excel 3 ကို အရင် တင်ပါ။",
+        importValidateTitle: "{file} ဖိုင်ပုံစံ စစ်ဆေးမှု မအောင်မြင်ပါ",
+        importValidateRunTitle: "ခွဲဝေမှု မလုပ်မီ တင်သွင်းမှု အမှားများကို ပြင်ပါ",
+        importValidateBlocked: "အဆင့် ၁ တင်သွင်းမှု အမှားများကို အရင်ပြင်ပြီးမှ ခွဲဝေမှု လုပ်ပါ။",
+        importValidateEmpty: "{file}: အသုံးပြုနိုင်သော ခေါင်းစဉ်/ဒေတာ အတန်း မတွေ့ပါ。",
+        importValidateMinCols: "{file}: အနည်းဆုံး ကော်လံ {need} လိုအပ်သော်လည်း ယခု {got} ကော်လံသာ ရှိသည်။",
+        importValidateHeader: "{file}: ကော်လံ {col} ခေါင်းစဉ် မမှန်ကန်သလို ဖြစ်နေသည် ({header})။",
+        importValidateBlankColumn: "{file}: နမူနာဒေတာတွင် ကော်လံ {col} အလွတ်ဖြစ်နေသည်။",
+        importValidateUnitLikeWrong: "{file}: ကော်လံ {col} သည် ယူနစ် ဖြစ်သင့်သော်လည်း နမူနာတန်ဖိုး မမှန်ကန်သလို ဖြစ်နေသည် ({sample})။",
+        importValidateColumnType: "{file}: ကော်လံ {col} သည် {type} မဟုတ်သလို ဖြစ်နေသည်။",
+        importTypeUnit: "ယူနစ်",
+        importTypeSo: "SO နံပါတ်",
+        importTypeDate: "ရက်စွဲ",
+        importTypeNumber: "ကိန်းဂဏန်း ပမာဏ",
+        needBoth: "Schedule၊ COOIS၊ ZRMM0028 နှင့် MB52 ကို အရင် တင်ပါ။",
         built: "အတန်း {rows} · စစ်ထုတ်/ထုတ်ယူ {shown} · ဇယား အစမ်းကြည့် {preview}/{limit}{capNote} · မလုံလောက် (အပြည့်) {shortage}",
         builtCapNote: " (ထုတ်ယူမှုတွင် စစ်ထုတ်ပြီး အားလုံး ပါဝင်ဆဲ)",
         exported: "CSV ထုတ်ယူပြီး",
@@ -1855,6 +2160,22 @@
         mapSo: "မှာယူမှု",
         mapCutting: "ထုတ်လုပ်ရက် cutting",
         mapSd: "မှာယူမှု (SD Document)",
+        mapMaterial: "Material (COOIS)",
+        mapUnitCoois: "Base Unit (COOIS)",
+        mapSegment: "Requirement Segment",
+        mapMother: "Mother (ZRMM)",
+        mapGiJ: "GI SC",
+        mapVendorL: "Stock of Vendor",
+        mapGrP: "GR SC",
+        mapStorage: "Storage Location",
+        mapBatch: "Batch",
+        mapOun: "OUn",
+        mapBun: "BUn",
+        mapDesc: "Description",
+        mapMb52Material: "Material (MB52)",
+        mapStockSegment: "Stock Segment",
+        mapMb52Storage: "Storage (MB52)",
+        mapMb52Unit: "Base Unit (MB52)",
         mapMother2: "မိခင်ပစ္စည်း",
         mapQty: "Open Quantity (လိုအပ်ချက်)",
         mapUnitR: "မိခင်ယူနစ် (2.R)",
@@ -1882,7 +2203,7 @@
         sizeSuffixPlaceholder: "ဥပမာ 110x200cm",
         filterSo: "SO စစ်ထုတ်ရန်",
         filterCutting: "Cutting ရက်စွဲ အစ — အဆုံး",
-        filterMother: "မိခင်ပစ္စည်း စစ်ထုတ်ရန်",
+        filterMother: "မိခင် / သားပစ္စည်း စစ်ထုတ်ရန်",
         filterMotherPlaceholder: "ရှေ့စာလုံး ရိုက်ပြီး Enter — သို့မဟုတ် စာရင်းမှ ရွေးပါ",
         filterMotherClear: "အားလုံး ရှင်းရန်",
         filterMotherCount: "ရွေးထားသည် {count}",
@@ -1898,18 +2219,26 @@
         tipFilterMother: "ရွေးထားသော မိခင်များကို အပေါ်တွင် chip အဖြစ် ပြသသည်။ ရှေ့စာလုံး ရိုက်ပြီး Enter သို့မဟုတ် အကြံပြုချက် ရွေးပါ။ × ဖြင့် ဖယ်ရှားနိုင်သည်။",
         tipHideSoAllZero: "SO တစ်ခုလုံး၏ လိုအပ်ချက် ပေါင်းလဒ် သုည ဖြစ်ပါက ထို SO အတန်းအားလုံး ဖျောက်ပါ။",
         tipHideRowZero: "လိုအပ်ချက် သုည ဖြစ်သော တစ်တန်းချင်း ဖျောက်ပါ။",
-        tipColCutting: "Excel1 မှ ဤ SO ၏ cutting ရက်စွဲ။",
+        tipColCutting: "Schedule မှ cutting ရက်စွဲ။",
         tipColSo: "မှာယူမှု နံပါတ်။",
-        tipColMother: "မိခင်ပစ္စည်း ကုဒ်။",
-        tipColMotherUnit: "မိခင်ယူနစ် (Excel2 R)။",
-        tipColChild: "ဤမိခင်အောက်ရှိ သားပစ္စည်း (Excel3)။",
-        tipColChildUnit: "သားယူနစ် (Excel3 M)။",
-        tipColDemand: "ပြောင်းလဲပြီး လိုအပ်ချက် (Q × အချိုး)။",
-        tipColProvided: "ဤအတန်းသို့ ခွဲဝေပေးသော ပမာဏ။",
-        tipColRemaining: "ဤအတန်းပြီးနောက် ကျန်ရှိ သိုလှောင်ရုံ။",
-        tipColY: "အုပ်စု အမှတ် — တူညီသော SO + မိခင်တွင် သားအားလုံး demand > 0 နှင့် provided ≥ demand ဖြစ်မှ Y။",
+        tipColMother: "မိခင်ပစ္စည်း (တိုက်ရိုက်သာ ဆိုပါက အလွတ်)။",
+        tipColMotherBatch: "Segment FLT/MTF။",
+        tipColMotherUnit: "မိခင်ယူနစ် (OUn)။",
+        tipColChild: "သားပစ္စည်း။",
+        tipColChildBatch: "သား Segment။",
+        tipColChildUnit: "သားယူနစ် (BUn)။",
+        tipColDemandFromMother: "မိခင်မှ ချဲ့ထားသော လိုအပ်ချက်။",
+        tipColDemandDirect: "တိုက်ရိုက် Open Quantity။",
+        tipColDemand: "လိုအပ်ချက် စုစုပေါင်း။",
+        tipColStockMb52: "MB52 Unrestricted SUM။",
+        tipColStockOutside: "Outside max(0, sumJ-sumP).",
+        tipColStockAvailable: "Initial pool = max(0, MB52 − outside).",
+        tipColProvided: "ခွဲဝေပေးသော ပမာဏ။",
+        tipColRemaining: "ကျန်ရှိ သိုလှောင်ရုံ။",
+        tipColY: "SO+မိခင်+Segment အုပ်စု အပြည့် ခွဲဝေပြီးမှ Y။",
+        dualMatLegend: "အပြာရောင် ကုဒ် = မိခင်နှင့် သား နှစ်မျိုးလုံး ဖြစ်နိုင်သော ပစ္စည်း (ZRMM0028)။",
         errorClose: "အိုကေ",
-        errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (2.R နှင့် 3.H)",
+        errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (COOIS vs ZRMM OUn)",
         errorConvTitle: "ပြောင်းလဲမှု စည်းမျဉ်း မရှိ",
         errorPrecheckIntro: "တူညီသော မိခင်ပစ္စည်းတွင် ယူနစ် တူညီရမည်။ ဒေတာ ပြင်ပြီး ပြန်လုပ်ပါ။",
         errorConvIntro: "ပြောင်းလဲမှု ဇယားတွင် မိခင်→သား ယူနစ် အချိုးများ ထည့်ပြီး ပြန်လုပ်ပါ။"
@@ -1953,11 +2282,12 @@
         if (!raw) return cloneDefaultConversionRules();
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || !parsed.length) return cloneDefaultConversionRules();
-        return parsed.map(rule => ({
+        const rules = parsed.map(rule => ({
           motherUnit: String(rule.motherUnit || "").trim().toUpperCase(),
           childUnit: String(rule.childUnit || "").trim().toUpperCase(),
           ratio: Number(rule.ratio) || 0
         })).filter(rule => rule.motherUnit && rule.childUnit && rule.ratio > 0);
+        return rules.length ? rules : cloneDefaultConversionRules();
       } catch {
         return cloneDefaultConversionRules();
       }
@@ -1973,11 +2303,12 @@
         if (!raw) return cloneDefaultSizeConversionRules();
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || !parsed.length) return cloneDefaultSizeConversionRules();
-        return parsed.map(rule => ({
+        const rules = parsed.map(rule => ({
           suffix: normalizeSizeSuffix(rule.suffix) || String(rule.suffix || "").trim().toLowerCase(),
           childUnit: normalizeChildUnit(rule.childUnit),
           ratio: Number(rule.ratio) || 0
         })).filter(rule => rule.suffix && rule.childUnit && rule.ratio > 0);
+        return rules.length ? rules : cloneDefaultSizeConversionRules();
       } catch {
         return cloneDefaultSizeConversionRules();
       }
@@ -1990,9 +2321,16 @@
     const state = {
       lang: "en",
       step: 1,
-      left: { headers: [], rows: [] },
-      right: { headers: [], rows: [] },
-      third: { headers: [], rows: [] },
+      schedule: { headers: [], rows: [], cols: {} },
+      coois: { headers: [], rows: [], cols: {} },
+      zrmm: { headers: [], rows: [], cols: {} },
+      mb52: { headers: [], rows: [], cols: {} },
+      importValidation: {
+        schedule: { ok: false, errors: [] },
+        coois: { ok: false, errors: [] },
+        zrmm: { ok: false, errors: [] },
+        mb52: { ok: false, errors: [] }
+      },
       resultHeaders: [],
       resultRows: [],
       allResultRows: [],
@@ -2000,6 +2338,7 @@
       sizeConversionRules: loadSizeConversionRules(),
       stats: { demandKeys: 0, mothers: 0, shortage: 0 },
       motherFilters: [],
+      dualIdentityMaterials: new Set(),
       allocating: false
     };
 
@@ -2007,20 +2346,24 @@
       languageSelect: document.getElementById("languageSelect"),
       themeSelect: document.getElementById("themeSelect"),
       statusText: document.getElementById("statusText"),
-      leftFile: document.getElementById("leftFile"),
-      rightFile: document.getElementById("rightFile"),
-      thirdFile: document.getElementById("thirdFile"),
-      leftData: document.getElementById("leftData"),
-      rightData: document.getElementById("rightData"),
-      thirdData: document.getElementById("thirdData"),
-      leftMessage: document.getElementById("leftMessage"),
-      rightMessage: document.getElementById("rightMessage"),
-      thirdMessage: document.getElementById("thirdMessage"),
+      scheduleFile: document.getElementById("scheduleFile"),
+      cooisFile: document.getElementById("cooisFile"),
+      zrmmFile: document.getElementById("zrmmFile"),
+      mb52File: document.getElementById("mb52File"),
+      scheduleData: document.getElementById("scheduleData"),
+      cooisData: document.getElementById("cooisData"),
+      zrmmData: document.getElementById("zrmmData"),
+      mb52Data: document.getElementById("mb52Data"),
+      scheduleMessage: document.getElementById("scheduleMessage"),
+      cooisMessage: document.getElementById("cooisMessage"),
+      zrmmMessage: document.getElementById("zrmmMessage"),
+      mb52Message: document.getElementById("mb52Message"),
       mappingBody: document.getElementById("mappingBody"),
       mappingMessage: document.getElementById("mappingMessage"),
       convBody: document.getElementById("convBody"),
       sizeConvBody: document.getElementById("sizeConvBody"),
       resultMessage: document.getElementById("resultMessage"),
+      dualMatLegend: document.getElementById("dualMatLegend"),
       resultHead: document.getElementById("resultHead"),
       resultBody: document.getElementById("resultBody"),
       exportCsv: document.getElementById("exportCsv"),
@@ -2133,6 +2476,8 @@
         elements.themeSelect.setAttribute("aria-label", t("themeMill") + " / " + t("themeSoft"));
       }
       refreshMappingTable();
+      renderConversionTable();
+      renderSizeConversionTable();
       if (state.allResultRows.length) {
         state.resultHeaders = [...outputHeadersForLang(state.lang)];
         applyViewFilters();
@@ -2205,22 +2550,30 @@
     function collectDistinctValues(source) {
       const values = new Set();
       if (source === "so") {
-        for (const row of state.left.rows) {
-          const so = normalize(row[COL.excel1.so]);
-          if (so) values.add(so);
+        const soIdx = state.schedule.cols?.so ?? -1;
+        if (soIdx >= 0) {
+          for (const row of state.schedule.rows) {
+            const so = normalize(row[soIdx]);
+            if (so) values.add(so);
+          }
         }
         for (const row of state.allResultRows) {
           const so = normalize(row[OUT.so]);
           if (so) values.add(so);
         }
       } else if (source === "mother") {
-        for (const row of state.right.rows) {
-          const mother = normalize(row[COL.excel2.mother]);
-          if (mother) values.add(mother);
-        }
         for (const row of state.allResultRows) {
           const mother = normalize(row[OUT.mother]);
+          const child = normalize(row[OUT.child]);
           if (mother) values.add(mother);
+          if (child) values.add(child);
+        }
+        const matIdx = state.coois.cols?.material ?? -1;
+        if (matIdx >= 0) {
+          for (const row of state.coois.rows) {
+            const mat = normalize(row[matIdx]);
+            if (mat) values.add(mat);
+          }
         }
       }
       return [...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -2550,11 +2903,8 @@
       if (!trimmed) return { headers: [], rows: [] };
       const delimiter = detectDelimiter(trimmed);
       const lines = trimmed.split(/\r?\n/).filter(line => line.length);
-      const rows = lines.map(line => splitLine(line, delimiter));
-      const width = Math.max(...rows.map(row => row.length));
-      const headers = normalizeRow(rows[0], width).map((header, index) => String(header || `Column ${index + 1}`));
-      const dataRows = rows.slice(1).map(row => normalizeRow(row, width).slice(0, headers.length));
-      return { headers, rows: dataRows };
+      const rawRows = lines.map(line => splitLine(line, delimiter));
+      return detectHeaderRow(rawRows);
     }
 
     function normalize(value) {
@@ -2598,43 +2948,69 @@
       return formatted || String(value ?? "");
     }
 
-    function headerAt(side, index) {
-      const headers = state[side].headers;
-      if (index < headers.length && normalize(headers[index])) return headers[index];
-      return t("missingHeader", { index });
+    function headerAt(side, fieldKey) {
+      const cols = state[side]?.cols || {};
+      const index = cols[fieldKey];
+      return headerLabel(state[side]?.headers || [], index);
     }
 
     function refreshMappingTable() {
       const rows = [
-        ["Excel1", "A", t("mapSo"), headerAt("left", COL.excel1.so)],
-        ["Excel1", "B", t("mapCutting"), headerAt("left", COL.excel1.cutting)],
-        ["Excel2", "B", t("mapSd"), headerAt("right", COL.excel2.so)],
-        ["Excel2", "F", t("mapMother2"), headerAt("right", COL.excel2.mother)],
-        ["Excel2", "Q", t("mapQty"), headerAt("right", COL.excel2.qty)],
-        ["Excel2", "R", t("mapUnitR"), headerAt("right", COL.excel2.unitR)],
-        ["Excel3", "E", t("mapMother3"), headerAt("third", COL.excel3.mother)],
-        ["Excel3", "F", t("mapDescF"), headerAt("third", COL.excel3.descF)],
-        ["Excel3", "H", t("mapUnitH"), headerAt("third", COL.excel3.unitH)],
-        ["Excel3", "I", t("mapChild"), headerAt("third", COL.excel3.child)],
-        ["Excel3", "M", t("mapUnitM"), headerAt("third", COL.excel3.unitM)],
-        ["Excel3", "K", t("mapStock"), headerAt("third", COL.excel3.stock)]
+        ["Schedule", "Order/so", t("mapSo"), headerAt("schedule", "so")],
+        ["Schedule", "cutting", t("mapCutting"), headerAt("schedule", "cutting")],
+        ["COOIS", "SD Document", t("mapSd"), headerAt("coois", "so")],
+        ["COOIS", "Material", t("mapMaterial"), headerAt("coois", "material")],
+        ["COOIS", "Open Quantity", t("mapQty"), headerAt("coois", "qty")],
+        ["COOIS", "Requirement Segment", t("mapSegment"), headerAt("coois", "segment")],
+        ["COOIS", "Base Unit of Measure", t("mapUnitCoois"), headerAt("coois", "unit")],
+        ["ZRMM0028", "Material", t("mapMother"), headerAt("zrmm", "mother")],
+        ["ZRMM0028", "Article(Com.)", t("mapChild"), headerAt("zrmm", "child")],
+        ["ZRMM0028", "GI SC(541/542)", t("mapGiJ"), headerAt("zrmm", "giJ")],
+        ["ZRMM0028", "Stock of Vendor", t("mapVendorL"), headerAt("zrmm", "vendorL")],
+        ["ZRMM0028", "GR SC(543/544)", t("mapGrP"), headerAt("zrmm", "grP")],
+        ["ZRMM0028", "Storage Location", t("mapStorage"), headerAt("zrmm", "storage")],
+        ["ZRMM0028", "Batch", t("mapBatch"), headerAt("zrmm", "batch")],
+        ["ZRMM0028", "OUn", t("mapOun"), headerAt("zrmm", "oun")],
+        ["ZRMM0028", "BUn", t("mapBun"), headerAt("zrmm", "bun")],
+        ["ZRMM0028", "Description", t("mapDesc"), headerAt("zrmm", "desc")],
+        ["MB52", "Material", t("mapMb52Material"), headerAt("mb52", "material")],
+        ["MB52", "Stock Segment", t("mapStockSegment"), headerAt("mb52", "segment")],
+        ["MB52", "Storage Location", t("mapMb52Storage"), headerAt("mb52", "storage")],
+        ["MB52", "Unrestricted", t("mapStock"), headerAt("mb52", "stock")],
+        ["MB52", "Base Unit of Measure", t("mapMb52Unit"), headerAt("mb52", "unit")]
       ];
-      elements.mappingBody.innerHTML = rows.map(([source, col, meaning, detected]) =>
-        `<tr><td>${source}</td><td>${col}</td><td>${meaning}</td><td>${detected}</td></tr>`
-      ).join("");
-      renderConversionTable();
-      renderSizeConversionTable();
+      elements.mappingBody.innerHTML = rows.map(([source, col, meaning, detected]) => {
+        const side = source === "Schedule" ? "schedule"
+          : source === "COOIS" ? "coois"
+          : source === "ZRMM0028" ? "zrmm"
+          : "mb52";
+        const status = state.importValidation[side]?.ok ? "✓" : "✗";
+        return `<tr><td>${escapeHtml(source)}</td><td>${escapeHtml(col)}</td><td>${escapeHtml(meaning)}</td><td>${escapeHtml(detected)} ${status}</td></tr>`;
+      }).join("");
     }
 
     function collectUnitOptions() {
-      const units = new Set(["M", "YD"]);
-      for (const row of state.right.rows) {
-        const u = normalize(row[COL.excel2.unitR]).toUpperCase();
-        if (u) units.add(u);
+      const units = new Set(["M", "YD", "SHT"]);
+      const cooisUnit = state.coois.cols?.unit ?? -1;
+      const zrmmOun = state.zrmm.cols?.oun ?? -1;
+      const zrmmBun = state.zrmm.cols?.bun ?? -1;
+      if (cooisUnit >= 0) {
+        for (const row of state.coois.rows) {
+          const u = normalize(row[cooisUnit]).toUpperCase();
+          if (u) units.add(u);
+        }
       }
-      for (const row of state.third.rows) {
-        const u = normalize(row[COL.excel3.unitM]).toUpperCase();
-        if (u) units.add(u);
+      if (zrmmOun >= 0) {
+        for (const row of state.zrmm.rows) {
+          const u = normalize(row[zrmmOun]).toUpperCase();
+          if (u) units.add(u);
+        }
+      }
+      if (zrmmBun >= 0) {
+        for (const row of state.zrmm.rows) {
+          const u = normalize(row[zrmmBun]).toUpperCase();
+          if (u) units.add(u);
+        }
       }
       return [...units].sort();
     }
@@ -2693,23 +3069,29 @@
     }
 
     function collectDetectedSizeSuffixes() {
-      const found = new Set();
-      for (const row of state.third.rows) {
-        const suffix = extractSizeSuffix(row[COL.excel3.descF]);
-        if (suffix) found.add(suffix);
+      const suffixes = new Set();
+      const descIdx = state.zrmm.cols?.desc ?? -1;
+      if (descIdx >= 0) {
+        for (const row of state.zrmm.rows) {
+          const suffix = extractSizeSuffix(row[descIdx]);
+          if (suffix) suffixes.add(suffix);
+        }
       }
       for (const rule of state.sizeConversionRules) {
         const suffix = normalizeSizeSuffix(rule.suffix);
-        if (suffix) found.add(suffix);
+        if (suffix) suffixes.add(suffix);
       }
-      return [...found].sort();
+      return [...suffixes].sort();
     }
 
     function collectSizeChildUnitOptions() {
       const units = new Set(["M", "YD", "SHT"]);
-      for (const row of state.third.rows) {
-        const u = normalizeChildUnit(row[COL.excel3.unitM]);
-        if (u) units.add(u);
+      const bunIdx = state.zrmm.cols?.bun ?? -1;
+      if (bunIdx >= 0) {
+        for (const row of state.zrmm.rows) {
+          const u = normalizeChildUnit(row[bunIdx]);
+          if (u) units.add(u);
+        }
       }
       for (const rule of state.sizeConversionRules) {
         const u = normalizeChildUnit(rule.childUnit);
@@ -2847,6 +3229,213 @@
       return String(Number(value.toFixed(6)));
     }
 
+
+    function normalizeHeaderKey(h) {
+      return normalize(h).toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function findCol(headers, aliases) {
+      const normalized = (headers || []).map(normalizeHeaderKey);
+      const aliasKeys = (aliases || []).map(normalizeHeaderKey).filter(Boolean);
+      for (const key of aliasKeys) {
+        const exact = normalized.findIndex(h => h === key);
+        if (exact >= 0) return exact;
+      }
+      for (const key of aliasKeys) {
+        const partial = normalized.findIndex(h => h.includes(key) || (key.length >= 3 && key.includes(h) && h.length >= 3));
+        if (partial >= 0) return partial;
+      }
+      return -1;
+    }
+
+    function looksChineseHeaderRow(cells) {
+      const text = (cells || []).map(c => String(c ?? "")).join("");
+      const chinese = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+      const latin = (text.match(/[A-Za-z]/g) || []).length;
+      return chinese > 0 && chinese >= Math.max(3, latin * 0.25);
+    }
+
+    function rowHasEnglishKeys(cells) {
+      const keys = (cells || []).map(normalizeHeaderKey);
+      let hits = 0;
+      for (const hint of ENGLISH_HEADER_HINTS) {
+        if (keys.some(k => k === hint || (hint.length >= 4 && k.includes(hint)))) hits += 1;
+      }
+      return hits >= 2;
+    }
+
+    function detectHeaderRow(rows) {
+      if (!rows || !rows.length) return { headerRowIndex: 0, headers: [], dataRows: [] };
+      const width = Math.max(...rows.map(row => row.length));
+      const norm = rows.map(row => {
+        const out = [];
+        for (let i = 0; i < width; i++) out.push(row[i] ?? "");
+        return out;
+      });
+      let headerRowIndex = 0;
+      if (norm.length >= 2 && looksChineseHeaderRow(norm[0]) && rowHasEnglishKeys(norm[1])) {
+        headerRowIndex = 1;
+      } else if (rowHasEnglishKeys(norm[0])) {
+        headerRowIndex = 0;
+      } else if (norm.length >= 2 && rowHasEnglishKeys(norm[1])) {
+        headerRowIndex = 1;
+      }
+      const headerCells = norm[headerRowIndex] || [];
+      const headers = headerCells.map((header, index) => String(header || `Column ${index + 1}`));
+      const dataRows = norm.slice(headerRowIndex + 1).map(row => row.slice(0, headers.length));
+      return { headerRowIndex, headers, dataRows, rows: dataRows };
+    }
+
+    function resolveSideCols(side, headers) {
+      const aliases = FIELD_ALIASES[side] || {};
+      const cols = {};
+      for (const [key, aliasList] of Object.entries(aliases)) {
+        cols[key] = findCol(headers, aliasList);
+      }
+      return cols;
+    }
+
+    function headerLabel(headers, index) {
+      if (index == null || index < 0) return t("missingHeader", { index: index ?? "?" });
+      if (index < headers.length && normalize(headers[index])) return headers[index];
+      return t("missingHeader", { index });
+    }
+
+    function normalizeHeaderText(value) {
+      return normalizeHeaderKey(value);
+    }
+
+    function looksLikeDate(value) {
+      const text = normalize(value);
+      if (!text) return false;
+      if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(text)) return true;
+      if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(text)) return true;
+      const num = Number(text);
+      return Number.isFinite(num) && num >= 20000 && num <= 60000;
+    }
+
+    function looksLikeSo(value) {
+      return /^\d{7,10}$/.test(normalize(value));
+    }
+
+    function looksLikeUnit(value) {
+      const text = normalize(value).toUpperCase();
+      if (!text) return false;
+      if (["M", "YD", "SHT", "SF", "PC", "PRS", "SET", "ROL", "KG", "G", "FT", "FLT"].includes(text)) return true;
+      return /^[A-Z]{1,4}$/.test(text);
+    }
+
+    function sampleNonBlankValues(rows, index, limit = 100) {
+      const values = [];
+      for (const row of rows) {
+        const value = normalize(row[index]);
+        if (!value) continue;
+        values.push(value);
+        if (values.length >= limit) break;
+      }
+      return values;
+    }
+
+    function columnLooksLike(values, kind) {
+      if (!values.length) return false;
+      let hits = 0;
+      for (const value of values) {
+        if (kind === "unit" && looksLikeUnit(value)) hits += 1;
+        else if (kind === "so" && looksLikeSo(value)) hits += 1;
+        else if (kind === "date" && looksLikeDate(value)) hits += 1;
+        else if (kind === "number" && normalize(value) && !Number.isNaN(Number(String(value).replace(/,/g, "")))) hits += 1;
+      }
+      return hits / values.length >= 0.6;
+    }
+
+    function validateImport(side, parsed) {
+      const guard = IMPORT_GUARDS[side];
+      const errors = [];
+      const headers = parsed.headers || [];
+      const rows = parsed.rows || [];
+      if (!headers.length || !rows.length) {
+        errors.push(t("importValidateEmpty", { file: t(guard.labelKey) }));
+        return { ok: false, errors, cols: {} };
+      }
+      if (headers.length < guard.minCols) {
+        errors.push(t("importValidateMinCols", {
+          file: t(guard.labelKey),
+          need: guard.minCols,
+          got: headers.length
+        }));
+      }
+      const cols = resolveSideCols(side, headers);
+      for (const field of guard.fields) {
+        const index = cols[field.key];
+        if (index < 0) {
+          errors.push(t("importValidateHeader", {
+            file: t(guard.labelKey),
+            col: field.label,
+            header: "(not found)"
+          }));
+          continue;
+        }
+        const header = normalizeHeaderKey(headers[index]);
+        const aliases = FIELD_ALIASES[side][field.key] || [];
+        const matched = aliases.some(alias => {
+          const a = normalizeHeaderKey(alias);
+          return header === a || header.includes(a) || (a.length >= 3 && a.includes(header));
+        });
+        if (!matched) {
+          errors.push(t("importValidateHeader", {
+            file: t(guard.labelKey),
+            col: field.label,
+            header: headers[index] || t("missingHeader", { index })
+          }));
+        }
+        if (!field.kind) continue;
+        const values = sampleNonBlankValues(rows, index);
+        if (!values.length) {
+          errors.push(t("importValidateBlankColumn", {
+            file: t(guard.labelKey),
+            col: field.label
+          }));
+          continue;
+        }
+        if (field.kind === "unit") {
+          const suspicious = values.filter(value => looksLikeSo(value) || looksLikeDate(value));
+          if (suspicious.length / values.length >= 0.3 || !columnLooksLike(values, "unit")) {
+            errors.push(t("importValidateUnitLikeWrong", {
+              file: t(guard.labelKey),
+              col: field.label,
+              sample: suspicious[0] || values[0]
+            }));
+          }
+        } else if (!columnLooksLike(values, field.kind)) {
+          // Schedule SO samples may be alphanumeric (SO-A); soften so-check when mixed demo data
+          if (field.kind === "so") {
+            const okish = values.filter(v => looksLikeSo(v) || /^[A-Za-z0-9_-]{3,}$/.test(normalize(v)));
+            if (okish.length / values.length < 0.6) {
+              errors.push(t("importValidateColumnType", {
+                file: t(guard.labelKey),
+                col: field.label,
+                type: t("importTypeSo")
+              }));
+            }
+          } else {
+            errors.push(t("importValidateColumnType", {
+              file: t(guard.labelKey),
+              col: field.label,
+              type: t(`importType${field.kind[0].toUpperCase()}${field.kind.slice(1)}`)
+            }));
+          }
+        }
+      }
+      return { ok: errors.length === 0, errors, cols };
+    }
+
+    function importValidationMessage(validation, parsed) {
+      if (validation.ok) {
+        return { text: t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }), kind: "ok" };
+      }
+      return { text: validation.errors.slice(0, 3).join("\n"), kind: "error" };
+    }
+
     async function loadFile(side, file) {
       if (!file) return;
       const messageEl = elements[`${side}Message`];
@@ -2866,7 +3455,14 @@
         }
         setSideData(side, parsed);
         document.getElementById(`${side}Data`).value = sheetToTsv(parsed.headers, parsed.rows.slice(0, 80));
-        setMessage(messageEl, t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }), "ok");
+        const validation = state.importValidation[side];
+        const feedback = importValidationMessage(validation, parsed);
+        setMessage(messageEl, feedback.text, feedback.kind);
+        if (!validation.ok) {
+          elements.progressOverlay.classList.remove("show");
+          showErrorModal(t("importValidateTitle", { file: t(IMPORT_GUARDS[side].labelKey) }), feedback.text);
+          return;
+        }
         await finishProgress(t("ready"));
       } catch (error) {
         elements.progressOverlay.classList.remove("show");
@@ -2875,12 +3471,20 @@
     }
 
     function setSideData(side, parsed) {
+      const headers = parsed.headers || [];
+      const rows = parsed.rows || parsed.dataRows || [];
+      const validation = validateImport(side, { headers, rows });
       state[side] = {
-        headers: parsed.headers || [],
-        rows: parsed.rows || []
+        headers,
+        rows,
+        cols: validation.cols || resolveSideCols(side, headers)
       };
+      state.importValidation[side] = validation;
+      if (side === "zrmm") refreshDualIdentityMaterials();
       markResultDirty();
       refreshMappingTable();
+      renderConversionTable();
+      renderSizeConversionTable();
     }
 
     function refreshFromText(side) {
@@ -2888,7 +3492,8 @@
       setSideData(side, parsed);
       const messageEl = elements[`${side}Message`];
       if (parsed.headers.length) {
-        setMessage(messageEl, t("loaded", { rows: parsed.rows.length, cols: parsed.headers.length }), "ok");
+        const feedback = importValidationMessage(state.importValidation[side], parsed);
+        setMessage(messageEl, feedback.text, feedback.kind);
       } else {
         setMessage(messageEl, "", "");
       }
@@ -2910,6 +3515,7 @@
       elements.copyTable.disabled = true;
       elements.resultMessage.textContent = t("resultEmpty");
       elements.resultMessage.className = "message";
+      if (elements.dualMatLegend) elements.dualMatLegend.hidden = true;
     }
 
     function markResultDirty() {
@@ -2921,16 +3527,27 @@
     }
 
     /**
-     * Pre-check Excel2.R vs Excel3.H for same mother (2.F = 3.E).
+     * Pre-check COOIS unit vs ZRMM OUn for same mother material.
      * @returns {string[]} error lines
      */
-    function precheckUnitRH(excel2, excel3) {
+    function precheckUnitRH(coois, zrmm) {
       const errors = [];
+      const c = coois.cols || {};
+      const z = zrmm.cols || {};
+      if (c.material < 0 || c.unit < 0 || z.mother < 0 || z.oun < 0) return errors;
+
+      // Only materials that appear as ZRMM mothers (not pure child COOIS lines).
+      const motherSet = new Set();
+      zrmm.rows.forEach(row => {
+        const mother = normalize(row[z.mother]);
+        if (mother) motherSet.add(mother);
+      });
+
       const rByMother = new Map();
-      excel2.rows.forEach((row, idx) => {
-        const mother = normalize(row[COL.excel2.mother]);
-        if (!mother) return;
-        const unitR = normalize(row[COL.excel2.unitR]).toUpperCase();
+      coois.rows.forEach((row, idx) => {
+        const mother = normalize(row[c.material]);
+        if (!mother || !motherSet.has(mother)) return;
+        const unitR = normalize(row[c.unit]).toUpperCase();
         const line = idx + 2;
         if (!rByMother.has(mother)) rByMother.set(mother, new Map());
         const unitMap = rByMother.get(mother);
@@ -2939,10 +3556,10 @@
       });
 
       const hByMother = new Map();
-      excel3.rows.forEach((row, idx) => {
-        const mother = normalize(row[COL.excel3.mother]);
+      zrmm.rows.forEach((row, idx) => {
+        const mother = normalize(row[z.mother]);
         if (!mother) return;
-        const unitH = normalize(row[COL.excel3.unitH]).toUpperCase();
+        const unitH = normalize(row[z.oun]).toUpperCase();
         const line = idx + 2;
         if (!hByMother.has(mother)) hByMother.set(mother, new Map());
         const unitMap = hByMother.get(mother);
@@ -2953,9 +3570,9 @@
       for (const [mother, unitMap] of rByMother.entries()) {
         if (unitMap.size > 1) {
           const detail = [...unitMap.entries()].map(([u, lines]) =>
-            `R=${u || "(blank)"} 列 ${lines.slice(0, 5).join(",")}${lines.length > 5 ? "…" : ""}`
+            `unit=${u || "(blank)"} rows ${lines.slice(0, 5).join(",")}${lines.length > 5 ? "…" : ""}`
           ).join("; ");
-          errors.push(`Excel2 母料 ${mother}：2.R 單位不一致 — ${detail}`);
+          errors.push(`COOIS mother ${mother}: inconsistent unit — ${detail}`);
         }
       }
 
@@ -2966,9 +3583,9 @@
         const hUnits = [...hByMother.get(mother).keys()];
         if (hUnits.length > 1) {
           const detail = [...hByMother.get(mother).entries()].map(([u, lines]) =>
-            `H=${u || "(blank)"} 列 ${lines.slice(0, 5).join(",")}${lines.length > 5 ? "…" : ""}`
+            `OUn=${u || "(blank)"} rows ${lines.slice(0, 5).join(",")}${lines.length > 5 ? "…" : ""}`
           ).join("; ");
-          errors.push(`Excel3 母料 ${mother}：3.H 單位不一致 — ${detail}`);
+          errors.push(`ZRMM mother ${mother}: inconsistent OUn — ${detail}`);
           continue;
         }
         const r = rUnits[0] || "";
@@ -2977,23 +3594,44 @@
           const rLines = rByMother.get(mother).get(r) || [];
           const hLines = hByMother.get(mother).get(h) || [];
           errors.push(
-            `Excel2 第 ${rLines[0] || "?"} 列：母料 ${mother}，R=${r || "(空白)"}\n` +
-            `Excel3 第 ${hLines[0] || "?"} 列：母料 ${mother}，H=${h || "(空白)"}\n` +
-            `→ 同料號單位不一致（R 應等於 H）`
+            `COOIS row ${rLines[0] || "?"}: mother ${mother}, unit=${r || "(blank)"}\n` +
+            `ZRMM row ${hLines[0] || "?"}: mother ${mother}, OUn=${h || "(blank)"}\n` +
+            `→ units must match for the same mother`
           );
         }
       }
       return errors;
     }
 
+    function poolKey(child, segment) {
+      return `${normalize(child)}\u0000${normalizeSegment(segment)}`;
+    }
+
+    function rowKey(so, segment, mother, child) {
+      return `${normalize(so)}\u0000${normalizeSegment(segment)}\u0000${normalize(mother)}\u0000${normalize(child)}`;
+    }
+
     /**
-     * Core allocation engine v2.2.
-     * @returns {{ok: boolean, headers?: string[], rows?: string[][], stats?: object, errorTitle?: string, errorBody?: string}}
+     * Warehouse-type lock: FLT / MTF must never mix in stock, outside, BOM, or demand.
+     * Blank stays blank (does not match FLT/MTF).
+     */
+    function normalizeSegment(value) {
+      return normalize(value).toUpperCase();
+    }
+
+    /**
+     * Y flag: group by so+mother+segment; mother="" groups per child alone.
      */
     function applyGroupYFlag(rows) {
       const groups = new Map();
       rows.forEach((row, idx) => {
-        const key = `${normalize(row[OUT.so])}\u0000${normalize(row[OUT.mother])}`;
+        const so = normalize(row[OUT.so]);
+        const mother = normalize(row[OUT.mother]);
+        const segment = normalizeSegment(row[OUT.motherBatch]) || normalizeSegment(row[OUT.childBatch]);
+        const child = normalize(row[OUT.child]);
+        const key = mother
+          ? `${so}\u0000${mother}\u0000${segment}`
+          : `${so}\u0000\u0000${segment}\u0000${child}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(idx);
       });
@@ -3010,8 +3648,29 @@
       return rows;
     }
 
-    function runAllocationEngine(excel1, excel2, excel3, conversionRules, sizeConversionRules) {
-      const preErrors = precheckUnitRH(excel2, excel3);
+    function storageExcluded(storage) {
+      return normalize(storage).startsWith("39");
+    }
+
+    /** ZRMM0028 Article (child): drop MH04* — not used for BOM / outside / demand. */
+    function childExcluded(child) {
+      return normalize(child).toUpperCase().startsWith("MH04");
+    }
+
+    /**
+     * Core allocation engine v3.
+     * runAllocationEngine(schedule, coois, zrmm, mb52, conversionRules, sizeConversionRules)
+     */
+    function runAllocationEngine(schedule, coois, zrmm, mb52, conversionRules, sizeConversionRules) {
+      const sc = schedule.cols || resolveSideCols("schedule", schedule.headers);
+      const cc = coois.cols || resolveSideCols("coois", coois.headers);
+      const zc = zrmm.cols || resolveSideCols("zrmm", zrmm.headers);
+      const mc = mb52.cols || resolveSideCols("mb52", mb52.headers);
+
+      const preErrors = precheckUnitRH(
+        { ...coois, cols: cc },
+        { ...zrmm, cols: zc }
+      );
       if (preErrors.length) {
         return {
           ok: false,
@@ -3020,57 +3679,71 @@
         };
       }
 
-      const schedule = new Map();
-      for (const row of excel1.rows) {
-        const so = normalize(row[COL.excel1.so]);
+      const scheduleMap = new Map();
+      for (const row of schedule.rows) {
+        const so = normalize(row[sc.so]);
         if (!so) continue;
-        const cuttingRaw = row[COL.excel1.cutting] ?? "";
+        const cuttingRaw = row[sc.cutting] ?? "";
         const cuttingDisplay = formatCellDate(cuttingRaw);
         const sortKey = cuttingSortKey(cuttingRaw);
-        const prev = schedule.get(so);
+        const prev = scheduleMap.get(so);
         if (!prev || sortKey < prev.sortKey) {
-          schedule.set(so, { cutting: cuttingDisplay, sortKey, cuttingRaw });
+          scheduleMap.set(so, { cutting: cuttingDisplay, sortKey, cuttingRaw });
         }
       }
 
-      const mothersInBom = new Set();
-      const childrenByMother = new Map();
-      const stockMax = new Map();
-      const motherUnitH = new Map();
-      const childUnitM = new Map();
-      const childUnitConflicts = [];
+      // ZRMM filtered rows + outside + BOM
+      const outsidePair = new Map(); // mother\0child\0seg -> {j,p}
+      const childrenByMotherSeg = new Map(); // mother\0seg -> Map(child -> meta)
       const motherSuffix = new Map();
+      const motherUnitH = new Map();
       const suffixConflicts = [];
+      const childUnitConflicts = [];
 
-      excel3.rows.forEach((row, idx) => {
-        const mother = normalize(row[COL.excel3.mother]);
-        const child = normalize(row[COL.excel3.child]);
-        if (!mother) return;
-        mothersInBom.add(mother);
-        const unitH = normalize(row[COL.excel3.unitH]).toUpperCase();
-        if (!motherUnitH.has(mother) && unitH) motherUnitH.set(mother, unitH);
-        const suffix = extractSizeSuffix(row[COL.excel3.descF]);
+      zrmm.rows.forEach((row, idx) => {
+        const mother = normalize(row[zc.mother]);
+        const child = normalize(row[zc.child]);
+        if (!mother || !child) return;
+        if (childExcluded(child)) return;
+        const j = parseNumber(row[zc.giJ]);
+        const l = parseNumber(row[zc.vendorL]);
+        const p = parseNumber(row[zc.grP]);
+        const storage = zc.storage >= 0 ? row[zc.storage] : "";
+        if (j === 0 || l === 0) return;
+        if (storageExcluded(storage)) return;
+        const batch = zc.batch >= 0 ? normalizeSegment(row[zc.batch]) : "";
+        const oun = zc.oun >= 0 ? normalize(row[zc.oun]).toUpperCase() : "";
+        const bun = zc.bun >= 0 ? normalize(row[zc.bun]).toUpperCase() : "";
+        const desc = zc.desc >= 0 ? row[zc.desc] : "";
+
+        if (!motherUnitH.has(mother) && oun) motherUnitH.set(mother, oun);
+        const suffix = extractSizeSuffix(desc);
         if (suffix) {
           if (motherSuffix.has(mother) && motherSuffix.get(mother) !== suffix) {
             suffixConflicts.push(
-              `Excel3 row ${idx + 2}: mother ${mother} has conflicting 3.F size suffix (${motherSuffix.get(mother)} vs ${suffix})`
+              `ZRMM row ${idx + 2}: mother ${mother} conflicting size suffix (${motherSuffix.get(mother)} vs ${suffix})`
             );
           } else if (!motherSuffix.has(mother)) {
             motherSuffix.set(mother, suffix);
           }
         }
-        if (!child) return;
-        if (!childrenByMother.has(mother)) childrenByMother.set(mother, new Set());
-        childrenByMother.get(mother).add(child);
-        const pairKey = `${mother}\u0000${child}`;
-        const unitM = normalize(row[COL.excel3.unitM]).toUpperCase();
-        if (!childUnitM.has(pairKey)) childUnitM.set(pairKey, unitM);
-        else if (childUnitM.get(pairKey) !== unitM) {
-          childUnitConflicts.push(`Excel3 row ${idx + 2}: mother ${mother} child ${child} has conflicting 3.M (${childUnitM.get(pairKey)} vs ${unitM})`);
+
+        const pairSeg = `${mother}\u0000${child}\u0000${batch}`;
+        if (!outsidePair.has(pairSeg)) outsidePair.set(pairSeg, { j: 0, p: 0 });
+        const agg = outsidePair.get(pairSeg);
+        agg.j += j;
+        agg.p += p;
+
+        const msKey = `${mother}\u0000${batch}`;
+        if (!childrenByMotherSeg.has(msKey)) childrenByMotherSeg.set(msKey, new Map());
+        const childMap = childrenByMotherSeg.get(msKey);
+        if (!childMap.has(child)) {
+          childMap.set(child, { bun, oun });
+        } else if (childMap.get(child).bun && bun && childMap.get(child).bun !== bun) {
+          childUnitConflicts.push(
+            `ZRMM row ${idx + 2}: mother ${mother} child ${child} conflicting BUn (${childMap.get(child).bun} vs ${bun})`
+          );
         }
-        const k = parseNumber(row[COL.excel3.stock]);
-        const prev = stockMax.has(child) ? stockMax.get(child) : -Infinity;
-        if (k > prev) stockMax.set(child, k);
       });
 
       if (suffixConflicts.length) {
@@ -3080,7 +3753,6 @@
           errorBody: `${t("errorPrecheckIntro")}\n\n${[...new Set(suffixConflicts)].slice(0, 80).join("\n")}`
         };
       }
-
       if (childUnitConflicts.length) {
         return {
           ok: false,
@@ -3089,61 +3761,166 @@
         };
       }
 
-      const demand = new Map();
-      const motherUnitR = new Map();
-      for (const row of excel2.rows) {
-        const so = normalize(row[COL.excel2.so]);
-        const mother = normalize(row[COL.excel2.mother]);
-        if (!so || !mother) continue;
-        if (!mothersInBom.has(mother)) continue;
-        const key = `${so}\u0000${mother}`;
-        demand.set(key, (demand.get(key) || 0) + parseNumber(row[COL.excel2.qty]));
-        const unitR = normalize(row[COL.excel2.unitR]).toUpperCase();
-        if (!motherUnitR.has(mother) && unitR) motherUnitR.set(mother, unitR);
+      const outsideByChild = new Map(); // child\0seg  (seg locked — FLT/MTF never mixed)
+      for (const [key, { j, p }] of outsidePair.entries()) {
+        const [mother, child, seg] = key.split("\u0000");
+        const outside = Math.max(0, j - p);
+        const ck = poolKey(child, seg);
+        outsideByChild.set(ck, (outsideByChild.get(ck) || 0) + outside);
       }
 
+      // MB52 stock SUM by Material + Stock Segment only (never mix FLT with MTF)
+      const stockMb52 = new Map();
+      for (const row of mb52.rows) {
+        const material = normalize(row[mc.material]);
+        if (!material) continue;
+        const storage = mc.storage >= 0 ? row[mc.storage] : "";
+        if (storageExcluded(storage)) continue;
+        const seg = mc.segment >= 0 ? normalizeSegment(row[mc.segment]) : "";
+        const stock = parseNumber(row[mc.stock]);
+        const key = poolKey(material, seg);
+        stockMb52.set(key, (stockMb52.get(key) || 0) + stock);
+      }
+
+      // Valid child codes from ZRMM Article (after MH04 / J-L / 39* filters)
+      const validChildren = new Set();
+      for (const childMap of childrenByMotherSeg.values()) {
+        for (const child of childMap.keys()) validChildren.add(child);
+      }
+
+      // Mothers present in ZRMM (any seg)
+      const mothersInBom = new Set();
+      for (const key of childrenByMotherSeg.keys()) {
+        mothersInBom.add(key.split("\u0000")[0]);
+      }
+
+      function childrenForMotherSeg(mother, seg) {
+        const exact = childrenByMotherSeg.get(`${mother}\u0000${seg}`);
+        if (exact && exact.size) return exact;
+        // blank seg: do not mix FLT/MTF
+        if (!seg) return new Map();
+        return new Map();
+      }
+
+      // Build demand rows keyed by so|seg|mother|child
+      const demandRows = new Map();
       const missingRules = [];
-      const expanded = [];
-      for (const [key, qty] of demand.entries()) {
-        const [so, mother] = key.split("\u0000");
-        const sched = schedule.get(so);
-        const cutting = sched ? sched.cutting : "";
-        const sortCutting = sched ? sched.sortKey : "\uffff";
-        const motherUnit = motherUnitR.get(mother) || "";
-        const sizeSuffix = motherSuffix.get(mother) || "";
-        const children = [...(childrenByMother.get(mother) || [])].sort();
-        for (const child of children) {
-          const pairKey = `${mother}\u0000${child}`;
-          const childUnit = childUnitM.get(pairKey) || "";
-          const conv = conversionRatio(
-            motherUnit,
-            childUnit,
-            conversionRules,
-            sizeConversionRules,
-            sizeSuffix
-          );
-          if (!conv.ok) {
-            if (conv.reason === "missing-suffix") {
-              missingRules.push(`Mother ${mother} (SHT): missing size suffix in Excel3.F`);
-            } else if (conv.reason === "missing-size-rule") {
-              missingRules.push(
-                `Mother ${mother} (SHT / ${sizeSuffix || "?"}) → Child ${child} (${childUnit || "?"})`
-              );
-            } else {
-              missingRules.push(`Mother ${mother} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`);
-            }
-            continue;
-          }
-          expanded.push({
-            cutting,
-            sortCutting,
+
+      function ensureDemand(so, seg, mother, child, meta) {
+        const key = rowKey(so, seg, mother, child);
+        if (!demandRows.has(key)) {
+          const sched = scheduleMap.get(so);
+          demandRows.set(key, {
+            cutting: sched ? sched.cutting : "",
+            sortCutting: sched ? sched.sortKey : "\uffff",
             so,
+            segment: seg,
             mother,
-            motherUnit,
             child,
-            childUnit,
-            need: qty * conv.ratio
+            motherUnit: meta.motherUnit || "",
+            childUnit: meta.childUnit || "",
+            demandFromMother: 0,
+            demandDirect: 0
           });
+        }
+        return demandRows.get(key);
+      }
+
+      // Process COOIS lines for SOs in schedule
+      const cooisBySo = new Map();
+      for (const row of coois.rows) {
+        const so = normalize(row[cc.so]);
+        if (!so || !scheduleMap.has(so)) continue;
+        if (!cooisBySo.has(so)) cooisBySo.set(so, []);
+        cooisBySo.get(so).push(row);
+      }
+
+      const sortedSos = [...scheduleMap.entries()]
+        .sort((a, b) => (a[1].sortKey < b[1].sortKey ? -1 : a[1].sortKey > b[1].sortKey ? 1 : a[0].localeCompare(b[0])))
+        .map(([so]) => so);
+
+      for (const so of sortedSos) {
+        const lines = cooisBySo.get(so) || [];
+        const expansionChildren = new Set(); // seg\0child under any mother on this SO
+        const expandedMothers = new Set(); // seg\0mother — skip mother self as direct stock
+
+        for (const row of lines) {
+          const material = normalize(row[cc.material]);
+          if (!material) continue;
+          const qty = parseNumber(row[cc.qty]);
+          const seg = cc.segment >= 0 ? normalizeSegment(row[cc.segment]) : "";
+          const unit = cc.unit >= 0 ? normalize(row[cc.unit]).toUpperCase() : "";
+
+          // Mother expansion when material is a mother for this batch/seg
+          if (mothersInBom.has(material) && seg) {
+            const childMap = childrenForMotherSeg(material, seg);
+            if (childMap.size) {
+              expandedMothers.add(`${seg}\u0000${material}`);
+              const sizeSuffix = motherSuffix.get(material) || "";
+              const motherUnit = unit || motherUnitH.get(material) || "";
+              for (const [child, meta] of [...childMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+                const childUnit = meta.bun || "";
+                const conv = conversionRatio(
+                  motherUnit,
+                  childUnit,
+                  conversionRules,
+                  sizeConversionRules,
+                  sizeSuffix
+                );
+                if (!conv.ok) {
+                  if (conv.reason === "missing-suffix") {
+                    missingRules.push(`Mother ${material} (SHT): missing size suffix in ZRMM description`);
+                  } else if (conv.reason === "missing-size-rule") {
+                    missingRules.push(
+                      `Mother ${material} (SHT / ${sizeSuffix || "?"}) → Child ${child} (${childUnit || "?"})`
+                    );
+                  } else {
+                    missingRules.push(
+                      `Mother ${material} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`
+                    );
+                  }
+                  continue;
+                }
+                const item = ensureDemand(so, seg, material, child, {
+                  motherUnit,
+                  childUnit
+                });
+                item.demandFromMother += qty * conv.ratio;
+                expansionChildren.add(`${seg}\u0000${child}`);
+              }
+            }
+          }
+        }
+
+        // Direct demand: only materials that exist as ZRMM0028 Article (child).
+        // HC/HU/etc. not in 0028.F are skipped; mothers already expanded above are skipped.
+        for (const row of lines) {
+          const material = normalize(row[cc.material]);
+          if (!material) continue;
+          const qty = parseNumber(row[cc.qty]);
+          const seg = cc.segment >= 0 ? normalizeSegment(row[cc.segment]) : "";
+          const unit = cc.unit >= 0 ? normalize(row[cc.unit]).toUpperCase() : "";
+          const motherExpKey = `${seg}\u0000${material}`;
+          if (expandedMothers.has(motherExpKey)) continue;
+          if (!validChildren.has(material)) continue;
+          const expKey = motherExpKey;
+          if (expansionChildren.has(expKey)) {
+            // Merge direct onto first expansion row for this child on this SO+seg
+            const candidates = [...demandRows.values()].filter(
+              d => d.so === so && d.segment === seg && d.child === material && d.mother
+            );
+            candidates.sort((a, b) => a.mother.localeCompare(b.mother));
+            if (candidates.length) {
+              candidates[0].demandDirect += qty;
+              if (!candidates[0].childUnit && unit) candidates[0].childUnit = unit;
+            }
+          } else {
+            const item = ensureDemand(so, seg, "", material, {
+              motherUnit: "",
+              childUnit: unit
+            });
+            item.demandDirect += qty;
+          }
         }
       }
 
@@ -3156,35 +3933,60 @@
         };
       }
 
+      const expanded = [...demandRows.values()];
+      // Keep demand=0 rows in the full result so Step 3 hide checkboxes can show/hide them.
+      // Default UI: both hide checkboxes checked → same net effect as previously dropping zeros here.
+
+      // cutting → SO → rows with mother (C) first → mother → child → segment
       expanded.sort((a, b) => {
         if (a.sortCutting !== b.sortCutting) return a.sortCutting < b.sortCutting ? -1 : 1;
         if (a.so !== b.so) return a.so < b.so ? -1 : 1;
+        const aHasMother = a.mother ? 0 : 1;
+        const bHasMother = b.mother ? 0 : 1;
+        if (aHasMother !== bHasMother) return aHasMother - bHasMother;
         if (a.mother !== b.mother) return a.mother < b.mother ? -1 : 1;
         if (a.child !== b.child) return a.child < b.child ? -1 : 1;
+        if (a.segment !== b.segment) return a.segment < b.segment ? -1 : 1;
         return 0;
       });
 
+      // Pool remaining = max(0, MB52 − outside); never allocate or show negative available
       const remaining = new Map();
-      for (const [child, maxK] of stockMax.entries()) {
-        remaining.set(child, maxK === -Infinity ? 0 : maxK);
+      const allPoolKeys = new Set([...stockMb52.keys(), ...outsideByChild.keys()]);
+      for (const key of allPoolKeys) {
+        const mb = stockMb52.get(key) || 0;
+        const out = outsideByChild.get(key) || 0;
+        remaining.set(key, Math.max(0, mb - out));
       }
 
       const outRows = [];
       let shortage = 0;
       for (const item of expanded) {
-        const rem = remaining.has(item.child) ? remaining.get(item.child) : 0;
-        const provide = Math.min(item.need, rem);
-        const nextRem = rem - provide;
-        remaining.set(item.child, nextRem);
-        if (provide < item.need - 1e-9) shortage += 1;
+        const demandTotal = item.demandFromMother + item.demandDirect;
+        const key = poolKey(item.child, item.segment);
+        const mb = stockMb52.get(key) || 0;
+        const out = outsideByChild.get(key) || 0;
+        const initialPool = Math.max(0, mb - out);
+        const available = remaining.has(key) ? remaining.get(key) : initialPool;
+        const provide = Math.min(demandTotal, Math.max(0, available));
+        const nextRem = available - provide;
+        remaining.set(key, nextRem);
+        if (provide < demandTotal - 1e-9) shortage += 1;
         outRows.push([
           item.cutting,
           item.so,
           item.mother,
+          item.segment,
           item.motherUnit,
           item.child,
+          item.segment,
           item.childUnit,
-          formatQty(item.need),
+          formatQty(item.demandFromMother),
+          formatQty(item.demandDirect),
+          formatQty(demandTotal),
+          formatQty(mb),
+          formatQty(out),
+          formatQty(initialPool),
           formatQty(provide),
           formatQty(nextRem),
           ""
@@ -3199,14 +4001,15 @@
         headers,
         rows: outRows,
         stats: {
-          demandKeys: demand.size,
-          mothers: childrenByMother.size,
+          demandKeys: demandRows.size,
+          mothers: mothersInBom.size,
           shortage
         }
       };
     }
 
     function parseFilterList(text) {
+
       return new Set(
         normalize(text)
           .split(/[,;\s]+/)
@@ -3222,9 +4025,12 @@
     }
 
     // Step 3 view filters only (preview / CSV / Excel export). Does not change runAllocationEngine().
-    // hideRowZero: drop rows where OUT.demand parses to 0.
-    // hideSoAllZero: per SO, sum |OUT.demand| on the current row set; drop the whole SO when that sum is 0
-    //   (not Excel2 Open Quantity; if any child row has demand > 0, zero-demand sibling rows remain unless hideRowZero).
+    // hideRowZero: drop rows where |OUT.demand| ≈ 0.
+    // hideSoAllZero: per SO, sum |OUT.demand|; drop the whole SO when that sum ≈ 0.
+    function demandQtyOf(row) {
+      return Math.abs(parseNumber(row[OUT.demand]));
+    }
+
     function getFilteredRows() {
       let rows = state.allResultRows.slice();
       const soFilter = parseFilterList(elements.filterSo.value);
@@ -3243,7 +4049,12 @@
         const tokens = [...motherFilter];
         rows = rows.filter(row => {
           const mother = normalize(row[OUT.mother]);
-          return tokens.some(token => mother === token || mother.toLowerCase().startsWith(token.toLowerCase()));
+          const child = normalize(row[OUT.child]);
+          return tokens.some(token => {
+            const tl = token.toLowerCase();
+            return mother === token || mother.toLowerCase().startsWith(tl)
+              || child === token || child.toLowerCase().startsWith(tl);
+          });
         });
       }
       if (from) {
@@ -3252,16 +4063,16 @@
       if (to) {
         rows = rows.filter(row => cuttingDateOnly(row[OUT.cutting]) <= to);
       }
-      if (elements.hideRowZero.checked) {
-        rows = rows.filter(row => parseNumber(row[OUT.demand]) !== 0);
+      if (elements.hideRowZero?.checked) {
+        rows = rows.filter(row => demandQtyOf(row) > 1e-9);
       }
-      if (elements.hideSoAllZero.checked) {
+      if (elements.hideSoAllZero?.checked) {
         const demandBySo = new Map();
         for (const row of rows) {
           const so = normalize(row[OUT.so]);
-          demandBySo.set(so, (demandBySo.get(so) || 0) + Math.abs(parseNumber(row[OUT.demand])));
+          demandBySo.set(so, (demandBySo.get(so) || 0) + demandQtyOf(row));
         }
-        rows = rows.filter(row => (demandBySo.get(normalize(row[OUT.so])) || 0) > 0);
+        rows = rows.filter(row => (demandBySo.get(normalize(row[OUT.so])) || 0) > 1e-9);
       }
       return rows;
     }
@@ -3297,8 +4108,18 @@
     async function buildResult(options = {}) {
       const scroll = options.scroll !== false;
       if (state.allocating) return;
-      if (!state.left.headers.length || !state.right.headers.length || !state.third.headers.length) {
+      if (!SIDES.every(side => state[side].headers.length)) {
         setMessage(elements.resultMessage, t("needBoth"), "error");
+        applyStepUI(1, scroll);
+        return;
+      }
+      const invalidSides = SIDES.filter(side => !state.importValidation[side]?.ok);
+      if (invalidSides.length) {
+        const details = invalidSides.map(side =>
+          `${t(IMPORT_GUARDS[side].labelKey)}\n- ${state.importValidation[side].errors.slice(0, 3).join("\n- ")}`
+        ).join("\n\n");
+        setMessage(elements.resultMessage, t("importValidateBlocked"), "error");
+        showErrorModal(t("importValidateRunTitle"), details);
         applyStepUI(1, scroll);
         return;
       }
@@ -3311,9 +4132,10 @@
         updateProgress(t("allocating"), 60);
         await waitFrame();
         const result = runAllocationEngine(
-          state.left,
-          state.right,
-          state.third,
+          state.schedule,
+          state.coois,
+          state.zrmm,
+          state.mb52,
           state.conversionRules,
           state.sizeConversionRules
         );
@@ -3351,6 +4173,34 @@
       }
     }
 
+    function refreshDualIdentityMaterials() {
+      const mothers = new Set();
+      const children = new Set();
+      const z = state.zrmm || { rows: [], cols: {} };
+      const motherIdx = z.cols?.mother ?? -1;
+      const childIdx = z.cols?.child ?? -1;
+      if (motherIdx < 0 || childIdx < 0) {
+        state.dualIdentityMaterials = new Set();
+        return;
+      }
+      for (const row of z.rows) {
+        const mother = normalize(row[motherIdx]);
+        const child = normalize(row[childIdx]);
+        if (mother) mothers.add(mother);
+        if (child && !childExcluded(child)) children.add(child);
+      }
+      const dual = new Set();
+      for (const code of mothers) {
+        if (children.has(code)) dual.add(code);
+      }
+      state.dualIdentityMaterials = dual;
+    }
+
+    function isDualIdentityMaterial(code) {
+      const key = normalize(code);
+      return Boolean(key && state.dualIdentityMaterials && state.dualIdentityMaterials.has(key));
+    }
+
     function renderResult(headers, rows) {
       elements.resultHead.innerHTML = headers.map((h, index) => {
         const tipKey = OUTPUT_TIP_KEYS[index];
@@ -3359,6 +4209,7 @@
         return `<th class="has-tip" tabindex="0" data-tip="${tip}">${escapeHtml(h)}</th>`;
       }).join("");
       elements.resultBody.innerHTML = "";
+      refreshDualIdentityMaterials();
       const preview = rows.slice(0, PREVIEW_ROW_LIMIT);
       let prevSo = null;
       let prevMother = null;
@@ -3376,14 +4227,26 @@
         if (prevSo !== null && (so !== prevSo || mother !== prevMother)) {
           tr.classList.add("group-break");
         }
-        for (const cell of row) {
+        row.forEach((cell, colIndex) => {
           const td = document.createElement("td");
           td.textContent = cell;
+          if (
+            (colIndex === OUT.mother || colIndex === OUT.child) &&
+            isDualIdentityMaterial(cell)
+          ) {
+            td.classList.add("mat-dual");
+            td.title = t("dualMatLegend");
+          }
           tr.appendChild(td);
-        }
+        });
         elements.resultBody.appendChild(tr);
         prevSo = so;
         prevMother = mother;
+      }
+      if (elements.dualMatLegend) {
+        const show = state.dualIdentityMaterials.size > 0 && rows.length > 0;
+        elements.dualMatLegend.hidden = !show;
+        if (show) elements.dualMatLegend.textContent = t("dualMatLegend");
       }
     }
 
@@ -3534,10 +4397,15 @@
         const cells = row.map((value, colIndex) => {
           const ref = `${colLetter(colIndex)}${rowIndex}`;
           const text = String(value ?? "");
+          const dual =
+            (colIndex === OUT.mother || colIndex === OUT.child) &&
+            isDualIdentityMaterial(text);
+          // styles 1–4 base zebra; 5–8 same fills + blue bold font for dual-identity materials
+          const cellStyle = dual ? style + 4 : style;
           if (text !== "" && Number.isFinite(Number(text)) && !/^0\d+/.test(text) && !/[eE]/.test(text) && /^-?\d+(\.\d+)?$/.test(text)) {
-            return `<c r="${ref}" s="${style}"><v>${text}</v></c>`;
+            return `<c r="${ref}" s="${cellStyle}"><v>${text}</v></c>`;
           }
-          return `<c r="${ref}" s="${style}" t="inlineStr"><is><t>${xmlEscape(text)}</t></is></c>`;
+          return `<c r="${ref}" s="${cellStyle}" t="inlineStr"><is><t>${xmlEscape(text)}</t></is></c>`;
         }).join("");
         rowXml.push(`<row r="${rowIndex}">${cells}</row>`);
         prevSo = so;
@@ -3551,7 +4419,10 @@
     function buildStylesXml() {
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-        `<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>` +
+        `<fonts count="2">` +
+        `<font><sz val="11"/><name val="Calibri"/></font>` +
+        `<font><b/><sz val="11"/><color rgb="FF1565C0"/><name val="Calibri"/></font>` +
+        `</fonts>` +
         `<fills count="4">` +
         `<fill><patternFill patternType="none"/></fill>` +
         `<fill><patternFill patternType="gray125"/></fill>` +
@@ -3563,12 +4434,16 @@
         `<border><left/><right/><top style="medium"><color rgb="FF64748B"/></top><bottom/><diagonal/></border>` +
         `</borders>` +
         `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
-        `<cellXfs count="5">` +
+        `<cellXfs count="9">` +
         `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
         `<xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/>` +
         `<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>` +
         `<xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>` +
         `<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>` +
+        `<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>` +
+        `<xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>` +
+        `<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>` +
+        `<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>` +
         `</cellXfs>` +
         `</styleSheet>`;
     }
@@ -3632,6 +4507,7 @@
     function downloadXlsx() {
       if (!state.resultRows.length) return;
       try {
+        refreshDualIdentityMaterials();
         const bytes = buildXlsxBytes(state.resultHeaders, state.resultRows);
         const blob = new Blob([bytes], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -3713,10 +4589,7 @@
         return cells.map(cell => cell ?? "");
       }).filter(row => row.some(cell => String(cell).trim()));
       if (!rows.length) return { headers: [], rows: [] };
-      const width = Math.max(...rows.map(row => row.length));
-      const headers = normalizeRow(rows[0], width).map((header, index) => String(header || `Column ${index + 1}`));
-      const dataRows = rows.slice(1).map(row => normalizeRow(row, width).slice(0, headers.length));
-      return { headers, rows: dataRows };
+      return detectHeaderRow(rows);
     }
 
     function normalizeRow(row, width) {
@@ -3775,17 +4648,17 @@
     document.getElementById("loadSample").addEventListener("click", async () => {
       showProgress(t("loading"), t("parsingFile"), 30);
       await waitFrame();
-      elements.leftData.value = sampleLeft;
-      elements.rightData.value = sampleRight;
-      elements.thirdData.value = sampleThird;
-      state.left = parseTextTable(sampleLeft);
-      state.right = parseTextTable(sampleRight);
-      state.third = parseTextTable(sampleThird);
-      markResultDirty();
-      refreshMappingTable();
-      setMessage(elements.leftMessage, t("loaded", { rows: state.left.rows.length, cols: state.left.headers.length }), "ok");
-      setMessage(elements.rightMessage, t("loaded", { rows: state.right.rows.length, cols: state.right.headers.length }), "ok");
-      setMessage(elements.thirdMessage, t("loaded", { rows: state.third.rows.length, cols: state.third.headers.length }), "ok");
+      elements.scheduleData.value = sampleSchedule;
+      elements.cooisData.value = sampleCoois;
+      elements.zrmmData.value = sampleZrmm;
+      elements.mb52Data.value = sampleMb52;
+      setSideData("schedule", parseTextTable(sampleSchedule));
+      setSideData("coois", parseTextTable(sampleCoois));
+      setSideData("zrmm", parseTextTable(sampleZrmm));
+      setSideData("mb52", parseTextTable(sampleMb52));
+      for (const side of SIDES) {
+        setMessage(elements[`${side}Message`], t("loaded", { rows: state[side].rows.length, cols: state[side].headers.length }), "ok");
+      }
       await finishProgress(t("ready"));
     });
 
@@ -3809,12 +4682,10 @@
         applyTheme(elements.themeSelect.value);
       });
     }
-    elements.leftFile.addEventListener("change", () => loadFile("left", elements.leftFile.files[0]));
-    elements.rightFile.addEventListener("change", () => loadFile("right", elements.rightFile.files[0]));
-    elements.thirdFile.addEventListener("change", () => loadFile("third", elements.thirdFile.files[0]));
-    elements.leftData.addEventListener("input", () => refreshFromText("left"));
-    elements.rightData.addEventListener("input", () => refreshFromText("right"));
-    elements.thirdData.addEventListener("input", () => refreshFromText("third"));
+    for (const side of SIDES) {
+      elements[`${side}File`].addEventListener("change", () => loadFile(side, elements[`${side}File`].files[0]));
+      elements[`${side}Data`].addEventListener("input", () => refreshFromText(side));
+    }
     if (elements.backToTop) {
       elements.backToTop.addEventListener("click", scrollToTop);
       window.addEventListener("scroll", updateBackToTopVisibility, { passive: true });
@@ -3877,8 +4748,13 @@
       elements.hideSoAllZero,
       elements.hideRowZero
     ].forEach(el => {
-      el.addEventListener("input", applyViewFilters);
+      if (!el) return;
       el.addEventListener("change", applyViewFilters);
+      el.addEventListener("input", applyViewFilters);
+      el.addEventListener("click", () => {
+        // Ensure checkbox toggles refresh even if change is delayed by label/tip.
+        queueMicrotask(applyViewFilters);
+      });
     });
     // SO suggest + mother chips call applyViewFilters on change
 
@@ -3892,20 +4768,23 @@
     const versionBadge = document.getElementById("appVersionBadge");
     if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
 
-    elements.leftData.value = sampleLeft;
-    elements.rightData.value = sampleRight;
-    elements.thirdData.value = sampleThird;
-    state.left = parseTextTable(sampleLeft);
-    state.right = parseTextTable(sampleRight);
-    state.third = parseTextTable(sampleThird);
+    elements.scheduleData.value = sampleSchedule;
+    elements.cooisData.value = sampleCoois;
+    elements.zrmmData.value = sampleZrmm;
+    elements.mb52Data.value = sampleMb52;
+    setSideData("schedule", parseTextTable(sampleSchedule));
+    setSideData("coois", parseTextTable(sampleCoois));
+    setSideData("zrmm", parseTextTable(sampleZrmm));
+    setSideData("mb52", parseTextTable(sampleMb52));
     applyLanguage();
+    renderConversionTable();
+    renderSizeConversionTable();
     bindStatTipButtons();
-    refreshMappingTable();
     clearResult();
     setStep(1, false);
-    setMessage(elements.leftMessage, t("loaded", { rows: state.left.rows.length, cols: state.left.headers.length }), "ok");
-    setMessage(elements.rightMessage, t("loaded", { rows: state.right.rows.length, cols: state.right.headers.length }), "ok");
-    setMessage(elements.thirdMessage, t("loaded", { rows: state.third.rows.length, cols: state.third.headers.length }), "ok");
+    for (const side of SIDES) {
+      setMessage(elements[`${side}Message`], t("loaded", { rows: state[side].rows.length, cols: state[side].headers.length }), "ok");
+    }
     elements.statusText.textContent = `${t("ready")} · v${APP_VERSION}`;
   </script>
 </body>

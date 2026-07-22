@@ -182,66 +182,102 @@
 
   <main>
     <section>
-      <p data-i18n="manualIntro">This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.</p>
+      <p data-i18n="manualIntro">This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.</p>
+      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.0.0 — four inputs, 17-column export, Segment FLT/MTF lock.</div>
     </section>
 
     <section>
       <h2 data-i18n="step1Title">Step 1 — Import Excel files</h2>
       <ul>
-        <li data-i18n="step1a">Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.</li>
-        <li data-i18n="step1b">Column mapping is fixed by business rules (see table below).</li>
+        <li data-i18n="step1a">Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).</li>
+        <li data-i18n="step1b">Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.</li>
         <li data-i18n="step1c">Use Sample data to try the tool without real files.</li>
+        <li data-i18n="step1d">Import validation must show OK on all four slots before you can run allocation.</li>
       </ul>
     </section>
 
     <section>
       <h2 data-i18n="step2Title">Step 2 — Mapping &amp; run allocation</h2>
       <ul>
-        <li data-i18n="step2a">Review the fixed mapping table and detected headers.</li>
-        <li data-i18n="step2b">Unit whitelist: when mother unit ≠ child unit (non-SHT), add conversion ratios (default M↔YD).</li>
-        <li data-i18n="step2c">SHT size-suffix table: when mother unit is SHT, read size suffix from Excel3.F mother name (e.g. 110x200cm). Add or edit rows as needed.</li>
+        <li data-i18n="step2a">Review the mapping table and detected headers for all four files.</li>
+        <li data-i18n="step2b">Unit whitelist defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.</li>
+        <li data-i18n="step2c">SHT size-suffix defaults (editable): 110x200cm / 220x110cm / 200x110cm. Suffix comes from ZRMM Material Full Description.</li>
         <li data-i18n="step2d">Click Run allocation. Missing rules or unit mismatches will block with an error message.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="rulesTitle">Allocation rules (important)</h2>
+      <ul>
+        <li data-i18n="rules1">Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.</li>
+        <li data-i18n="rules2">ZRMM Article starting with MH04 is dropped (not used in BOM, outside, or demand).</li>
+        <li data-i18n="rules3">Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch; child outside is summed across mothers for that Batch.</li>
+        <li data-i18n="rules4">Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Available = max(0, MB52 − outside).</li>
+        <li data-i18n="rules5">Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.</li>
+        <li data-i18n="rules6">Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.</li>
+        <li data-i18n="rules7">Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.</li>
       </ul>
     </section>
 
     <section>
       <h2 data-i18n="step3Title">Step 3 — Filter, preview &amp; export</h2>
       <ul>
-        <li data-i18n="step3a">Filter by SO, cutting date range, or mother material. Preview updates live.</li>
-        <li data-i18n="step3b">Checkboxes can hide zero-demand SOs or rows.</li>
-        <li data-i18n="step3c">Export CSV or Excel. Export uses the same filters as preview.</li>
-        <li data-i18n="step3d">If inputs change after a run, re-run allocation before exporting.</li>
+        <li data-i18n="step3a">Filter by SO, cutting date range, or mother/child material. Preview updates live.</li>
+        <li data-i18n="step3b">Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.</li>
+        <li data-i18n="step3c">Export CSV or Excel (17 columns). Excel export paints dual-identity material codes in blue (mother/child columns).</li>
+        <li data-i18n="step3d">Blue codes = dual identity (same code is both mother and child in ZRMM0028, excluding MH04 children).</li>
+        <li data-i18n="step3e">If inputs change after a run, re-run allocation before exporting.</li>
       </ul>
     </section>
 
     <section>
       <h2 data-i18n="yTitle">Column Y (allocated flag)</h2>
-      <p data-i18n="yBody">For each sales order + mother material group: Y appears on all rows only when every child has demand &gt; 0 and provided ≥ demand (fully allocated). If any child is short, the whole group shows blank.</p>
+      <p data-i18n="yBody">For each sales order + mother + segment group: Y appears only when every demand&gt;0 row is fully provided. Direct-only rows (blank mother) form their own group per child.</p>
     </section>
 
     <section>
-      <h2 data-i18n="colsTitle">Fixed column mapping</h2>
+      <h2 data-i18n="outTitle">Output columns (17)</h2>
+      <p data-i18n="outIntro">Preview and Excel use the same column order.</p>
+      <ol>
+        <li data-i18n="out1">cutting · so</li>
+        <li data-i18n="out2">mother material · mother batch · mother unit</li>
+        <li data-i18n="out3">child material · child batch · child unit</li>
+        <li data-i18n="out4">demand from mother · demand direct · demand qty</li>
+        <li data-i18n="out5">stock MB52 · stock outside · stock available</li>
+        <li data-i18n="out6">provided qty · remaining stock after this row · allocated (Y)</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 data-i18n="colsTitle">Column mapping (by English header name)</h2>
       <table>
         <thead>
           <tr>
             <th data-i18n="colSource">Source</th>
-            <th data-i18n="colLetter">Column</th>
+            <th data-i18n="colLetter">Header (EN)</th>
             <th data-i18n="colMeaning">Meaning</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td>Excel1</td><td>A</td><td data-i18n="colSo">Sales order (so)</td></tr>
-          <tr><td>Excel1</td><td>B</td><td data-i18n="colCutting">Cutting / production date</td></tr>
-          <tr><td>Excel2</td><td>B</td><td data-i18n="colSd">SD Document (SO)</td></tr>
-          <tr><td>Excel2</td><td>F</td><td data-i18n="colMother">Mother material</td></tr>
-          <tr><td>Excel2</td><td>Q</td><td data-i18n="colQty">Open Quantity (demand)</td></tr>
-          <tr><td>Excel2</td><td>R</td><td data-i18n="colUnitR">Mother unit</td></tr>
-          <tr><td>Excel3</td><td>E</td><td data-i18n="colMother3">Mother material</td></tr>
-          <tr><td>Excel3</td><td>F</td><td data-i18n="colDescF">Mother full name (SHT size suffix)</td></tr>
-          <tr><td>Excel3</td><td>H</td><td data-i18n="colUnitH">Mother unit check (must match 2.R)</td></tr>
-          <tr><td>Excel3</td><td>I</td><td data-i18n="colChild">Child material</td></tr>
-          <tr><td>Excel3</td><td>M</td><td data-i18n="colUnitM">Child unit</td></tr>
-          <tr><td>Excel3</td><td>K</td><td data-i18n="colStock">Unrestricted stock (MAX per child)</td></tr>
+          <tr><td>Schedule</td><td>Order / so</td><td data-i18n="colSo">Sales order (so)</td></tr>
+          <tr><td>Schedule</td><td>cutting</td><td data-i18n="colCutting">Cutting / production date</td></tr>
+          <tr><td>COOIS</td><td>SD Document</td><td data-i18n="colSd">SD Document (SO)</td></tr>
+          <tr><td>COOIS</td><td>Material</td><td data-i18n="colMaterial">Demand material</td></tr>
+          <tr><td>COOIS</td><td>Open Quantity</td><td data-i18n="colQty">Open Quantity (demand)</td></tr>
+          <tr><td>COOIS</td><td>Requirement Segment</td><td data-i18n="colSeg">Requirement Segment (FLT/MTF)</td></tr>
+          <tr><td>COOIS</td><td>Base Unit of Measure</td><td data-i18n="colUnitR">Demand unit</td></tr>
+          <tr><td>ZRMM0028</td><td>Material</td><td data-i18n="colMother3">Mother material</td></tr>
+          <tr><td>ZRMM0028</td><td>Article(Com.)</td><td data-i18n="colChild">Child material (drop MH04*)</td></tr>
+          <tr><td>ZRMM0028</td><td>GI SC(541/542)</td><td data-i18n="colGiJ">GI (outside issue J)</td></tr>
+          <tr><td>ZRMM0028</td><td>Stock of Vendor</td><td data-i18n="colVendorL">Stock of Vendor (L)</td></tr>
+          <tr><td>ZRMM0028</td><td>GR SC(543/544)</td><td data-i18n="colGrP">GR (outside receipt P)</td></tr>
+          <tr><td>ZRMM0028</td><td>Storage Location</td><td data-i18n="colStorage">Storage (drop 39*)</td></tr>
+          <tr><td>ZRMM0028</td><td>Batch</td><td data-i18n="colBatch">Batch (= segment FLT/MTF)</td></tr>
+          <tr><td>ZRMM0028</td><td>OUn / BUn</td><td data-i18n="colOunBun">Mother / child unit</td></tr>
+          <tr><td>ZRMM0028</td><td>Material Full Description</td><td data-i18n="colDescF">Description (SHT size suffix)</td></tr>
+          <tr><td>MB52</td><td>Material</td><td data-i18n="colMb52Mat">Stock material</td></tr>
+          <tr><td>MB52</td><td>Stock Segment</td><td data-i18n="colStockSeg">Stock Segment (FLT/MTF; never mix)</td></tr>
+          <tr><td>MB52</td><td>Unrestricted</td><td data-i18n="colStock">Unrestricted (SUM by material+segment)</td></tr>
         </tbody>
       </table>
     </section>
@@ -249,10 +285,12 @@
     <section>
       <h2 data-i18n="troubleTitle">Troubleshooting</h2>
       <ul>
-        <li data-i18n="trouble1">Unit pre-check failed: same mother must have matching Excel2.R and Excel3.H.</li>
-        <li data-i18n="trouble2">Missing conversion: add unit or SHT size-suffix rule in Step 2, then re-run.</li>
-        <li data-i18n="trouble3">SHT mother missing suffix: ensure Excel3.F mother name ends with size like 110x200cm.</li>
+        <li data-i18n="trouble1">Unit pre-check failed: same mother must have matching COOIS Base Unit and ZRMM OUn.</li>
+        <li data-i18n="trouble2">Missing conversion: add unit or SHT size-suffix rule in Step 2 (or Reset defaults), then re-run.</li>
+        <li data-i18n="trouble3">SHT mother missing suffix: ensure ZRMM description ends with size like 110x200cm.</li>
         <li data-i18n="trouble4">Results stale: inputs changed — run allocation again before export.</li>
+        <li data-i18n="trouble5">HC/HU rows missing: only materials present as ZRMM Article (after MH04 filter) are calculated — by design.</li>
+        <li data-i18n="trouble6">Available stock is 0 while MB52 &gt; 0: outside stock may exceed plant stock for that segment.</li>
       </ul>
       <div class="note" data-i18n="troubleNote">Data stays on your computer. Do not upload real business files to external services.</div>
     </section>
@@ -269,44 +307,72 @@
         backToApp: "Back to app",
         themeMill: "Mill Ops",
         themeSoft: "Soft Enterprise",
-        manualIntro: "This manual explains how to use the RAW MAT Allocation Engine (offline browser tool). Choose your language above.",
+        manualIntro: "This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.",
+        manualVersion: "App version: allocation-web.html v3.0.0 — four inputs, 17-column export, Segment FLT/MTF lock.",
         step1Title: "Step 1 — Import Excel files",
-        step1a: "Upload or paste three files: Excel1 schedule, Excel2 demand (COIS), Excel3 BOM/stock.",
-        step1b: "Column mapping is fixed by business rules (see table below).",
+        step1a: "Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).",
+        step1b: "Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.",
         step1c: "Use Sample data to try the tool without real files.",
+        step1d: "Import validation must show OK on all four slots before you can run allocation.",
         step2Title: "Step 2 — Mapping & run allocation",
-        step2a: "Review the fixed mapping table and detected headers.",
-        step2b: "Unit whitelist: when mother unit ≠ child unit (non-SHT), add conversion ratios (default M↔YD).",
-        step2c: "SHT size-suffix table: when mother unit is SHT, read size suffix from Excel3.F mother name (e.g. 110x200cm). Add or edit rows as needed.",
+        step2a: "Review the mapping table and detected headers for all four files.",
+        step2b: "Unit whitelist defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.",
+        step2c: "SHT size-suffix defaults (editable): 110x200cm / 220x110cm / 200x110cm. Suffix comes from ZRMM Material Full Description.",
         step2d: "Click Run allocation. Missing rules or unit mismatches will block with an error message.",
+        rulesTitle: "Allocation rules (important)",
+        rules1: "Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.",
+        rules2: "ZRMM Article starting with MH04 is dropped (not used in BOM, outside, or demand).",
+        rules3: "Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch; child outside is summed across mothers for that Batch.",
+        rules4: "Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Available = max(0, MB52 − outside).",
+        rules5: "Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.",
+        rules6: "Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.",
+        rules7: "Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.",
         step3Title: "Step 3 — Filter, preview & export",
-        step3a: "Filter by SO, cutting date range, or mother material. Preview updates live.",
-        step3b: "Checkboxes can hide zero-demand SOs or rows.",
-        step3c: "Export CSV or Excel. Export uses the same filters as preview.",
-        step3d: "If inputs change after a run, re-run allocation before exporting.",
+        step3a: "Filter by SO, cutting date range, or mother/child material. Preview updates live.",
+        step3b: "Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.",
+        step3c: "Export CSV or Excel (17 columns). Excel export paints dual-identity material codes in blue (mother/child columns).",
+        step3d: "Blue codes = dual identity (same code is both mother and child in ZRMM0028, excluding MH04 children).",
+        step3e: "If inputs change after a run, re-run allocation before exporting.",
         yTitle: "Column Y (allocated flag)",
-        yBody: "For each sales order + mother material group: Y appears on all rows only when every child has demand > 0 and provided ≥ demand (fully allocated). If any child is short, the whole group shows blank.",
-        colsTitle: "Fixed column mapping",
+        yBody: "For each sales order + mother + segment group: Y appears only when every demand>0 row is fully provided. Direct-only rows (blank mother) form their own group per child.",
+        outTitle: "Output columns (17)",
+        outIntro: "Preview and Excel use the same column order.",
+        out1: "cutting · so",
+        out2: "mother material · mother batch · mother unit",
+        out3: "child material · child batch · child unit",
+        out4: "demand from mother · demand direct · demand qty",
+        out5: "stock MB52 · stock outside · stock available",
+        out6: "provided qty · remaining stock after this row · allocated (Y)",
+        colsTitle: "Column mapping (by English header name)",
         colSource: "Source",
-        colLetter: "Column",
+        colLetter: "Header (EN)",
         colMeaning: "Meaning",
         colSo: "Sales order (so)",
         colCutting: "Cutting / production date",
         colSd: "SD Document (SO)",
-        colMother: "Mother material",
+        colMaterial: "Demand material",
         colQty: "Open Quantity (demand)",
-        colUnitR: "Mother unit",
+        colSeg: "Requirement Segment (FLT/MTF)",
+        colUnitR: "Demand unit",
         colMother3: "Mother material",
-        colDescF: "Mother full name (SHT size suffix)",
-        colUnitH: "Mother unit check (must match 2.R)",
-        colChild: "Child material",
-        colUnitM: "Child unit",
-        colStock: "Unrestricted stock (MAX per child)",
+        colDescF: "Description (SHT size suffix)",
+        colChild: "Child material (drop MH04*)",
+        colGiJ: "GI (outside issue J)",
+        colVendorL: "Stock of Vendor (L)",
+        colGrP: "GR (outside receipt P)",
+        colStorage: "Storage (drop 39*)",
+        colBatch: "Batch (= segment FLT/MTF)",
+        colOunBun: "Mother / child unit",
+        colMb52Mat: "Stock material",
+        colStockSeg: "Stock Segment (FLT/MTF; never mix)",
+        colStock: "Unrestricted (SUM by material+segment)",
         troubleTitle: "Troubleshooting",
-        trouble1: "Unit pre-check failed: same mother must have matching Excel2.R and Excel3.H.",
-        trouble2: "Missing conversion: add unit or SHT size-suffix rule in Step 2, then re-run.",
-        trouble3: "SHT mother missing suffix: ensure Excel3.F mother name ends with size like 110x200cm.",
+        trouble1: "Unit pre-check failed: same mother must have matching COOIS Base Unit and ZRMM OUn.",
+        trouble2: "Missing conversion: add unit or SHT size-suffix rule in Step 2 (or Reset defaults), then re-run.",
+        trouble3: "SHT mother missing suffix: ensure ZRMM description ends with size like 110x200cm.",
         trouble4: "Results stale: inputs changed — run allocation again before export.",
+        trouble5: "HC/HU rows missing: only materials present as ZRMM Article (after MH04 filter) are calculated — by design.",
+        trouble6: "Available stock is 0 while MB52 > 0: outside stock may exceed plant stock for that segment.",
         troubleNote: "Data stays on your computer. Do not upload real business files to external services."
       },
       zh: {
@@ -315,44 +381,72 @@
         backToApp: "返回程式",
         themeMill: "Mill Ops 廠務",
         themeSoft: "Soft 企業風",
-        manualIntro: "本手冊說明如何使用 RAW MAT 庫存配發引擎（離線瀏覽器工具）。請在上方選擇語系。",
+        manualIntro: "本手冊說明 RAW MAT 庫存配發引擎 v3（離線瀏覽器工具）。請在上方選擇語系。",
+        manualVersion: "程式版本：allocation-web.html v3.0.0 — 四輸入、17 欄匯出、Segment FLT/MTF 鎖定。",
         step1Title: "第 1 步 — 匯入 Excel",
-        step1a: "上傳或貼上三個檔案：Excel1 排程、Excel2 需求（COIS）、Excel3 BOM／庫存。",
-        step1b: "欄位對應依業務規則固定（見下表）。",
+        step1a: "上傳或貼上四個檔案：Schedule 排程、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。",
+        step1b: "欄位以英文表頭名稱解析（可用 alias）。雙表頭（中文＋英文）時以英文列為 header。",
         step1c: "可使用「範例資料」在不使用真實檔的情況下試用。",
+        step1d: "四個上傳槽的匯入驗證皆須顯示 OK，才能執行配發。",
         step2Title: "第 2 步 — 對應與執行配發",
-        step2a: "檢視固定對應表與偵測到的表頭。",
-        step2b: "單位白名單：母單位 ≠ 子單位（非 SHT）時，補上換算倍率（預設 M↔YD）。",
-        step2c: "SHT 末碼換算：母單位為 SHT 時，從 Excel3.F 母料全名讀取末碼（如 110x200cm）。請自行新增或修改規則。",
+        step2a: "檢視四個檔案的對應表與偵測到的表頭。",
+        step2b: "單位白名單預設（可改）：M→YD=1.0936、YD→M=0.9144；同單位永遠 1:1。表空白時可按「重設預設」。",
+        step2c: "SHT 末碼預設（可改）：110x200cm／220x110cm／200x110cm；末碼來自 ZRMM Material Full Description。",
         step2d: "按「執行配發」。缺規則或單位不一致會以錯誤訊息阻擋。",
+        rulesTitle: "配發規則（重要）",
+        rules1: "需求路徑：僅計算存在於 ZRMM0028 Article（子料）的料號；COOIS 的 HC／HU 等不在 0028.F 者不計算。",
+        rules2: "ZRMM Article 以 MH04 開頭者丟棄（不進 BOM、廠外、需求）。",
+        rules3: "廠外庫存 = max(0, Σ GI J − Σ GR P)，依母–子–Batch；子料廠外為同 Batch 下各母加總。",
+        rules4: "廠內庫存 = SUM(MB52 Unrestricted)，依 Material + Stock Segment（排除儲位 39*）。可用 = max(0, MB52 − 廠外）。",
+        rules5: "Segment 鎖定：COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch。FLT 與 MTF 永不混倉。",
+        rules6: "母料 COOIS 列展開至所有有效子料（× 換算）；子料若在 0028.F，其 Open Quantity 加為 demand direct。",
+        rules7: "依最早 cutting、再 SO 貪婪配發；同 SO 內有母料列排在母料空白的直接需求列之前。",
         step3Title: "第 3 步 — 篩選、預覽與匯出",
-        step3a: "可依 SO、cutting 日期、母材料篩選；預覽即時更新。",
-        step3b: "可勾選隱藏零需求 SO 或零需求列。",
-        step3c: "匯出 CSV 或 Excel；匯出內容與預覽篩選一致。",
-        step3d: "若執行後又修改輸入，請重新配發再匯出。",
+        step3a: "可依 SO、cutting 日期、母／子材料篩選；預覽即時更新。",
+        step3b: "隱藏零需求 SO／列預設勾選。取消勾選才會在預覽與匯出顯示 demand=0 列。",
+        step3c: "匯出 CSV 或 Excel（17 欄）。Excel 會將雙重身分料號以藍色標示（母／子欄）。",
+        step3d: "藍色料號 = 雙重身分（同一碼在 ZRMM0028 同時為母與子；已排除 MH04 子料）。",
+        step3e: "若執行後又修改輸入，請重新配發再匯出。",
         yTitle: "Y 欄（已配發標記）",
-        yBody: "同一訂單 + 同一母材料：僅當所有子料 demand > 0 且 provided ≥ demand（全數配滿）時，群組內每一列才顯示 Y；任一字料短缺則整組空白。",
-        colsTitle: "固定欄位對應",
+        yBody: "同一訂單 + 母料 + Segment：僅當所有 demand>0 列皆 fully provided 時標 Y；僅直接需求（母料空白）時依子料各自成組。",
+        outTitle: "輸出欄位（17）",
+        outIntro: "預覽與 Excel 欄序相同。",
+        out1: "cutting · so",
+        out2: "母料 · 母 Batch · 母單位",
+        out3: "子料 · 子 Batch · 子單位",
+        out4: "來自母料需求 · 直接需求 · 需求合計",
+        out5: "MB52 庫存 · 廠外庫存 · 可用庫存",
+        out6: "配發量 · 本列後剩餘庫存 · 已配發（Y）",
+        colsTitle: "欄位對應（依英文表頭名稱）",
         colSource: "來源",
-        colLetter: "欄位",
+        colLetter: "表頭（EN）",
         colMeaning: "語意",
         colSo: "訂單（so）",
         colCutting: "排程生產日 cutting",
         colSd: "訂單（SD Document）",
-        colMother: "母材料",
+        colMaterial: "需求物料",
         colQty: "Open Quantity（需求）",
-        colUnitR: "母單位（2.R）",
+        colSeg: "需求區段（FLT/MTF）",
+        colUnitR: "需求單位",
         colMother3: "母材料",
-        colDescF: "母料全名（SHT 末碼）",
-        colUnitH: "母單位檢查（須等於 2.R）",
-        colChild: "子材料",
-        colUnitM: "子單位（3.M）",
-        colStock: "Unrestricted 庫存（同子料取 MAX）",
+        colDescF: "完整說明（SHT 末碼）",
+        colChild: "子材料（排除 MH04*）",
+        colGiJ: "GI（廠外發料 J）",
+        colVendorL: "Stock of Vendor（L）",
+        colGrP: "GR（廠外領料 P）",
+        colStorage: "儲位（排除 39*）",
+        colBatch: "Batch（= Segment FLT/MTF）",
+        colOunBun: "母／子單位",
+        colMb52Mat: "庫存物料",
+        colStockSeg: "Stock Segment（FLT/MTF；不可混）",
+        colStock: "Unrestricted（依料號+Segment SUM）",
         troubleTitle: "常見問題",
-        trouble1: "單位事前檢查失敗：同母料 Excel2.R 與 Excel3.H 必須一致。",
-        trouble2: "缺少換算：在 Step 2 補單位或 SHT 末碼規則後重跑。",
-        trouble3: "SHT 母料無末碼：請確認 Excel3.F 母料全名末尾含 110x200cm 等尺寸。",
+        trouble1: "單位事前檢查失敗：同母料 COOIS 單位與 ZRMM OUn 必須一致。",
+        trouble2: "缺少換算：在 Step 2 補單位或 SHT 末碼規則（或重設預設）後重跑。",
+        trouble3: "SHT 母料無末碼：請確認 ZRMM 說明末尾含 110x200cm 等尺寸。",
         trouble4: "結果已過期：輸入已變更 — 請重新執行配發再匯出。",
+        trouble5: "看不到 HC／HU 列：僅計算 ZRMM Article（經 MH04 過濾後）有出現的料 — 屬設計行為。",
+        trouble6: "MB52 > 0 但可用庫存為 0：該 Segment 廠外占用可能已超過廠內庫存。",
         troubleNote: "資料僅留在本機電腦，請勿將真實業務檔上傳至外部服務。"
       },
       my: {
@@ -361,44 +455,72 @@
         backToApp: "အက်ပ်သို့ ပြန်သွားရန်",
         themeMill: "Mill Ops",
         themeSoft: "Soft Enterprise",
-        manualIntro: "ဤလက်စွဲသည် RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင် (offline ဘရောက်ဆာ ကိရိယာ) ကို အသုံးပြုနည်းကို ရှင်းပြထားသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
+        manualIntro: "ဤလက်စွဲသည် RAW MAT Allocation Engine v3 (offline ဘရောက်ဆာ ကိရိယာ) ကို ရှင်းပြသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
+        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.0.0 — input ၄ ခု၊ ကော်လံ ၁၇ ခု၊ Segment FLT/MTF သော့ခတ်။",
         step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
-        step1a: "ဖိုင် ၃ ခု တင်ပါ သို့မဟုတ် ကူးထည့်ပါ — Excel1 အချိန်ဇယား၊ Excel2 လိုအပ်ချက် (COIS)၊ Excel3 BOM/သိုလှောင်ရုံ။",
-        step1b: "ကော်လံ အမှတ်အသားသည် လုပ်ငန်း စည်းမျဉ်းအရ သတ်မှတ်ထားသည် (အောက်ဇယားကြည့်ပါ)။",
-        step1c: "အစမ်း အသုံးပြုရန် Sample data ကို သုံးနိုင်သည်။",
+        step1a: "ဖိုင် ၄ ခု တင်ပါ/ကူးထည့်ပါ — Schedule၊ COOIS (လိုအပ်ချက်)၊ ZRMM0028 (BOM/ပြင်ပ)၊ MB52 (သိုလှောင်)။",
+        step1b: "ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ဖြေရှင်းသည် (alias ခွင့်ပြု)။ နှစ်ထပ်ခေါင်းစဉ် (တရုတ်ပြီး အင်္ဂလိပ်) တွင် အင်္ဂလိပ်အတန်းကို သုံးသည်။",
+        step1c: "အစစ်ဖိုင် မလိုဘဲ စမ်းရန် Sample data သုံးနိုင်သည်။",
+        step1d: "slot လေးခုလုံး Import validation OK မြင်မှ Run allocation လုပ်နိုင်သည်။",
         step2Title: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု လုပ်ဆောင်ရန်",
-        step2a: "သတ်မှတ်ထားသော အမှတ်အသား ဇယားနှင့် တွေ့ရှိသော ခေါင်းစဉ်များကို စစ်ဆေးပါ။",
-        step2b: "ယူနစ် whitelist — မိခင်ယူနစ် ≠ သားယူနစ် (SHT မဟုတ်) ဆိုပါက ပြောင်းလဲမှု အချိုးကို ထည့်ပါ (ပုံမှန် M↔YD)။",
-        step2c: "SHT အရွယ်အစား နောက်ဆုံးစာလုံး — မိခင်ယူနစ် SHT ဖြစ်ပါက Excel3.F မိခင်အမည် မှ အရွယ်အစား (ဥပမာ 110x200cm) ကို ဖတ်ပါ။ လိုအပ်သလို စာရင်းထည့်/ပြင်ပါ။",
-        step2d: "Run allocation ကို နှိပ်ပါ။ စည်းမျဉ်း မပြည့်မီပါက အမှားပြမည်။",
+        step2a: "ဖိုင်လေးခု၏ mapping ဇယားနှင့် တွေ့ရှိသော ခေါင်းစဉ်များကို စစ်ဆေးပါ။",
+        step2b: "ယူနစ် whitelist ပုံမှန် (ပြင်နိုင်): M→YD=1.0936၊ YD→M=0.9144။ တူညီယူနစ်သည် အမြဲ 1:1။ ဇယားဗလာဖြစ်ပါက Reset defaults သုံးပါ။",
+        step2c: "SHT အရွယ်အစား ပုံမှန် (ပြင်နိုင်): 110x200cm / 220x110cm / 200x110cm။ နောက်ဆက် ZRMM Material Full Description မှ ရသည်။",
+        step2d: "Run allocation ကို နှိပ်ပါ။ စည်းမျဉ်း မပြည့်မီ သို့မဟုတ် ယူနစ် မကိုက်ညီပါက အမှားဖြင့် ပိတ်မည်။",
+        rulesTitle: "ခွဲဝေမှု စည်းမျဉ်း (အရေးကြီး)",
+        rules1: "လိုအပ်ချက်လမ်းကြောင်း: ZRMM0028 Article (သား) တွင် ရှိသော ပစ္စည်းများသာ။ 0028.F တွင် မရှိသော HC/HU စသည်များကို ကျော်သည်။",
+        rules2: "ZRMM Article MH04 ဖြင့် စသော် ဖယ်သည် (BOM / ပြင်ပ / လိုအပ်ချက် မသုံး)။",
+        rules3: "ပြင်ပသိုလှောင် = max(0, Σ GI J − Σ GR P) မိခင်–သား–Batch အလိုက်၊ သားပြင်ပသည် ထို Batch ရှိ မိခင်အားလုံး ပေါင်းသည်။",
+        rules4: "စက်ရုံသိုလှောင် = SUM(MB52 Unrestricted) Material + Stock Segment (storage 39* ဖယ်)။ Available = max(0, MB52 − ပြင်ပ)။",
+        rules5: "Segment သော့: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch။ FLT နှင့် MTF ဘယ်တော့မှ မရော။",
+        rules6: "မိခင် COOIS အတန်းများကို သားတရားဝင်အားလုံးသို့ ချဲ့သည် (× conversion)၊ သား 0028.F တွင်ရှိလျှင် Open Quantity ကို demand direct ထည့်သည်။",
+        rules7: "အမြန်ဆုံး cutting၊ ပြီး SO အလိုက် greedy ခွဲဝေ၊ တူညီ SO အတွင်း မိခင်ရှိအတန်းများကို မိခင်ဗလာ direct အတန်းများအပေါ်တွင် စဉ်သည်။",
         step3Title: "အဆင့် ၃ — စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
-        step3a: "SO၊ cutting ရက်စွဲ၊ မိခင်ပစ္စည်း ဖြင့် စစ်ထုတ်နိုင်သည်။ အစမ်းကြည့်မှု ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်။",
-        step3b: "လိုအပ်ချက် သုည ဖြစ်သော SO သို့မဟုတ် အတန်းများကို ဖျောက်နိုင်သည်။",
-        step3c: "CSV သို့မဟုတ် Excel ထုတ်ယူပါ။ ထုတ်ယူမှုသည် အစမ်းကြည့်မှု စစ်ထုတ်မှုနှင့် တူညီသည်။",
-        step3d: "လုပ်ဆောင်ပြီးနောက် ထည့်သွင်းမှု ပြောင်းပါက ထပ်မံ ခွဲဝေမှု လုပ်ဆောင်ပါ။",
+        step3a: "SO၊ cutting ရက်စွဲ၊ မိခင်/သား ပစ္စည်းဖြင့် စစ်ထုတ်နိုင်သည်။ အစမ်းကြည့်မှု ချက်ချင်း မွမ်းမံသည်။",
+        step3b: "သုညလိုအပ်ချက် SO/အတန်း ဖျောက် checkbox များ ပုံမှန် ON။ ဖျက်မှ demand=0 အတန်းများကို အစမ်း/ထုတ်ယူတွင် မြင်ရမည်။",
+        step3c: "CSV သို့မဟုတ် Excel (ကော်လံ ၁၇) ထုတ်ယူပါ။ Excel တွင် dual-identity ပစ္စည်းကုဒ်များကို အပြာရောင်ခြယ်သည်။",
+        step3d: "အပြာကုဒ် = dual identity (ZRMM0028 တွင် မိခင်နှင့်သား တပြိုင်နက်၊ MH04 သား ဖယ်ပြီး)။",
+        step3e: "လုပ်ဆောင်ပြီးနောက် input ပြောင်းပါက ထုတ်ယူမီ ထပ်မံ ခွဲဝေပါ။",
         yTitle: "ကော်လံ Y (ခွဲဝေပြီး အမှတ်အသား)",
-        yBody: "တစ်စုံတစ်ရာ မှာယူမှု + မိခင်ပစ္စည်း အုပ်စုတစ်ခုလုံးအတွက် — သားပစ္စည်း အားလုံး demand > 0 နှင့် provided ≥ demand (ပြည့်စုံစွာ ခွဲဝေပြီး) ဖြစ်မှသာ Y ပြမည်။ တစ်ခုခု မလုံလောက်ပါက အုပ်စုလုံး ဗလာဖြစ်မည်။",
-        colsTitle: "သတ်မှတ် ကော်လံ အမှတ်အသား",
+        yBody: "မှာယူမှု + မိခင် + segment အုပ်စုတစ်ခုတွင် demand>0 အတန်းအားလုံး fully provided ဖြစ်မှသာ Y ပြသည်။ မိခင်ဗလာ direct အတန်းများသည် သားအလိုက် သီးခြားအုပ်စု။",
+        outTitle: "ထုတ်ကုန် ကော်လံများ (၁၇)",
+        outIntro: "အစမ်းကြည့်နှင့် Excel ကော်လံအစဉ် တူညီသည်။",
+        out1: "cutting · so",
+        out2: "မိခင်ပစ္စည်း · မိခင် batch · မိခင်ယူနစ်",
+        out3: "သားပစ္စည်း · သား batch · သားယူနစ်",
+        out4: "မိခင်မှ လိုအပ်ချက် · တိုက်ရိုက်လိုအပ်ချက် · လိုအပ်ချက်စုစုပေါင်း",
+        out5: "MB52 သိုလှောင် · ပြင်ပသိုလှောင် · ရနိုင်သော သိုလှောင်",
+        out6: "ပေးထားသော ပမာဏ · ဤအတန်းပြီး ကျန်သိုလှောင် · ခွဲဝေပြီး (Y)",
+        colsTitle: "ကော်လံ အမှတ်အသား (အင်္ဂလိပ် ခေါင်းစဉ်အမည်)",
         colSource: "ရင်းမြစ်",
-        colLetter: "ကော်လံ",
+        colLetter: "ခေါင်းစဉ် (EN)",
         colMeaning: "အဓိပ္ပာယ်",
         colSo: "မှာယူမှု (so)",
         colCutting: "Cutting / ထုတ်လုပ်ရက်",
         colSd: "SD Document (SO)",
-        colMother: "မိခင်ပစ္စည်း",
+        colMaterial: "လိုအပ်ချက် ပစ္စည်း",
         colQty: "Open Quantity (လိုအပ်ချက်)",
-        colUnitR: "မိခင်ယူနစ်",
+        colSeg: "Requirement Segment (FLT/MTF)",
+        colUnitR: "လိုအပ်ချက် ယူနစ်",
         colMother3: "မိခင်ပစ္စည်း",
-        colDescF: "မိခင်အမည် အပြည့်အစုံ (SHT အရွယ်အစား)",
-        colUnitH: "မိခင်ယူနစ် စစ်ဆေးမှု (2.R နှင့် တူညီရမည်)",
-        colChild: "သားပစ္စည်း",
-        colUnitM: "သားယူနစ်",
-        colStock: "Unrestricted သိုလှောင်ရုံ (သားပစ္စည်းတစ်ခုလျှင် MAX)",
+        colDescF: "ဖော်ပြချက် (SHT အရွယ်အစား)",
+        colChild: "သားပစ္စည်း (MH04* ဖယ်)",
+        colGiJ: "GI (ပြင်ပ ထုတ်ယူ J)",
+        colVendorL: "Stock of Vendor (L)",
+        colGrP: "GR (ပြင်ပ လက်ခံ P)",
+        colStorage: "Storage (39* ဖယ်)",
+        colBatch: "Batch (= segment FLT/MTF)",
+        colOunBun: "မိခင် / သား ယူနစ်",
+        colMb52Mat: "သိုလှောင် ပစ္စည်း",
+        colStockSeg: "Stock Segment (FLT/MTF; မရော)",
+        colStock: "Unrestricted (material+segment SUM)",
         troubleTitle: "ပြဿနာ ဖြေရှင်းနည်း",
-        trouble1: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် — တူညီသော မိခင်ပစ္စည်းတွင် Excel2.R နှင့် Excel3.H တူညီရမည်။",
-        trouble2: "ပြောင်းလဲမှု မရှိ — အဆင့် ၂ တွင် ယူနစ် သို့မဟုတ် SHT နောက်ဆုံးစာလုံး စည်းမျဉ်း ထည့်ပြီး ပြန်လုပ်ပါ။",
-        trouble3: "SHT မိခင်တွင် နောက်ဆုံးစာလုံး မရှိ — Excel3.F တွင် 110x200cm ကဲ့သို့ အဆုံးတွင် အရွယ်အစား ရှိရမည်။",
-        trouble4: "ရလဒ် ဟောင်းနေပြီ — ထည့်သွင်းမှု ပြောင်းပြီး — ထပ်မံ ခွဲဝေမှု လုပ်ဆောင်ပါ။",
+        trouble1: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် — တူညီမိခင်တွင် COOIS Base Unit နှင့် ZRMM OUn တူညီရမည်။",
+        trouble2: "conversion မရှိ — အဆင့် ၂ တွင် ယူနစ် သို့မဟုတ် SHT စည်းမျဉ်း ထည့် (သို့ Reset defaults) ပြီး ပြန်လုပ်ပါ။",
+        trouble3: "SHT မိခင်တွင် နောက်ဆက် မရှိ — ZRMM ဖော်ပြချက်အဆုံးတွင် 110x200cm ကဲ့သို့ အရွယ်အစား ရှိရမည်။",
+        trouble4: "ရလဒ် ဟောင်းနေပြီ — input ပြောင်းပြီး — ထပ်မံ ခွဲဝေပြီးမှ ထုတ်ယူပါ။",
+        trouble5: "HC/HU အတန်း မမြင်ရ — MH04 စစ်ထုတ်ပြီးနောက် ZRMM Article တွင်ရှိသော ပစ္စည်းများသာ တွက်သည် (ဒီဇိုင်းအရ)။",
+        trouble6: "MB52 > 0 သို့သော် available = 0 — ထို segment တွင် ပြင်ပသိုလှောင်က စက်ရုံသိုလှောင်ထက် ကျော်နိုင်သည်။",
         troubleNote: "ဒေတာသည် သင့်ကွန်ပျူတာတွင်သာ ရှိသည်။ လုပ်ငန်း ဖိုင်များကို ပြင်ပ ဝန်ဆောင်မှုသို့ မတင်ပါနှင့်။"
       }
     };

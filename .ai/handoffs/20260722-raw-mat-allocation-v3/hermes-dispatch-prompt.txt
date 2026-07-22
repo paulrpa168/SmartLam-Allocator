@@ -1,0 +1,25 @@
+請執行 Cursor → Diff → Codex 品質驗證流程（codex-dispatcher Pattern B + agency-code-reviewer + agency-reality-checker）。
+
+## 工作目錄
+D:/0.AI-Agent-Workspace/03_projects/RAW MAT Project
+
+## 交件（已由 Cursor 備妥）
+- Diff：.ai/handoffs/20260722-raw-mat-allocation-v3/allocation-v3.0.0.diff
+- Brief：.ai/handoffs/20260722-raw-mat-allocation-v3/brief.md
+- 測試證據：.ai/handoffs/20260722-raw-mat-allocation-v3/result.md
+- 規格：docs/07-allocation-v3-spec.md
+
+## 必做步驟
+1. 先讀 brief.md 與 result.md，再讀 diff（可分段；重點看 allocation-web.html 引擎／匯入／17 欄輸出）。
+2. 自行做一次風險摘要（繁中，簡短）。
+3. **dispatch Codex** 做靜態品質驗證：
+   - 只審查、產出 Findings 與 Verdict
+   - **不要直接修改任何業務檔案**
+   - 重點：docs/07 規則符合度、表頭解析誤绑、雙重身分母料、Segment 鎖定、stock available 語意、secrets／真實 xlsx 是否誤入、測試缺口
+4. 將合併後的最終報告寫入：
+   `.ai/handoffs/20260722-raw-mat-allocation-v3/review-hermes-codex.md`
+5. 用 `hermes send --to telegram` 發送最終 Verdict 摘要（APPROVE / NEEDS WORK / BLOCK + Top findings）。
+
+## 回覆格式（stdout）
+用繁體中文給我：Verdict、Critical/High 條數、報告路徑、Codex tokens（若有）。
+預設傾向 NEEDS WORK，除非有壓倒性證據。
