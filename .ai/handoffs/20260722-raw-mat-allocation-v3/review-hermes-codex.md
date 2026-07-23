@@ -1,86 +1,97 @@
-# Review: RAW MAT Allocation v3.0.0 — Hermes + Codex 靜態品質審查
+# Codex 靜態品質審查報告 — RAW MAT Allocation v3.1.3
 
-**日期：** 2026-07-22  
-**審查者：** Hermes (DeepSeek V4 Flash) → Codex (GPT-5.5)  
-**Diff：** `allocation-v3.0.0.diff`（3575 行，主要 ~2212 行在 `allocation-web.html`）  
-**Verdict：** **NEEDS WORK**
+**審查日期：** 2026-07-23  
+**Commit：** `ac618e9`（parent `fe7b59f` / v3.0.0）  
+**Diff：** `allocation-v3.1.3.diff`  
+**真實 Codex：** ✅ 是  
+**Codex CLI：** `~/codex-cli.exe` **0.140.0-alpha.2**  
+**Model：** `gpt-5.5`（強制指定；避開 config 預設 `gpt-5.6-luna` 不相容）  
+**Sandbox：** `read-only`  
+**Tokens used：** **103,246**  
+**原始輸出：** [codex-review-raw.md](./codex-review-raw.md)  
+**Stdout log：** [codex-review-stdout.log](./codex-review-stdout.log)
 
----
-
-## 1. Hermes 自評風險摘要
-
-### 正向觀察
-
-| 項目 | 狀態 |
-|------|------|
-| 四輸入架構（Schedule/COOIS/ZRMM0028/MB52） | ✅ 完整實作 |
-| 英文表頭解析（`detectHeaderRow` / `FIELD_ALIASES` / `findCol`） | ✅ 正確，Open Quantity vs Quantity withdrawn 不會誤綁 |
-| 雙表頭偵測（中文→英文） | ✅ `looksChineseHeaderRow` + `rowHasEnglishKeys` |
-| 廠外庫存 `max(0, ΣJ−ΣP)` | ✅ 按 mother\0child\0seg 聚合 |
-| MB52 SUM + 39* 排除 | ✅ 正確 |
-| Segment FLT/MTF 鎖定（空白不混配） | ✅ `childrenForMotherSeg` 回傳 exact match only |
-| 雙重身分母料自我排除 | ✅ `expandedMothers` Set 阻擋 |
-| 17 欄輸出（含雙 BATCH、庫存拆分、Y） | ✅ 欄序與規格 `docs/07` 一致 |
-| `stock available` 語意 = MB52 − 廠外 | ✅ 財報欄位顯示計算值，配發 clamp ≥ 0 |
-| 匯出安全（CSV formula injection 防護、XLSX inlineStr） | ✅ |
-| `New_0722/` 已進 `.gitignore` | ✅ |
-| 測試 fixture 4 項 PASS + 真實資料 smoke 2579 列 | ✅ |
-
-### 需關注
-
-| 項目 | 風險 |
-|------|------|
-| 多 mother 展開同一 child + child 自身 direct demand | Medium — direct 量全部併到排序後的第一個 mother row |
-| 根目錄 `0028.xlsx` / `MB52_new.xlsx` 未 ignore | Medium — 可能誤提交真實資料 |
-| MY 語系 `mapStock` 翻譯殘留 v2「MAX」 | Low — 應為 SUM |
-| 無 JS 層直接測試（Python mirror 非 JS） | High — 實際 browser 行為未驗證 |
+> 由 Cursor 直接調度真實 Codex CLI；Hermes 負責交件同步與 Telegram 摘要（非 Hermes 代審）。
 
 ---
 
-## 2. Codex Findings（GPT-5.5 靜態分析）
+## Verdict：**NEEDS WORK**
 
-**Medium**
-1. **Multi-mother direct demand merge** — `allocation-web.html` `runAllocationEngine`：同一 SO+Segment+child 若由多個 mother 展開，child 的 direct demand 全部併到 `mother.localeCompare()` 排序後的第一個 mother row。現有 fixture 未覆蓋此情境。建議：明確定義多 mother 時 direct demand 應拆成獨立 direct row、按比例分攤，或阻擋並提示。
-2. **`.gitignore` 缺 root xlsx** — 根目錄 `0028.xlsx`、`MB52_new.xlsx` 未追蹤但不在 ignore 清單，`git add .` 易誤提交真實資料。建議：加入 `/0028.xlsx` 與 `/MB52_new.xlsx`。
+Critical：**0**　High：**0**　Medium：**1**　Low：**2**
 
-**Low**
-3. **MY 翻譯殘留** — `allocation-web.html:2177` `mapStock` 仍寫 `Unrestricted (... MAX)`，v3 規格是 SUM。建議：改為 SUM，全面掃 v3 文案殘留。
-4. **README.md trailing whitespace** — 行尾空白讓 diff hygiene 檢查失敗。
-
-### Codex 測試缺口清單
-
-- 缺 JS-level smoke test（驗證腳本是 Python mirror，非執行 `allocation-web.html` 的 `runAllocationEngine`）
-- 缺 browser E2E（四檔上傳/貼上、run allocation、預覽、CSV/XLSX 匯出）
-- 缺多 mother 同 child + direct demand 測試
-- 缺 duplicate header fixture（ZRMM0028 多個 `Storage Location` 時必須取第一個）
-- 缺 blank segment direct/stock 對帳測試
-- 缺 17 欄 golden output snapshot（鎖定欄序、欄名、`stock available = MB52 - outside`）
-
-### Codex Token 使用
-
-- Token count：85,980 tokens
-- 僅靜態分析，未修改程式
+核心配發引擎可接受；文件版本不一致與交付證據未完全版本化，尚不足以 APPROVE。
 
 ---
 
-## 3. 合併 Verdict
+## Findings（Codex）
 
-**NEEDS WORK**
+### Critical
+無。
 
-核心引擎邏輯（四輸入解析、過濾、廠外、MB52 SUM、Segment 鎖定、展開＋直接需求、17 欄輸出、Y 標記）正確符合 `docs/07-allocation-v3-spec.md`。4 項 fixture 測試 + 真實資料 2579 列 smoke 均 PASS。
+### High
+無。
 
-但 2 項 Medium Finding 應在合併前處理：
-1. 多 mother→child 的 direct demand 歸屬邊界（需業務決策後補測試）
-2. `.gitignore` 補上根目錄真實 xlsx（低風險快速 fix）
+### Medium
 
-此外，JS-level smoke test 與 browser E2E 應列為產出正式版本前的必要品質閘門。
+| # | 檔案 | 問題 | 風險 | 建議 |
+|---|------|------|------|------|
+| M1 | `README.md`（約 L7 / L35） | 仍寫入口／App version `v3.1.2`，但 `APP_VERSION = "3.1.3"` | 驗收與追蹤版本錯位 | README 全部改為 `3.1.3` |
+
+### Low
+
+| # | 檔案 | 問題 | 風險 | 建議 |
+|---|------|------|------|------|
+| L1 | `allocation-web.html` 檔頭註解 | 仍寫 `Version: 3.0.0`，runtime 為 `3.1.3` | 人工追溯誤判 | 同步檔頭註解 |
+| L2 | handoff 交件 | `allocation-v3.1.3.diff`、`brief.md`、`result.md` 等未進 `ac618e9` | 無法從該 commit 完整重建審查證據 | 納入版本化，或標明「commit 後產生」 |
 
 ---
 
-## 4. 建議下一步
+## Reality Check（Codex 通過項）
 
-1. [P0] 補 `.gitignore` 排除 `0028.xlsx` / `MB52_new.xlsx`（1 分鐘）
-2. [P1] 確認多 mother→child 的 direct demand 業務規則
-3. [P1] 補 JS-level smoke test（可用 Node.js + jsdom 或 headless browser）
-4. [P2] 補 MY `mapStock` 翻譯修正
-5. [P2] 移除 README.md trailing whitespace
+- 16 欄契約：JS `OUT`、EN/ZH/MY headers、tips、Python `OUTPUT_HEADERS` 基本一致  
+- F/G/P 已刪；`stock available` = MB52-only running pool，不扣 outside  
+- `child demand`／子材料需求更名完成，語意仍為母料展開量  
+- Y 排除 MH04；FLT/MTF 分池；MH04 保留輸出  
+- JS ↔ Python 镜像高度一致  
+- `fe7b59f..ac618e9` 僅 5 個文字檔；無 xlsx／secrets 進 commit  
+
+**Codex 重跑測試：**
+
+```text
+PASS ×9 fixture + New_0722 smoke OK（out_rows=465）
+```
+
+---
+
+## 測試缺口（Codex）
+
+1. 缺 JS 端 golden snapshot（不能只靠 Python mirror）  
+2. 缺 CSV/Excel 16 欄＋三語表頭 snapshot  
+3. 缺 UI 匯入 E2E（xlsx／雙表頭／語言／匯出）  
+4. 缺負向測試（缺欄、空 Segment、未知 unit、SHT suffix、全 MH04 Y）  
+5. 缺 release hygiene（版本號跨 README／手冊／規格／檔頭一致）
+
+---
+
+## 給 Paul 的短結論
+
+邏輯本體接近過關。先補 **README／檔頭版本一致性**（最快），再視需要補 golden／UI 證據，才升級到 release APPROVE。
+
+---
+
+## Follow-up（2026-07-23 Cursor）
+
+已修復 Codex M1／L1／L2：
+1. README 版本字串 → `3.1.3`
+2. `allocation-web.html` 檔頭註解 → `Version: 3.1.3`；`docs/07` 同步
+3. 本 handoff 交件（diff／brief／result／Codex 報告等）納入 git commit
+
+---
+
+## Archive：先前 Hermes-only 審查（2026-07-22）
+
+上次因 Codex CLI 不支援 `gpt-5.6-luna`，曾由 Hermes 代審並誤標部分 High。本次以真實 Codex `gpt-5.5` 為準；舊結論僅供對照，不以 Hermes-only 為最終依據。
+
+---
+
+*Generated from real Codex CLI · synced for Hermes/Telegram · 2026-07-23*

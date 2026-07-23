@@ -1,0 +1,27 @@
+請以 agency-code-reviewer + reality-checker 對 RAW MAT Allocation **v3.1.3**（commit `ac618e9`，parent `fe7b59f`）做靜態程式品質審查。
+
+## 交件
+- Diff：`.ai/handoffs/20260722-raw-mat-allocation-v3/allocation-v3.1.3.diff`
+- Brief：`.ai/handoffs/20260722-raw-mat-allocation-v3/brief.md`
+- 測試證據：`.ai/handoffs/20260722-raw-mat-allocation-v3/result.md`
+- 規格：`docs/07-allocation-v3-spec.md`
+
+## 約束
+- **只審查、不要修改任何業務檔案**
+- 用繁體中文輸出
+- 預設傾向 NEEDS WORK，除非有壓倒性證據才 APPROVE
+
+## 重點
+1. 16 欄輸出契約（OUT 索引／EN·ZH·MY 表頭／tips）一致
+2. 可配發池 = MB52 only（不扣廠外）；F/G/P 欄已刪乾淨
+3. child demand／子材料需求 更名正確（語意仍為母料展開量）
+4. Y flag、FLT/MTF 分池、MH04 配套略過、雙重身分
+5. JS `runAllocationEngine` ↔ Python `verify_allocation_v3.py` 镜像一致
+6. 無 secrets／真實 xlsx 誤入
+7. 測試缺口建議
+
+## 輸出結構
+1. Findings（Critical / High / Medium / Low）— 每條含檔案、問題、風險、建議修法
+2. 測試缺口
+3. Verdict：APPROVE / NEEDS WORK / BLOCK
+4. 簡短總結（給 Paul）

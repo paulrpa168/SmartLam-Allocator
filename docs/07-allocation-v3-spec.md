@@ -1,6 +1,6 @@
 # 07 — RAW MAT 庫存配發引擎規格（v3）
 
-> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.2+）。  
+> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.3）。  
 > 欄位對應一律使用**英文欄位名稱**，禁止寫死 Excel 欄位字母（A/B/C）。
 
 **狀態 / Status：** CONFIRMED（2026-07-22）  

@@ -1,0 +1,12 @@
+﻿PASS test_find_col_open_quantity
+PASS test_expand_plus_direct_and_outside
+PASS test_bom_expand_when_vendor_stock_l_is_zero
+PASS test_mother_not_double_counted
+PASS test_segment_lock_blank
+PASS test_mh04_kept_but_ignored_for_y_kit
+PASS test_mother_rows_sort_before_direct_within_so
+PASS test_flt_mtf_stock_never_mixed
+PASS test_available_pool_ignores_outside
+New_0722 smoke OK: schedule=733 coois=16325 zrmm=16275 mb52=7019 out_rows=465 MA020162253_rows=18
+
+All v3 fixture checks passed.
