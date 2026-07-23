@@ -1,8 +1,8 @@
-﻿# allocation-v3.1.6.diff
-# Base: 610b597 (v3.1.4) -> 24ca14e (v3.1.6 feature commit)
-# Excludes vendor/xlsx.full.min.js binary (~952KB SheetJS 0.20.3) — present in commit 24ca14e as vendor/xlsx.full.min.js
-# Also see: conditions-one-pager.md
-# HEAD with this docs commit: see git log
+# allocation-v3.1.6.diff
+# Base: 610b597 (v3.1.4) -> 24ca14e (feat v3.1.6)
+# Excludes vendor/xlsx.full.min.js (~952KB SheetJS 0.20.3; in repo at vendor/xlsx.full.min.js)
+# Companion: conditions-one-pager.md
+# HEAD: ed3ffa2+
 diff --git a/.ai/handoffs/20260722-raw-mat-allocation-v3/conditions-one-pager.md b/.ai/handoffs/20260722-raw-mat-allocation-v3/conditions-one-pager.md
 new file mode 100644
 index 0000000..c9cd9ac
@@ -1003,4 +1003,3 @@ index 0000000..19de8f4
 +Keep this file next to `allocation-web.html` (same relative path `vendor/xlsx.full.min.js`). Opening only the HTML without this file will show a clear import error.
 +
 +Do not replace with a CDN `<script>` ΓÇö this project stays local/offline-first.
-
