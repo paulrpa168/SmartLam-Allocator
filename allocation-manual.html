@@ -183,7 +183,7 @@
   <main>
     <section>
       <p data-i18n="manualIntro">This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.</p>
-      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.3 — four inputs, 16-column export, Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
+      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
     </section>
 
     <section>
@@ -211,8 +211,8 @@
       <ul>
         <li data-i18n="rules1">Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.</li>
         <li data-i18n="rules2">MH04* children are kept in BOM / outside / demand / export. They are ignored only when deciding pending allocation (Y) kit completeness.</li>
-        <li data-i18n="rules3">Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Child outside is summed across mothers for that Batch. BOM expand keeps all non-39* children even when J/L is 0.</li>
-        <li data-i18n="rules4">Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = MB52 only.</li>
+        <li data-i18n="rules3">Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Mother outside column sums those pairs for mother+Batch. BOM expand keeps all non-39* children even when J/L is 0.</li>
+        <li data-i18n="rules4">Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = child MB52 only. Mother plant stock is display-only from the same MB52 rule.</li>
         <li data-i18n="rules5">Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.</li>
         <li data-i18n="rules6">Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.</li>
         <li data-i18n="rules7">Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.</li>
@@ -224,7 +224,7 @@
       <ul>
         <li data-i18n="step3a">Filter by SO, cutting date range, or mother/child material. Preview updates live.</li>
         <li data-i18n="step3b">Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.</li>
-        <li data-i18n="step3c">Export CSV or Excel (16 columns). Excel export paints dual-identity material codes in blue (mother/child columns).</li>
+        <li data-i18n="step3c">Export CSV or Excel (18 columns). Excel export paints dual-identity material codes in blue (mother/child columns).</li>
         <li data-i18n="step3d">Blue codes = dual identity (same code is both mother and child in ZRMM0028).</li>
         <li data-i18n="step3e">If inputs change after a run, re-run allocation before exporting.</li>
       </ul>
@@ -236,11 +236,12 @@
     </section>
 
     <section>
-      <h2 data-i18n="outTitle">Output columns (16)</h2>
+      <h2 data-i18n="outTitle">Output columns (18)</h2>
       <p data-i18n="outIntro">Preview and Excel use the same column order.</p>
       <ol>
         <li data-i18n="out1">cutting · so</li>
         <li data-i18n="out2">mother material · mother batch · mother unit</li>
+        <li data-i18n="out2b">mother plant stock · mother stock outside (display only)</li>
         <li data-i18n="out3">child material · child batch · child unit</li>
         <li data-i18n="out4">child demand · demand direct · demand qty</li>
         <li data-i18n="out5">child stock (running) · stock available (=MB52 pool)</li>
@@ -308,7 +309,7 @@
         themeMill: "Mill Ops",
         themeSoft: "Soft Enterprise",
         manualIntro: "This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.",
-        manualVersion: "App version: allocation-web.html v3.1.3 — four inputs, 16-column export, Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
+        manualVersion: "App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
         step1Title: "Step 1 — Import Excel files",
         step1a: "Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).",
         step1b: "Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.",
@@ -322,23 +323,24 @@
         rulesTitle: "Allocation rules (important)",
         rules1: "Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.",
         rules2: "MH04* children are kept in BOM / outside / demand / export. They are ignored only when deciding pending allocation (Y) kit completeness.",
-        rules3: "Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Child outside is summed across mothers for that Batch. BOM expand keeps all non-39* children even when J/L is 0.",
-        rules4: "Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = MB52 only.",
+        rules3: "Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Mother outside column sums those pairs for mother+Batch. BOM expand keeps all non-39* children even when J/L is 0.",
+        rules4: "Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = child MB52 only. Mother plant stock is display-only from the same MB52 rule.",
         rules5: "Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.",
         rules6: "Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.",
         rules7: "Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.",
         step3Title: "Step 3 — Filter, preview & export",
         step3a: "Filter by SO, cutting date range, or mother/child material. Preview updates live.",
         step3b: "Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.",
-        step3c: "Export CSV or Excel (16 columns). Excel export paints dual-identity material codes in blue (mother/child columns).",
+        step3c: "Export CSV or Excel (18 columns). Excel export paints dual-identity material codes in blue (mother/child columns).",
         step3d: "Blue codes = dual identity (same code is both mother and child in ZRMM0028).",
         step3e: "If inputs change after a run, re-run allocation before exporting.",
         yTitle: "Column Y (pending allocation)",
         yBody: "For each sales order + mother + segment group: Y when every non-MH04 demand>0 child is fully provided. MH04 children do not affect the kit flag. Direct-only rows (blank mother) form their own group per child.",
-        outTitle: "Output columns (16)",
+        outTitle: "Output columns (18)",
         outIntro: "Preview and Excel use the same column order.",
         out1: "cutting · so",
         out2: "mother material · mother batch · mother unit",
+        out2b: "mother plant stock · mother stock outside (display only)",
         out3: "child material · child batch · child unit",
         out4: "child demand · demand direct · demand qty",
         out5: "child stock (running) · stock available (=MB52 pool)",
@@ -382,7 +384,7 @@
         themeMill: "Mill Ops 廠務",
         themeSoft: "Soft 企業風",
         manualIntro: "本手冊說明 RAW MAT 庫存配發引擎 v3（離線瀏覽器工具）。請在上方選擇語系。",
-        manualVersion: "程式版本：allocation-web.html v3.1.3 — 四輸入、16 欄匯出、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。",
+        manualVersion: "程式版本：allocation-web.html v3.1.4 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。",
         step1Title: "第 1 步 — 匯入 Excel",
         step1a: "上傳或貼上四個檔案：Schedule 排程、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。",
         step1b: "欄位以英文表頭名稱解析（可用 alias）。雙表頭（中文＋英文）時以英文列為 header。",
@@ -396,23 +398,24 @@
         rulesTitle: "配發規則（重要）",
         rules1: "需求路徑：僅計算存在於 ZRMM0028 Article（子料）的料號；COOIS 的 HC／HU 等不在 0028.F 者不計算。",
         rules2: "MH04* 子料仍進 BOM／廠外／需求／匯出；僅在「待配發（Y）」配套判定時略過，不論其是否有庫存。",
-        rules3: "廠外庫存 = max(0, Σ GI J − Σ GR P)，依母–子–Batch（J=0 或 L=0 的列只不計廠外，仍做合貼展開）。子料廠外為同 Batch 下各母加總。",
-        rules4: "廠內庫存 = SUM(MB52 Unrestricted)，依 Material + Stock Segment（排除儲位 39*）。可配發池 = MB52。",
+        rules3: "廠外庫存 = max(0, Σ GI J − Σ GR P)，依母–子–Batch（J=0 或 L=0 的列只不計廠外，仍做合貼展開）。廠外母材料庫存 = 該母+Batch 下各子料 pair 加總。",
+        rules4: "廠內庫存 = SUM(MB52 Unrestricted)，依 Material + Stock Segment（排除儲位 39*）。可配發池 = 子料 MB52；廠內母材料庫存僅顯示。",
         rules5: "Segment 鎖定：COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch。FLT 與 MTF 永不混倉。",
         rules6: "母料 COOIS 列展開至所有有效子料（× 換算）；子料若在 0028.F，其 Open Quantity 加為 demand direct。",
         rules7: "依最早 cutting、再 SO 貪婪配發；同 SO 內有母料列排在母料空白的直接需求列之前。",
         step3Title: "第 3 步 — 篩選、預覽與匯出",
         step3a: "可依 SO、cutting 日期、母／子材料篩選；預覽即時更新。",
         step3b: "隱藏零需求 SO／列預設勾選。取消勾選才會在預覽與匯出顯示 demand=0 列。",
-        step3c: "匯出 CSV 或 Excel（16 欄）。Excel 會將雙重身分料號以藍色標示（母／子欄）。",
+        step3c: "匯出 CSV 或 Excel（18 欄）。Excel 會將雙重身分料號以藍色標示（母／子欄）。",
         step3d: "藍色料號 = 雙重身分（同一碼在 ZRMM0028 同時為母與子）。",
         step3e: "若執行後又修改輸入，請重新配發再匯出。",
         yTitle: "Y 欄（待配發標記）",
         yBody: "同一訂單 + 母料 + Segment：僅當所有非 MH04 且 demand>0 的子料列皆 fully provided 時標 Y；MH04 子料不影響配套。僅直接需求（母料空白）時依子料各自成組。",
-        outTitle: "輸出欄位（16）",
+        outTitle: "輸出欄位（18）",
         outIntro: "預覽與 Excel 欄序相同。",
         out1: "cutting · so",
         out2: "母料 · 母 Batch · 母單位",
+        out2b: "廠內母材料庫存 · 廠外母材料庫存（僅顯示）",
         out3: "子料 · 子 Batch · 子單位",
         out4: "子材料需求 · 子料直接需求 · 需求合計",
         out5: "子材料庫存（遞減）· 可配發庫存（=MB52 池）",
@@ -456,7 +459,7 @@
         themeMill: "Mill Ops",
         themeSoft: "Soft Enterprise",
         manualIntro: "ဤလက်စွဲသည် RAW MAT Allocation Engine v3 (offline ဘရောက်ဆာ ကိရိယာ) ကို ရှင်းပြသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
-        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.3 — input ၄ ခု၊ ကော်လံ ၁၆ ခု၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။",
+        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.4 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။",
         step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
         step1a: "ဖိုင် ၄ ခု တင်ပါ/ကူးထည့်ပါ — Schedule၊ COOIS (လိုအပ်ချက်)၊ ZRMM0028 (BOM/ပြင်ပ)၊ MB52 (သိုလှောင်)။",
         step1b: "ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ဖြေရှင်းသည် (alias ခွင့်ပြု)။ နှစ်ထပ်ခေါင်းစဉ် (တရုတ်ပြီး အင်္ဂလိပ်) တွင် အင်္ဂလိပ်အတန်းကို သုံးသည်။",
@@ -470,23 +473,24 @@
         rulesTitle: "ခွဲဝေမှု စည်းမျဉ်း (အရေးကြီး)",
         rules1: "လိုအပ်ချက်လမ်းကြောင်း: ZRMM0028 Article (သား) တွင် ရှိသော ပစ္စည်းများသာ။ 0028.F တွင် မရှိသော HC/HU စသည်များကို ကျော်သည်။",
         rules2: "MH04* သားများကို BOM / ပြင်ပ / လိုအပ်ချက် / ထုတ်ယူတွင် ထားသည်။ ခွဲဝေရန် (Y) တွဲစုံ စစ်ဆေးရာတွင်သာ ကျော်သည်။",
-        rules3: "ပြင်ပသိုလှောင် = max(0, Σ GI J − Σ GR P) မိခင်–သား–Batch (J=0 သို့မဟုတ် L=0 ကို ပြင်ပတွင်သာ ကျော်၊ BOM ချဲ့ရာတွင် ထား)။",
-        rules4: "စက်ရုံသိုလှောင် = SUM(MB52 Unrestricted) Material + Stock Segment (storage 39* ဖယ်)။ ခွဲဝေကန် = MB52 သာ။",
+        rules3: "ပြင်ပသိုလှောင် = max(0, Σ GI J − Σ GR P) မိခင်–သား–Batch (J=0 သို့မဟုတ် L=0 ကို ပြင်ပတွင်သာ ကျော်၊ BOM ချဲ့ရာတွင် ထား)။ မိခင် ပြင်ပကော်လံ = မိခင်+Batch အတွက် သား pair ပေါင်း။",
+        rules4: "စက်ရုံသိုလှောင် = SUM(MB52 Unrestricted) Material + Stock Segment (storage 39* ဖယ်)။ ခွဲဝေကန် = သား MB52 သာ; မိခင် စက်ရုံသိုလှောင်သည် ပြသရန်သာ။",
         rules5: "Segment သော့: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch။ FLT နှင့် MTF ဘယ်တော့မှ မရော။",
         rules6: "မိခင် COOIS အတန်းများကို သားတရားဝင်အားလုံးသို့ ချဲ့သည် (× conversion)၊ သား 0028.F တွင်ရှိလျှင် Open Quantity ကို demand direct ထည့်သည်။",
         rules7: "အမြန်ဆုံး cutting၊ ပြီး SO အလိုက် greedy ခွဲဝေ၊ တူညီ SO အတွင်း မိခင်ရှိအတန်းများကို မိခင်ဗလာ direct အတန်းများအပေါ်တွင် စဉ်သည်။",
         step3Title: "အဆင့် ၃ — စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
         step3a: "SO၊ cutting ရက်စွဲ၊ မိခင်/သား ပစ္စည်းဖြင့် စစ်ထုတ်နိုင်သည်။ အစမ်းကြည့်မှု ချက်ချင်း မွမ်းမံသည်။",
         step3b: "သုညလိုအပ်ချက် SO/အတန်း ဖျောက် checkbox များ ပုံမှန် ON။ ဖျက်မှ demand=0 အတန်းများကို အစမ်း/ထုတ်ယူတွင် မြင်ရမည်။",
-        step3c: "CSV သို့မဟုတ် Excel (ကော်လံ ၁၆) ထုတ်ယူပါ။ Excel တွင် dual-identity ပစ္စည်းကုဒ်များကို အပြာရောင်ခြယ်သည်။",
+        step3c: "CSV သို့မဟုတ် Excel (ကော်လံ ၁၈) ထုတ်ယူပါ။ Excel တွင် dual-identity ပစ္စည်းကုဒ်များကို အပြာရောင်ခြယ်သည်။",
         step3d: "အပြာကုဒ် = dual identity (ZRMM0028 တွင် မိခင်နှင့်သား တပြိုင်နက်)။",
         step3e: "လုပ်ဆောင်ပြီးနောက် input ပြောင်းပါက ထုတ်ယူမီ ထပ်မံ ခွဲဝေပါ။",
         yTitle: "ကော်လံ Y (ခွဲဝေရန်)",
         yBody: "မှာယူမှု + မိခင် + segment အုပ်စုတွင် MH04 မဟုတ်သော demand>0 သားများ အပြည့် ပေးပြီးမှ Y။ MH04 သည် တွဲစုံအလံကို မထိခိုက်။ မိခင်ဗလာ direct အတန်းများသည် သားအလိုက် သီးခြားအုပ်စု။",
-        outTitle: "ထုတ်ကုန် ကော်လံများ (၁၆)",
+        outTitle: "ထုတ်ကုန် ကော်လံများ (၁၈)",
         outIntro: "အစမ်းကြည့်နှင့် Excel ကော်လံအစဉ် တူညီသည်။",
         out1: "cutting · so",
         out2: "မိခင်ပစ္စည်း · မိခင် batch · မိခင်ယူနစ်",
+        out2b: "မိခင် စက်ရုံသိုလှောင် · မိခင် ပြင်ပသိုလှောင် (ပြသရန်သာ)",
         out3: "သားပစ္စည်း · သား batch · သားယူနစ်",
         out4: "သားပစ္စည်း လိုအပ်ချက် · တိုက်ရိုက်လိုအပ်ချက် · လိုအပ်ချက်စုစုပေါင်း",
         out5: "သား သိုလှောင် (လျော့) · ခွဲဝေနိုင် (=MB52)",

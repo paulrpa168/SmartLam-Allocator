@@ -1,0 +1,868 @@
+diff --git a/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py b/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
+index 2d3a895..fc516a6 100644
+--- a/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
++++ b/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
+@@ -3,7 +3,8 @@
+ 
+ Covers: dual-header field names, J/L/39* filters, MB52 SUM,
+ mother expand + child direct add, mother self not double-counted,
+-segment lock, greedy by cutting, Y flag, 16-column output.
++segment lock, greedy by cutting, Y flag, 18-column output
++(mother plant/outside display after mother unit).
+ Optional: smoke New_0722/ workbooks when present.
+ """
+ 
+@@ -20,6 +21,8 @@ OUTPUT_HEADERS = [
+     "mother material",
+     "mother batch",
+     "mother unit",
++    "mother plant stock",
++    "mother stock outside",
+     "child material",
+     "child batch",
+     "child unit",
+@@ -167,12 +170,18 @@ def run_engine(
+     children_by_mother_seg: dict[tuple[str, str], dict[str, dict]] = defaultdict(dict)
+     mother_suffix: dict[str, str] = {}
+     mother_unit_h: dict[str, str] = {}
++    outside_pair: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
++        lambda: {"j": 0.0, "p": 0.0}
++    )
+ 
+     for row in zrmm:
+         mother = _norm(row.get("mother"))
+         child = _norm(row.get("child"))
+         if not mother or not child:
+             continue
++        j = _num(row.get("gi_j"))
++        l = _num(row.get("vendor_l"))
++        p = _num(row.get("gr_p"))
+         if storage_excluded(row.get("storage")):
+             continue
+         batch = _norm_seg(row.get("batch"))
+@@ -184,9 +193,17 @@ def run_engine(
+         suffix = _extract_size_suffix(desc)
+         if suffix and mother not in mother_suffix:
+             mother_suffix[mother] = suffix
+-        # BOM always (non-39*); J/L no longer gate expand or output columns
++        # BOM always (non-39*); outside only when J and L both non-zero
+         if child not in children_by_mother_seg[(mother, batch)]:
+             children_by_mother_seg[(mother, batch)][child] = {"bun": bun, "oun": oun}
++        if j == 0 or l == 0:
++            continue
++        outside_pair[(mother, child, batch)]["j"] += j
++        outside_pair[(mother, child, batch)]["p"] += p
++
++    outside_by_mother: dict[tuple[str, str], float] = defaultdict(float)
++    for (mother, _child, seg), agg in outside_pair.items():
++        outside_by_mother[(mother, seg)] += max(0.0, agg["j"] - agg["p"])
+ 
+     stock_mb52: dict[tuple[str, str], float] = defaultdict(float)
+     for row in mb52:
+@@ -330,6 +347,14 @@ def run_engine(
+         pool_after = pool_before - provide
+         remaining_plant[key] = plant_after
+         remaining_pool[key] = pool_after
++        mother_mb = (
++            stock_mb52.get((item["mother"], item["segment"]), 0.0) if item["mother"] else ""
++        )
++        mother_out = (
++            outside_by_mother.get((item["mother"], item["segment"]), 0.0)
++            if item["mother"]
++            else ""
++        )
+         out_rows.append(
+             [
+                 item["cutting"],
+@@ -337,6 +362,8 @@ def run_engine(
+                 item["mother"],
+                 item["segment"],
+                 item["mother_unit"],
++                _fmt(mother_mb) if item["mother"] else "",
++                _fmt(mother_out) if item["mother"] else "",
+                 item["child"],
+                 item["segment"],
+                 item["child_unit"],
+@@ -356,21 +383,21 @@ def run_engine(
+     for idx, row in enumerate(out_rows):
+         so = _norm(row[1])
+         mother = _norm(row[2])
+-        segment = _norm(row[3]) or _norm(row[6])
+-        child = _norm(row[5])
++        segment = _norm(row[3]) or _norm(row[8])
++        child = _norm(row[7])
+         gkey = f"{so}\0{mother}\0{segment}" if mother else f"{so}\0\0{segment}\0{child}"
+         groups[gkey].append(idx)
+     for indices in groups.values():
+         to_check = [
+             i
+             for i in indices
+-            if not is_mh04_child(out_rows[i][5]) and _num(out_rows[i][10]) > 0
++            if not is_mh04_child(out_rows[i][7]) and _num(out_rows[i][12]) > 0
+         ]
+         qualifies = bool(to_check) and all(
+-            _num(out_rows[i][13]) >= _num(out_rows[i][10]) - 1e-9 for i in to_check
++            _num(out_rows[i][15]) >= _num(out_rows[i][12]) - 1e-9 for i in to_check
+         )
+         for i in indices:
+-            out_rows[i][15] = "Y" if qualifies else ""
++            out_rows[i][17] = "Y" if qualifies else ""
+ 
+     return {"ok": True, "headers": OUTPUT_HEADERS, "rows": out_rows}
+ 
+@@ -445,32 +472,36 @@ def test_expand_plus_direct_and_outside() -> None:
+     )
+     _assert(result["ok"], str(result))
+     rows = result["rows"]
+-    _assert(len(result["headers"]) == 16, "16 headers")
+-    # MB52 SUM FLT=50; pool=50
++    _assert(len(result["headers"]) == 18, "18 headers")
++    # mother outside = max(0,20-8)=12 from CHILD_A only (CHILD_B J=0 skipped); MB52 SUM FLT=50
+     so1 = [r for r in rows if r[1] == "10100001"]
+-    _assert(len(so1) == 2, f"SO1 should expand to CHILD_A + CHILD_B, got {len(so1)} {[r[5] for r in so1]}")
+-    r = next(x for x in so1 if x[5] == "CHILD_A")
++    _assert(len(so1) == 2, f"SO1 should expand to CHILD_A + CHILD_B, got {len(so1)} {[r[7] for r in so1]}")
++    r = next(x for x in so1 if x[7] == "CHILD_A")
+     _assert(r[2] == "MOTHER_A", "mother")
+-    _assert(r[3] == "FLT" and r[6] == "FLT", "batches")
+-    _assert(_num(r[8]) == 10, f"child demand expected 10 got {r[8]}")
+-    _assert(_num(r[9]) == 5, f"demand direct expected 5 got {r[9]}")
+-    _assert(_num(r[10]) == 15, "demand total 15")
+-    _assert(_num(r[11]) == 50, "child plant before SO1")
+-    _assert(_num(r[12]) == 50, "allocatable before SO1 (= MB52)")
+-    _assert(_num(r[13]) == 15, "provided full")
+-    _assert(_num(r[14]) == 35, "remaining after SO1")
+-    _assert(r[15] == "Y", "Y when fully provided")
+-    rb = next(x for x in so1 if x[5] == "CHILD_B")
+-    _assert(_num(rb[8]) == 10, "CHILD_B also expanded from mother despite J=0")
++    _assert(r[3] == "FLT" and r[8] == "FLT", "batches")
++    _assert(_num(r[5]) == 0, "mother plant (no mother MB52 in fixture)")
++    _assert(_num(r[6]) == 12, "mother outside = pair CHILD_A only")
++    _assert(_num(r[10]) == 10, f"child demand expected 10 got {r[10]}")
++    _assert(_num(r[11]) == 5, f"demand direct expected 5 got {r[11]}")
++    _assert(_num(r[12]) == 15, "demand total 15")
++    _assert(_num(r[13]) == 50, "child plant before SO1")
++    _assert(_num(r[14]) == 50, "allocatable before SO1 (= MB52)")
++    _assert(_num(r[15]) == 15, "provided full")
++    _assert(_num(r[16]) == 35, "remaining after SO1")
++    _assert(r[17] == "Y", "Y when fully provided")
++    rb = next(x for x in so1 if x[7] == "CHILD_B")
++    _assert(_num(rb[10]) == 10, "CHILD_B also expanded from mother despite J=0")
++    _assert(_num(rb[6]) == 12, "same mother outside on CHILD_B row")
+ 
+     so2 = [r for r in rows if r[1] == "10100002"]
+     _assert(len(so2) == 1, "SO2 one direct row")
+     r2 = so2[0]
+     _assert(r2[2] == "", "no mother on direct-only")
+-    _assert(_num(r2[11]) == 35, f"SO2 plant remaining after SO1 provide 15, got {r2[11]}")
+-    _assert(_num(r2[12]) == 35, f"SO2 allocatable remaining 35, got {r2[12]}")
+-    _assert(_num(r2[13]) == 35, f"SO2 gets remaining pool 35, got {r2[13]}")
+-    _assert(r2[15] == "", "not Y when short")
++    _assert(r2[5] == "" and r2[6] == "", "blank mother stock cols")
++    _assert(_num(r2[13]) == 35, f"SO2 plant remaining after SO1 provide 15, got {r2[13]}")
++    _assert(_num(r2[14]) == 35, f"SO2 allocatable remaining 35, got {r2[14]}")
++    _assert(_num(r2[15]) == 35, f"SO2 gets remaining pool 35, got {r2[15]}")
++    _assert(r2[17] == "", "not Y when short")
+ 
+ 
+ def test_bom_expand_when_vendor_stock_l_is_zero() -> None:
+@@ -512,7 +543,7 @@ def test_bom_expand_when_vendor_stock_l_is_zero() -> None:
+         ],
+     )
+     _assert(result["ok"], str(result))
+-    children = sorted(r[5] for r in result["rows"])
++    children = sorted(r[7] for r in result["rows"])
+     _assert(children == ["MH040007537", "MP190000562"], f"both children, got {children}")
+ 
+ 
+@@ -558,12 +589,12 @@ def test_mother_not_double_counted() -> None:
+     )
+     _assert(result["ok"], str(result))
+     rows = result["rows"]
+-    mothers_self = [r for r in rows if r[5] == "MA020162253" and r[2] == ""]
++    mothers_self = [r for r in rows if r[7] == "MA020162253" and r[2] == ""]
+     _assert(not mothers_self, "expanded mother must not appear as blank-mother direct row")
+-    child_rows = [r for r in rows if r[5] == "CHILD_X"]
++    child_rows = [r for r in rows if r[7] == "CHILD_X"]
+     _assert(len(child_rows) == 1, "one expansion child")
+-    _assert(_num(child_rows[0][8]) == 4, f"SHT→M 2*2=4, got {child_rows[0][8]}")
+-    _assert(_num(child_rows[0][9]) == 0, "no direct on child")
++    _assert(_num(child_rows[0][10]) == 4, f"SHT→M 2*2=4, got {child_rows[0][10]}")
++    _assert(_num(child_rows[0][11]) == 0, "no direct on child")
+ 
+ 
+ def test_segment_lock_blank() -> None:
+@@ -648,15 +679,15 @@ def test_mh04_kept_but_ignored_for_y_kit() -> None:
+         ],
+     )
+     _assert(result["ok"], str(result))
+-    children = sorted(r[5] for r in result["rows"])
++    children = sorted(r[7] for r in result["rows"])
+     _assert(
+         children == ["MH040001138", "MP190000407", "MPO80002175"],
+         f"all three children expected, got {children}",
+     )
+-    mh04 = next(r for r in result["rows"] if r[5] == "MH040001138")
+-    _assert(_num(mh04[13]) == 0, "MH04 provided may be 0")
++    mh04 = next(r for r in result["rows"] if r[7] == "MH040001138")
++    _assert(_num(mh04[15]) == 0, "MH04 provided may be 0")
+     for r in result["rows"]:
+-        _assert(r[15] == "Y", f"Y when non-MH04 kit complete, got {r[5]}={r[15]}")
++        _assert(r[17] == "Y", f"Y when non-MH04 kit complete, got {r[7]}={r[17]}")
+ 
+ 
+ def test_find_col_open_quantity() -> None:
+@@ -837,7 +868,7 @@ def smoke_new_0722() -> dict | None:
+             "headers_ok": True,
+         }
+ 
+-    dual = [r for r in result["rows"] if "MA020162253" in (r[2], r[5])]
++    dual = [r for r in result["rows"] if "MA020162253" in (r[2], r[7])]
+     print(
+         f"New_0722 smoke OK: schedule={len(schedule)} coois={len(coois)} "
+         f"zrmm={len(zrmm)} mb52={len(mb52)} out_rows={len(result['rows'])} "
+@@ -897,8 +928,8 @@ def test_mother_rows_sort_before_direct_within_so() -> None:
+     _assert(result["ok"], str(result))
+     rows = result["rows"]
+     _assert(len(rows) == 2, rows)
+-    _assert(rows[0][2] == "MOTHER_Z" and rows[0][5] == "CHILD_Z", f"mother row first: {rows[0]}")
+-    _assert(rows[1][2] == "" and rows[1][5] == "DIRECT_ONLY", f"direct row second: {rows[1]}")
++    _assert(rows[0][2] == "MOTHER_Z" and rows[0][7] == "CHILD_Z", f"mother row first: {rows[0]}")
++    _assert(rows[1][2] == "" and rows[1][7] == "DIRECT_ONLY", f"direct row second: {rows[1]}")
+ 
+ 
+ def test_flt_mtf_stock_never_mixed() -> None:
+@@ -906,8 +937,8 @@ def test_flt_mtf_stock_never_mixed() -> None:
+     result = run_engine(
+         schedule=[{"so": "10100060", "cutting": "2026-07-01"}],
+         coois=[
+-            {"so": "10100060", "material": "CHILD_SEG", "qty": 30, "segment": "FLT", "unit": "M"},
+-            {"so": "10100060", "material": "CHILD_SEG", "qty": 5, "segment": "MTF", "unit": "M"},
++            {"so": "10100060", "material": "M_SEG", "qty": 30, "segment": "FLT", "unit": "M"},
++            {"so": "10100060", "material": "M_SEG", "qty": 5, "segment": "MTF", "unit": "M"},
+         ],
+         zrmm=[
+             {
+@@ -942,17 +973,67 @@ def test_flt_mtf_stock_never_mixed() -> None:
+         ],
+     )
+     _assert(result["ok"], str(result))
+-    by_seg = {r[6]: r for r in result["rows"]}
++    by_seg = {r[8]: r for r in result["rows"]}
+     _assert("FLT" in by_seg and "MTF" in by_seg, by_seg.keys())
+     flt, mtf = by_seg["FLT"], by_seg["MTF"]
+-    # FLT: plant=120, pool=120, provide=30
+-    _assert(_num(flt[11]) == 120, f"FLT plant {flt[11]}")
+-    _assert(_num(flt[12]) == 120, f"FLT avail {flt[12]}")
+-    _assert(_num(flt[13]) == 30, f"FLT provided {flt[13]}")
+-    # MTF must NOT see FLT stock: plant=7, pool=7, provide=5
+-    _assert(_num(mtf[11]) == 7, f"MTF plant must not include FLT, got {mtf[11]}")
+-    _assert(_num(mtf[12]) == 7, f"MTF avail {mtf[12]}")
+-    _assert(_num(mtf[13]) == 5, f"MTF provided {mtf[13]}")
++    # FLT: plant=120, pool=120, provide=30; mother outside=10
++    _assert(_num(flt[13]) == 120, f"FLT plant {flt[13]}")
++    _assert(_num(flt[14]) == 120, f"FLT avail {flt[14]}")
++    _assert(_num(flt[15]) == 30, f"FLT provided {flt[15]}")
++    _assert(_num(flt[6]) == 10, f"FLT mother outside {flt[6]}")
++    # MTF must NOT see FLT stock: plant=7, pool=7, provide=5; mother outside=1
++    _assert(_num(mtf[13]) == 7, f"MTF plant must not include FLT, got {mtf[13]}")
++    _assert(_num(mtf[14]) == 7, f"MTF avail {mtf[14]}")
++    _assert(_num(mtf[15]) == 5, f"MTF provided {mtf[15]}")
++    _assert(_num(mtf[6]) == 1, f"MTF mother outside {mtf[6]}")
++
++
++def test_mother_outside_clamps_negative_pair() -> None:
++    """Per-child max(0,ΣJ−ΣP); mother column sums pairs (negative pair → 0)."""
++    result = run_engine(
++        schedule=[{"so": "10100999", "cutting": "2026-07-01"}],
++        coois=[
++            {"so": "10100999", "material": "MN050086118", "qty": 1, "segment": "FLT", "unit": "M"},
++        ],
++        zrmm=[
++            {
++                "mother": "MN050086118",
++                "child": "MH040001536",
++                "gi_j": 1269.15,
++                "vendor_l": 1,
++                "gr_p": 1329,
++                "storage": "1001",
++                "batch": "FLT",
++                "oun": "M",
++                "bun": "M",
++                "desc": "",
++            },
++            {
++                "mother": "MN050086118",
++                "child": "MP080009346",
++                "gi_j": 11,
++                "vendor_l": 1,
++                "gr_p": 11,
++                "storage": "1001",
++                "batch": "FLT",
++                "oun": "M",
++                "bun": "M",
++                "desc": "",
++            },
++        ],
++        mb52=[
++            {"material": "MH040001536", "segment": "FLT", "storage": "1001", "stock": 10},
++            {"material": "MP080009346", "segment": "FLT", "storage": "1001", "stock": 10},
++            {"material": "MN050086118", "segment": "FLT", "storage": "1001", "stock": 50},
++            {"material": "MN050086118", "segment": "FLT", "storage": "39G2", "stock": 999},
++        ],
++    )
++    _assert(result["ok"], str(result))
++    rows = result["rows"]
++    _assert(len(rows) == 2, rows)
++    for r in rows:
++        _assert(_num(r[5]) == 50, f"mother plant excl 39* got {r[5]}")
++        _assert(_num(r[6]) == 0, f"mother outside 0+0 got {r[6]}")
+ 
+ 
+ def test_available_pool_ignores_outside() -> None:
+@@ -960,7 +1041,7 @@ def test_available_pool_ignores_outside() -> None:
+     result = run_engine(
+         schedule=[{"so": "10100040", "cutting": "2026-07-01"}],
+         coois=[
+-            {"so": "10100040", "material": "CHILD_NEG", "qty": 5, "segment": "FLT", "unit": "M"},
++            {"so": "10100040", "material": "M_NEG", "qty": 5, "segment": "FLT", "unit": "M"},
+         ],
+         zrmm=[
+             {
+@@ -982,10 +1063,12 @@ def test_available_pool_ignores_outside() -> None:
+     )
+     _assert(result["ok"], str(result))
+     r = result["rows"][0]
+-    _assert(_num(r[11]) == 20, f"plant {r[11]}")
+-    _assert(_num(r[12]) == 20, f"avail must equal MB52, got {r[12]}")
+-    _assert(_num(r[13]) == 5, f"provided {r[13]}")
+-    _assert(_num(r[14]) == 15, f"remaining {r[14]}")
++    _assert(_num(r[5]) == 0, "mother plant display")
++    _assert(_num(r[6]) == 90, f"mother outside display {r[6]}")  # max(0,100-10)
++    _assert(_num(r[13]) == 20, f"plant {r[13]}")
++    _assert(_num(r[14]) == 20, f"avail must equal MB52, got {r[14]}")
++    _assert(_num(r[15]) == 5, f"provided {r[15]}")
++    _assert(_num(r[16]) == 15, f"remaining {r[16]}")
+ 
+ 
+ def main() -> int:
+@@ -998,6 +1081,7 @@ def main() -> int:
+         test_mh04_kept_but_ignored_for_y_kit,
+         test_mother_rows_sort_before_direct_within_so,
+         test_flt_mtf_stock_never_mixed,
++        test_mother_outside_clamps_negative_pair,
+         test_available_pool_ignores_outside,
+     ]
+     failed = 0
+diff --git a/README.md b/README.md
+index e021c64..9f40178 100644
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,7 @@
+ 
+ 本專案是一個在使用者電腦瀏覽器內執行的單頁工具，依核准業務規則將 **Schedule（排程）**、**COOIS（需求）**、**ZRMM0028（BOM／廠外）** 與 **MB52（廠內庫存）** 合併後做**庫存貪婪配發**，並匯出可比對「需求 vs 能提供」與「扣減後剩餘」的結果。
+ 
+-**現行程式入口：`allocation-web.html`（v3.1.3）**  
++**現行程式入口：`allocation-web.html`（v3.1.4）**  
+ 規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
+ 
+ 舊檔 `vlookup-web.html` 為**已淘汰的兩段式查找原型**，僅供歷史對照，**不是**現行產品方向。  
+@@ -14,7 +14,7 @@ v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocati
+ 
+ This project is a browser-based, single-page allocation tool. It combines **Schedule**, **COOIS** demand, **ZRMM0028** BOM/outside stock, and **MB52** plant stock under approved business rules, then greedily allocates child stock and exports demand vs provided and remaining stock after each row.
+ 
+-**Current app entry point: `allocation-web.html` (v3.1.3)**  
++**Current app entry point: `allocation-web.html` (v3.1.4)**  
+ Spec: [docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
+ 
+ Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only.  
+@@ -22,8 +22,8 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
+ 
+ ## 目前狀態
+ 
+-- 狀態：配發引擎 **v3.1.3**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**16 欄**輸出、Y 標記）已實作。
+-- 程式版本：`allocation-web.html` **3.1.3**。
++- 狀態：配發引擎 **v3.1.4**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記）已實作。
++- 程式版本：`allocation-web.html` **3.1.4**。
+ - 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
+ - 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
+ - 語言規則：專案說明與規格採繁體中文在前、英文緊接；UI 為 English／繁體中文／မြန်မာ。
+@@ -31,8 +31,8 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
+ 
+ ## Current status
+ 
+-- Status: Allocation engine **v3.1.3** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **16-column** output, Y flag) is implemented.
+-- App version: `allocation-web.html` **3.1.3**.
++- Status: Allocation engine **v3.1.4** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **18-column** output with mother plant/outside display, Y flag) is implemented.
++- App version: `allocation-web.html` **3.1.4**.
+ - Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
+ - Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
+ - Language rule: Project docs place Traditional Chinese first and English immediately after. UI languages are English, Traditional Chinese, and Myanmar.
+@@ -45,7 +45,7 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
+ 3. **ZRMM0028**：母料 Material → 子料 Article(Com.)；儲位 39* 排除；Batch 須對齊 Segment（BOM 展開不因 J/L=0 丢掉）。
+ 4. **MB52**：Material + Stock Segment 的 Unrestricted **SUM**（排除 39*）；可配發池 = MB52。
+ 5. 需求：母料展開（× conversion）＋同料直接 Open Quantity；單位換算同 v2（1:1／SHT 末碼表／M↔YD 白名單）。
+-6. 輸出 **16** 欄（含子材料需求、雙 BATCH、Y）。細節見 [docs/07](docs/07-allocation-v3-spec.md)。
++6. 輸出 **18** 欄（含廠內／廠外母材料庫存顯示、子材料需求、雙 BATCH、Y）。細節見 [docs/07](docs/07-allocation-v3-spec.md)。
+ 
+ ## Allocation data flow (v3)
+ 
+@@ -54,7 +54,7 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
+ 3. **ZRMM0028**: mother Material → child Article(Com.); exclude storage 39*; Batch must match Segment (BOM expand keeps children even when J/L is 0).
+ 4. **MB52**: SUM Unrestricted by Material + Stock Segment (exclude 39*); allocatable pool = MB52 only.
+ 5. Demand: mother expansion (× conversion) + direct Open Quantity; unit conversion same as v2.
+-6. Output **16** columns (child demand, dual BATCH, Y). See [docs/07](docs/07-allocation-v3-spec.md).
++6. Output **18** columns (mother plant/outside display, child demand, dual BATCH, Y). See [docs/07](docs/07-allocation-v3-spec.md).
+ 
+ ## 文件索引
+ 
+diff --git a/allocation-manual.html b/allocation-manual.html
+index b1c7f5d..de0dd8b 100644
+--- a/allocation-manual.html
++++ b/allocation-manual.html
+@@ -183,7 +183,7 @@
+   <main>
+     <section>
+       <p data-i18n="manualIntro">This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.</p>
+-      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.3 — four inputs, 16-column export, Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
++      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
+     </section>
+ 
+     <section>
+@@ -211,8 +211,8 @@
+       <ul>
+         <li data-i18n="rules1">Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.</li>
+         <li data-i18n="rules2">MH04* children are kept in BOM / outside / demand / export. They are ignored only when deciding pending allocation (Y) kit completeness.</li>
+-        <li data-i18n="rules3">Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Child outside is summed across mothers for that Batch. BOM expand keeps all non-39* children even when J/L is 0.</li>
+-        <li data-i18n="rules4">Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = MB52 only.</li>
++        <li data-i18n="rules3">Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Mother outside column sums those pairs for mother+Batch. BOM expand keeps all non-39* children even when J/L is 0.</li>
++        <li data-i18n="rules4">Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = child MB52 only. Mother plant stock is display-only from the same MB52 rule.</li>
+         <li data-i18n="rules5">Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.</li>
+         <li data-i18n="rules6">Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.</li>
+         <li data-i18n="rules7">Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.</li>
+@@ -224,7 +224,7 @@
+       <ul>
+         <li data-i18n="step3a">Filter by SO, cutting date range, or mother/child material. Preview updates live.</li>
+         <li data-i18n="step3b">Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.</li>
+-        <li data-i18n="step3c">Export CSV or Excel (16 columns). Excel export paints dual-identity material codes in blue (mother/child columns).</li>
++        <li data-i18n="step3c">Export CSV or Excel (18 columns). Excel export paints dual-identity material codes in blue (mother/child columns).</li>
+         <li data-i18n="step3d">Blue codes = dual identity (same code is both mother and child in ZRMM0028).</li>
+         <li data-i18n="step3e">If inputs change after a run, re-run allocation before exporting.</li>
+       </ul>
+@@ -236,11 +236,12 @@
+     </section>
+ 
+     <section>
+-      <h2 data-i18n="outTitle">Output columns (16)</h2>
++      <h2 data-i18n="outTitle">Output columns (18)</h2>
+       <p data-i18n="outIntro">Preview and Excel use the same column order.</p>
+       <ol>
+         <li data-i18n="out1">cutting · so</li>
+         <li data-i18n="out2">mother material · mother batch · mother unit</li>
++        <li data-i18n="out2b">mother plant stock · mother stock outside (display only)</li>
+         <li data-i18n="out3">child material · child batch · child unit</li>
+         <li data-i18n="out4">child demand · demand direct · demand qty</li>
+         <li data-i18n="out5">child stock (running) · stock available (=MB52 pool)</li>
+@@ -308,7 +309,7 @@
+         themeMill: "Mill Ops",
+         themeSoft: "Soft Enterprise",
+         manualIntro: "This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.",
+-        manualVersion: "App version: allocation-web.html v3.1.3 — four inputs, 16-column export, Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
++        manualVersion: "App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
+         step1Title: "Step 1 — Import Excel files",
+         step1a: "Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).",
+         step1b: "Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.",
+@@ -322,23 +323,24 @@
+         rulesTitle: "Allocation rules (important)",
+         rules1: "Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.",
+         rules2: "MH04* children are kept in BOM / outside / demand / export. They are ignored only when deciding pending allocation (Y) kit completeness.",
+-        rules3: "Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Child outside is summed across mothers for that Batch. BOM expand keeps all non-39* children even when J/L is 0.",
+-        rules4: "Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = MB52 only.",
++        rules3: "Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Mother outside column sums those pairs for mother+Batch. BOM expand keeps all non-39* children even when J/L is 0.",
++        rules4: "Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = child MB52 only. Mother plant stock is display-only from the same MB52 rule.",
+         rules5: "Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.",
+         rules6: "Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.",
+         rules7: "Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.",
+         step3Title: "Step 3 — Filter, preview & export",
+         step3a: "Filter by SO, cutting date range, or mother/child material. Preview updates live.",
+         step3b: "Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.",
+-        step3c: "Export CSV or Excel (16 columns). Excel export paints dual-identity material codes in blue (mother/child columns).",
++        step3c: "Export CSV or Excel (18 columns). Excel export paints dual-identity material codes in blue (mother/child columns).",
+         step3d: "Blue codes = dual identity (same code is both mother and child in ZRMM0028).",
+         step3e: "If inputs change after a run, re-run allocation before exporting.",
+         yTitle: "Column Y (pending allocation)",
+         yBody: "For each sales order + mother + segment group: Y when every non-MH04 demand>0 child is fully provided. MH04 children do not affect the kit flag. Direct-only rows (blank mother) form their own group per child.",
+-        outTitle: "Output columns (16)",
++        outTitle: "Output columns (18)",
+         outIntro: "Preview and Excel use the same column order.",
+         out1: "cutting · so",
+         out2: "mother material · mother batch · mother unit",
++        out2b: "mother plant stock · mother stock outside (display only)",
+         out3: "child material · child batch · child unit",
+         out4: "child demand · demand direct · demand qty",
+         out5: "child stock (running) · stock available (=MB52 pool)",
+@@ -382,7 +384,7 @@
+         themeMill: "Mill Ops 廠務",
+         themeSoft: "Soft 企業風",
+         manualIntro: "本手冊說明 RAW MAT 庫存配發引擎 v3（離線瀏覽器工具）。請在上方選擇語系。",
+-        manualVersion: "程式版本：allocation-web.html v3.1.3 — 四輸入、16 欄匯出、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。",
++        manualVersion: "程式版本：allocation-web.html v3.1.4 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。",
+         step1Title: "第 1 步 — 匯入 Excel",
+         step1a: "上傳或貼上四個檔案：Schedule 排程、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。",
+         step1b: "欄位以英文表頭名稱解析（可用 alias）。雙表頭（中文＋英文）時以英文列為 header。",
+@@ -396,23 +398,24 @@
+         rulesTitle: "配發規則（重要）",
+         rules1: "需求路徑：僅計算存在於 ZRMM0028 Article（子料）的料號；COOIS 的 HC／HU 等不在 0028.F 者不計算。",
+         rules2: "MH04* 子料仍進 BOM／廠外／需求／匯出；僅在「待配發（Y）」配套判定時略過，不論其是否有庫存。",
+-        rules3: "廠外庫存 = max(0, Σ GI J − Σ GR P)，依母–子–Batch（J=0 或 L=0 的列只不計廠外，仍做合貼展開）。子料廠外為同 Batch 下各母加總。",
+-        rules4: "廠內庫存 = SUM(MB52 Unrestricted)，依 Material + Stock Segment（排除儲位 39*）。可配發池 = MB52。",
++        rules3: "廠外庫存 = max(0, Σ GI J − Σ GR P)，依母–子–Batch（J=0 或 L=0 的列只不計廠外，仍做合貼展開）。廠外母材料庫存 = 該母+Batch 下各子料 pair 加總。",
++        rules4: "廠內庫存 = SUM(MB52 Unrestricted)，依 Material + Stock Segment（排除儲位 39*）。可配發池 = 子料 MB52；廠內母材料庫存僅顯示。",
+         rules5: "Segment 鎖定：COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch。FLT 與 MTF 永不混倉。",
+         rules6: "母料 COOIS 列展開至所有有效子料（× 換算）；子料若在 0028.F，其 Open Quantity 加為 demand direct。",
+         rules7: "依最早 cutting、再 SO 貪婪配發；同 SO 內有母料列排在母料空白的直接需求列之前。",
+         step3Title: "第 3 步 — 篩選、預覽與匯出",
+         step3a: "可依 SO、cutting 日期、母／子材料篩選；預覽即時更新。",
+         step3b: "隱藏零需求 SO／列預設勾選。取消勾選才會在預覽與匯出顯示 demand=0 列。",
+-        step3c: "匯出 CSV 或 Excel（16 欄）。Excel 會將雙重身分料號以藍色標示（母／子欄）。",
++        step3c: "匯出 CSV 或 Excel（18 欄）。Excel 會將雙重身分料號以藍色標示（母／子欄）。",
+         step3d: "藍色料號 = 雙重身分（同一碼在 ZRMM0028 同時為母與子）。",
+         step3e: "若執行後又修改輸入，請重新配發再匯出。",
+         yTitle: "Y 欄（待配發標記）",
+         yBody: "同一訂單 + 母料 + Segment：僅當所有非 MH04 且 demand>0 的子料列皆 fully provided 時標 Y；MH04 子料不影響配套。僅直接需求（母料空白）時依子料各自成組。",
+-        outTitle: "輸出欄位（16）",
++        outTitle: "輸出欄位（18）",
+         outIntro: "預覽與 Excel 欄序相同。",
+         out1: "cutting · so",
+         out2: "母料 · 母 Batch · 母單位",
++        out2b: "廠內母材料庫存 · 廠外母材料庫存（僅顯示）",
+         out3: "子料 · 子 Batch · 子單位",
+         out4: "子材料需求 · 子料直接需求 · 需求合計",
+         out5: "子材料庫存（遞減）· 可配發庫存（=MB52 池）",
+@@ -456,7 +459,7 @@
+         themeMill: "Mill Ops",
+         themeSoft: "Soft Enterprise",
+         manualIntro: "ဤလက်စွဲသည် RAW MAT Allocation Engine v3 (offline ဘရောက်ဆာ ကိရိယာ) ကို ရှင်းပြသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
+-        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.3 — input ၄ ခု၊ ကော်လံ ၁၆ ခု၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။",
++        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.4 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။",
+         step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
+         step1a: "ဖိုင် ၄ ခု တင်ပါ/ကူးထည့်ပါ — Schedule၊ COOIS (လိုအပ်ချက်)၊ ZRMM0028 (BOM/ပြင်ပ)၊ MB52 (သိုလှောင်)။",
+         step1b: "ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ဖြေရှင်းသည် (alias ခွင့်ပြု)။ နှစ်ထပ်ခေါင်းစဉ် (တရုတ်ပြီး အင်္ဂလိပ်) တွင် အင်္ဂလိပ်အတန်းကို သုံးသည်။",
+@@ -470,23 +473,24 @@
+         rulesTitle: "ခွဲဝေမှု စည်းမျဉ်း (အရေးကြီး)",
+         rules1: "လိုအပ်ချက်လမ်းကြောင်း: ZRMM0028 Article (သား) တွင် ရှိသော ပစ္စည်းများသာ။ 0028.F တွင် မရှိသော HC/HU စသည်များကို ကျော်သည်။",
+         rules2: "MH04* သားများကို BOM / ပြင်ပ / လိုအပ်ချက် / ထုတ်ယူတွင် ထားသည်။ ခွဲဝေရန် (Y) တွဲစုံ စစ်ဆေးရာတွင်သာ ကျော်သည်။",
+-        rules3: "ပြင်ပသိုလှောင် = max(0, Σ GI J − Σ GR P) မိခင်–သား–Batch (J=0 သို့မဟုတ် L=0 ကို ပြင်ပတွင်သာ ကျော်၊ BOM ချဲ့ရာတွင် ထား)။",
+-        rules4: "စက်ရုံသိုလှောင် = SUM(MB52 Unrestricted) Material + Stock Segment (storage 39* ဖယ်)။ ခွဲဝေကန် = MB52 သာ။",
++        rules3: "ပြင်ပသိုလှောင် = max(0, Σ GI J − Σ GR P) မိခင်–သား–Batch (J=0 သို့မဟုတ် L=0 ကို ပြင်ပတွင်သာ ကျော်၊ BOM ချဲ့ရာတွင် ထား)။ မိခင် ပြင်ပကော်လံ = မိခင်+Batch အတွက် သား pair ပေါင်း။",
++        rules4: "စက်ရုံသိုလှောင် = SUM(MB52 Unrestricted) Material + Stock Segment (storage 39* ဖယ်)။ ခွဲဝေကန် = သား MB52 သာ; မိခင် စက်ရုံသိုလှောင်သည် ပြသရန်သာ။",
+         rules5: "Segment သော့: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch။ FLT နှင့် MTF ဘယ်တော့မှ မရော။",
+         rules6: "မိခင် COOIS အတန်းများကို သားတရားဝင်အားလုံးသို့ ချဲ့သည် (× conversion)၊ သား 0028.F တွင်ရှိလျှင် Open Quantity ကို demand direct ထည့်သည်။",
+         rules7: "အမြန်ဆုံး cutting၊ ပြီး SO အလိုက် greedy ခွဲဝေ၊ တူညီ SO အတွင်း မိခင်ရှိအတန်းများကို မိခင်ဗလာ direct အတန်းများအပေါ်တွင် စဉ်သည်။",
+         step3Title: "အဆင့် ၃ — စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
+         step3a: "SO၊ cutting ရက်စွဲ၊ မိခင်/သား ပစ္စည်းဖြင့် စစ်ထုတ်နိုင်သည်။ အစမ်းကြည့်မှု ချက်ချင်း မွမ်းမံသည်။",
+         step3b: "သုညလိုအပ်ချက် SO/အတန်း ဖျောက် checkbox များ ပုံမှန် ON။ ဖျက်မှ demand=0 အတန်းများကို အစမ်း/ထုတ်ယူတွင် မြင်ရမည်။",
+-        step3c: "CSV သို့မဟုတ် Excel (ကော်လံ ၁၆) ထုတ်ယူပါ။ Excel တွင် dual-identity ပစ္စည်းကုဒ်များကို အပြာရောင်ခြယ်သည်။",
++        step3c: "CSV သို့မဟုတ် Excel (ကော်လံ ၁၈) ထုတ်ယူပါ။ Excel တွင် dual-identity ပစ္စည်းကုဒ်များကို အပြာရောင်ခြယ်သည်။",
+         step3d: "အပြာကုဒ် = dual identity (ZRMM0028 တွင် မိခင်နှင့်သား တပြိုင်နက်)။",
+         step3e: "လုပ်ဆောင်ပြီးနောက် input ပြောင်းပါက ထုတ်ယူမီ ထပ်မံ ခွဲဝေပါ။",
+         yTitle: "ကော်လံ Y (ခွဲဝေရန်)",
+         yBody: "မှာယူမှု + မိခင် + segment အုပ်စုတွင် MH04 မဟုတ်သော demand>0 သားများ အပြည့် ပေးပြီးမှ Y။ MH04 သည် တွဲစုံအလံကို မထိခိုက်။ မိခင်ဗလာ direct အတန်းများသည် သားအလိုက် သီးခြားအုပ်စု။",
+-        outTitle: "ထုတ်ကုန် ကော်လံများ (၁၆)",
++        outTitle: "ထုတ်ကုန် ကော်လံများ (၁၈)",
+         outIntro: "အစမ်းကြည့်နှင့် Excel ကော်လံအစဉ် တူညီသည်။",
+         out1: "cutting · so",
+         out2: "မိခင်ပစ္စည်း · မိခင် batch · မိခင်ယူနစ်",
++        out2b: "မိခင် စက်ရုံသိုလှောင် · မိခင် ပြင်ပသိုလှောင် (ပြသရန်သာ)",
+         out3: "သားပစ္စည်း · သား batch · သားယူနစ်",
+         out4: "သားပစ္စည်း လိုအပ်ချက် · တိုက်ရိုက်လိုအပ်ချက် · လိုအပ်ချက်စုစုပေါင်း",
+         out5: "သား သိုလှောင် (လျော့) · ခွဲဝေနိုင် (=MB52)",
+diff --git a/allocation-web.html b/allocation-web.html
+index bdaa1a5..e55b990 100644
+--- a/allocation-web.html
++++ b/allocation-web.html
+@@ -1,7 +1,7 @@
+ <!doctype html>
+ <!--
+   RAW MAT Allocation Engine
+-  Version: 3.1.3
++  Version: 3.1.4
+   Product direction: inventory allocation (supersedes two-stage VLOOKUP)
+   Spec: docs/07-allocation-v3-spec.md
+   UI: Mill Ops (default) / Soft Enterprise theme toggle + L2 one-step screens
+@@ -1399,7 +1399,7 @@
+   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
+ 
+   <script>
+-    const APP_VERSION = "3.1.3";
++    const APP_VERSION = "3.1.4";
+     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
+     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
+     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
+@@ -1508,24 +1508,26 @@
+       }
+     };
+ 
+-    // Output indexes (16 columns; F/G/P stock-outside display cols removed)
++    // Output indexes (18 columns; mother plant/outside display after mother unit)
+     const OUT = {
+       cutting: 0,
+       so: 1,
+       mother: 2,
+       motherBatch: 3,
+       motherUnit: 4,
+-      child: 5,
+-      childBatch: 6,
+-      childUnit: 7,
+-      demandFromMother: 8,
+-      demandDirect: 9,
+-      demand: 10,
+-      stockMb52: 11,
+-      stockAvailable: 12,
+-      provided: 13,
+-      remaining: 14,
+-      flagY: 15
++      motherStockMb52: 5,
++      motherStockOutside: 6,
++      child: 7,
++      childBatch: 8,
++      childUnit: 9,
++      demandFromMother: 10,
++      demandDirect: 11,
++      demand: 12,
++      stockMb52: 13,
++      stockAvailable: 14,
++      provided: 15,
++      remaining: 16,
++      flagY: 17
+     };
+ 
+     const DEFAULT_CONVERSION_RULES = [
+@@ -1552,6 +1554,8 @@
+       "mother material",
+       "mother batch",
+       "mother unit",
++      "mother plant stock",
++      "mother stock outside",
+       "child material",
+       "child batch",
+       "child unit",
+@@ -1571,6 +1575,8 @@
+       "母材料",
+       "母材料 BATCH",
+       "母單位",
++      "廠內母材料庫存",
++      "廠外母材料庫存",
+       "子材料",
+       "子材料 BATCH",
+       "子單位",
+@@ -1590,6 +1596,8 @@
+       "မိခင်ပစ္စည်း",
+       "မိခင် BATCH",
+       "မိခင်ယူနစ်",
++      "မိခင် စက်ရုံသိုလှောင်",
++      "မိခင် ပြင်ပသိုလှောင်",
+       "သားပစ္စည်း",
+       "သား BATCH",
+       "သားယူနစ်",
+@@ -1609,6 +1617,8 @@
+       "tipColMother",
+       "tipColMotherBatch",
+       "tipColMotherUnit",
++      "tipColMotherStockMb52",
++      "tipColMotherStockOutside",
+       "tipColChild",
+       "tipColChildBatch",
+       "tipColChildUnit",
+@@ -1877,6 +1887,8 @@
+         tipColMother: "Mother material (blank for direct-only demand).",
+         tipColMotherBatch: "Mother / requirement segment (FLT/MTF).",
+         tipColMotherUnit: "Mother unit (ZRMM OUn or COOIS unit).",
++        tipColMotherStockMb52: "Display only: MB52 Unrestricted SUM for mother material + segment (excl. storage 39*). Not used for allocation.",
++        tipColMotherStockOutside: "Display only: sum of max(0, ΣJ−ΣP) for each child under this mother + segment (J=0 or L=0 rows skipped). Not used for allocation.",
+         tipColChild: "Child material allocated against stock.",
+         tipColChildBatch: "Child stock segment (FLT/MTF).",
+         tipColChildUnit: "Child unit (ZRMM BUn or COOIS/MB52 unit).",
+@@ -2047,6 +2059,8 @@
+         tipColMother: "母材料（僅直接需求時可空白）。",
+         tipColMotherBatch: "母料／需求區段（FLT/MTF）。",
+         tipColMotherUnit: "母單位（ZRMM OUn 或 COOIS）。",
++        tipColMotherStockMb52: "僅顯示：母料 + Segment 的 MB52 Unrestricted SUM（排除儲位 39*）。不參與配發。",
++        tipColMotherStockOutside: "僅顯示：本母料 + Segment 下各子料 pair 的 max(0, ΣJ−ΣP) 加總（J=0 或 L=0 不計）。不參與配發。",
+         tipColChild: "對庫存配發的子材料。",
+         tipColChildBatch: "子料庫存區段（FLT/MTF）。",
+         tipColChildUnit: "子單位（ZRMM BUn 或 COOIS/MB52）。",
+@@ -2217,6 +2231,8 @@
+         tipColMother: "မိခင်ပစ္စည်း (တိုက်ရိုက်သာ ဆိုပါက အလွတ်)။",
+         tipColMotherBatch: "Segment FLT/MTF။",
+         tipColMotherUnit: "မိခင်ယူနစ် (OUn)။",
++        tipColMotherStockMb52: "ပြသရန်သာ: မိခင် + Segment MB52 SUM (storage 39* ဖယ်)။ ခွဲဝေမှု မသုံး။",
++        tipColMotherStockOutside: "ပြသရန်သာ: မိခင် + Segment အတွက် သားအားလုံး၏ max(0, ΣJ−ΣP) ပေါင်း (J=0 သို့မဟုတ် L=0 ကျော်)။ ခွဲဝေမှု မသုံး။",
+         tipColChild: "သားပစ္စည်း။",
+         tipColChildBatch: "သား Segment။",
+         tipColChildUnit: "သားယူနစ် (BUn)။",
+@@ -3689,7 +3705,8 @@
+         }
+       }
+ 
+-      // ZRMM filtered rows + BOM
++      // ZRMM filtered rows + BOM + mother outside (display)
++      const outsidePair = new Map(); // mother\0child\0seg -> {j,p}
+       const childrenByMotherSeg = new Map(); // mother\0seg -> Map(child -> meta)
+       const motherSuffix = new Map();
+       const motherUnitH = new Map();
+@@ -3700,6 +3717,9 @@
+         const mother = normalize(row[zc.mother]);
+         const child = normalize(row[zc.child]);
+         if (!mother || !child) return;
++        const j = parseNumber(row[zc.giJ]);
++        const l = parseNumber(row[zc.vendorL]);
++        const p = parseNumber(row[zc.grP]);
+         const storage = zc.storage >= 0 ? row[zc.storage] : "";
+         if (storageExcluded(storage)) return;
+         const batch = zc.batch >= 0 ? normalizeSegment(row[zc.batch]) : "";
+@@ -3730,6 +3750,14 @@
+             `ZRMM row ${idx + 2}: mother ${mother} child ${child} conflicting BUn (${childMap.get(child).bun} vs ${bun})`
+           );
+         }
++
++        // 廠外母材料庫存：J=0 或 L=0 不計入
++        if (j === 0 || l === 0) return;
++        const pairSeg = `${mother}\u0000${child}\u0000${batch}`;
++        if (!outsidePair.has(pairSeg)) outsidePair.set(pairSeg, { j: 0, p: 0 });
++        const agg = outsidePair.get(pairSeg);
++        agg.j += j;
++        agg.p += p;
+       });
+ 
+       if (suffixConflicts.length) {
+@@ -3747,6 +3775,14 @@
+         };
+       }
+ 
++      const outsideByMother = new Map(); // mother\0seg — display only
++      for (const [key, { j, p }] of outsidePair.entries()) {
++        const [mother, , seg] = key.split("\u0000");
++        const outside = Math.max(0, j - p);
++        const mk = poolKey(mother, seg);
++        outsideByMother.set(mk, (outsideByMother.get(mk) || 0) + outside);
++      }
++
+       // MB52 stock SUM by Material + Stock Segment only (never mix FLT with MTF)
+       const stockMb52 = new Map();
+       for (const row of mb52.rows) {
+@@ -3929,7 +3965,7 @@
+       });
+ 
+       // Running balances (same child+segment): decrease as earlier cutting/SO rows consume stock.
+-      // Allocatable pool = MB52 only (outside not subtracted; outside columns removed from output).
++      // Allocatable pool = MB52 only. Mother plant/outside columns are display-only.
+       const remainingPlant = new Map();
+       const remainingPool = new Map();
+       for (const [key, mb] of stockMb52.entries()) {
+@@ -3951,12 +3987,17 @@
+         remainingPlant.set(key, plantAfter);
+         remainingPool.set(key, poolAfter);
+         if (provide < demandTotal - 1e-9) shortage += 1;
++        const motherKey = item.mother ? poolKey(item.mother, item.segment) : "";
++        const motherMb = item.mother ? (stockMb52.get(motherKey) || 0) : "";
++        const motherOut = item.mother ? (outsideByMother.get(motherKey) || 0) : "";
+         outRows.push([
+           item.cutting,
+           item.so,
+           item.mother,
+           item.segment,
+           item.motherUnit,
++          item.mother ? formatQty(motherMb) : "",
++          item.mother ? formatQty(motherOut) : "",
+           item.child,
+           item.segment,
+           item.childUnit,
+diff --git a/docs/07-allocation-v3-spec.md b/docs/07-allocation-v3-spec.md
+index eb062ac..084bf72 100644
+--- a/docs/07-allocation-v3-spec.md
++++ b/docs/07-allocation-v3-spec.md
+@@ -1,6 +1,6 @@
+ # 07 — RAW MAT 庫存配發引擎規格（v3）
+ 
+-> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.3）。  
++> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.4）。  
+ > 欄位對應一律使用**英文欄位名稱**，禁止寫死 Excel 欄位字母（A/B/C）。
+ 
+ **狀態 / Status：** CONFIRMED（2026-07-22）  
+@@ -73,15 +73,16 @@
+ 
+ ---
+ 
+-## 3. 廠外庫存（輸入規則；目前不輸出）
++## 3. 廠外庫存（母材料顯示欄）
+ 
+-對每個 `(mother Material, child Article, Batch seg)`（僅計入通過 J≠0 且 L≠0 的列）：
++對每個 `(mother Material, child Article, Batch seg)`（僅計入通過 J≠0 且 L≠0 的列；儲位 39* 已排除）：
+ 
+ ```text
+ outside(mother, child, seg) = max(0, SUM(J) - SUM(P))
+ ```
+ 
+-廠外**不扣減**可配發池，且 **v3.1.3+ 不再輸出**母／子廠外或母材料廠內顯示欄。
++- **廠外母材料庫存**（僅顯示）：母料 `M` + Segment 下，所有子料 pair 的 `outside(M, *, seg)` **加總**。  
++- **不扣減**子料可配發池。
+ 
+ ---
+ 
+@@ -91,9 +92,10 @@ outside(mother, child, seg) = max(0, SUM(J) - SUM(P))
+ pool(X, seg) = SUM(MB52.Unrestricted where Material=X, Stock Segment=seg, Storage Location not 39*)
+ ```
+ 
+-**不減** 子料廠外。
++**不減** 廠外。
+ 
+ 輸出列上：
++- **廠內母材料庫存**（僅顯示）= 同上公式對母料 `M` 的 MB52 SUM；無母料列則空白  
+ - **子材料庫存** = 該子料配發前剩餘廠內（起始 MB52，先前列 `provided` 已扣）  
+ - **可配發庫存** = 該子料配發前剩餘池（起始 = MB52，先前列已扣）  
+ - **扣減後剩餘** = 本列配發後的可配發池  
+@@ -135,7 +137,7 @@ pool(X, seg) = SUM(MB52.Unrestricted where Material=X, Stock Segment=seg, Storag
+ 
+ ---
+ 
+-## 7. 輸出 16 欄
++## 7. 輸出 18 欄
+ 
+ | # | 英文表頭 | 中文辨識 |
+ |---|----------|----------|
+@@ -144,19 +146,21 @@ pool(X, seg) = SUM(MB52.Unrestricted where Material=X, Stock Segment=seg, Storag
+ | 3 | mother material | 母材料 |
+ | 4 | mother batch | 母材料 BATCH |
+ | 5 | mother unit | 母單位 |
+-| 6 | child material | 子材料 |
+-| 7 | child batch | 子材料 BATCH |
+-| 8 | child unit | 子單位 |
+-| 9 | child demand | 子材料需求（母料展開） |
+-| 10 | demand direct | 子料直接需求 |
+-| 11 | demand qty | 需求合計 |
+-| 12 | child stock | 子材料庫存（本列配發前剩餘廠內；依序遞減） |
+-| 13 | stock available | 可配發庫存（= 廠內剩餘池；依序遞減） |
+-| 14 | provided qty | 能提供數量 |
+-| 15 | remaining stock after this row | 扣減後剩餘（可配發池） |
+-| 16 | pending allocation (Y) | 待配發（Y） |
+-
+-（已移除：母材料廠內／廠外庫存、子材料廠外庫存顯示欄。）
++| 6 | mother plant stock | 廠內母材料庫存（僅顯示；MB52 SUM，排除 39*） |
++| 7 | mother stock outside | 廠外母材料庫存（僅顯示；Σ max(0,ΣJ−ΣP)） |
++| 8 | child material | 子材料 |
++| 9 | child batch | 子材料 BATCH |
++| 10 | child unit | 子單位 |
++| 11 | child demand | 子材料需求（母料展開） |
++| 12 | demand direct | 子料直接需求 |
++| 13 | demand qty | 需求合計 |
++| 14 | child stock | 子材料庫存（本列配發前剩餘廠內；依序遞減） |
++| 15 | stock available | 可配發庫存（= 廠內剩餘池；依序遞減） |
++| 16 | provided qty | 能提供數量 |
++| 17 | remaining stock after this row | 扣減後剩餘（可配發池） |
++| 18 | pending allocation (Y) | 待配發（Y） |
++
++母料空白（僅直接需求）時，廠內／廠外母材料庫存欄空白。
+ 
+ ---
+ 

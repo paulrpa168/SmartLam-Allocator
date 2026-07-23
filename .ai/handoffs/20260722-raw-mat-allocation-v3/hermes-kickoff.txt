@@ -1,0 +1,13 @@
+請讀取並完整執行此調度說明檔（Cursor → Diff → 真實 Codex 品質驗證）：
+
+D:/0.AI-Agent-Workspace/03_projects/RAW MAT Project/.ai/handoffs/20260722-raw-mat-allocation-v3/hermes-dispatch-prompt.txt
+
+交件同目錄已備妥：
+- allocation-v3.1.4.diff
+- brief.md / result.md / codex-review-prompt.txt
+- docs/07-allocation-v3-spec.md
+
+任務：v3.1.4 母單位後新增廠內／廠外母材料庫存（僅顯示；18 欄）。
+必須用 ~/codex-cli.exe -m gpt-5.5 真實審查（不可 Hermes 代審）。
+產出 review-hermes-codex.md + Telegram Verdict 摘要。
+預設 NEEDS WORK。不要改業務檔。

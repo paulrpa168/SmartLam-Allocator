@@ -4,7 +4,7 @@
 
 本專案是一個在使用者電腦瀏覽器內執行的單頁工具，依核准業務規則將 **Schedule（排程）**、**COOIS（需求）**、**ZRMM0028（BOM／廠外）** 與 **MB52（廠內庫存）** 合併後做**庫存貪婪配發**，並匯出可比對「需求 vs 能提供」與「扣減後剩餘」的結果。
 
-**現行程式入口：`allocation-web.html`（v3.1.3）**  
+**現行程式入口：`allocation-web.html`（v3.1.4）**  
 規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
 
 舊檔 `vlookup-web.html` 為**已淘汰的兩段式查找原型**，僅供歷史對照，**不是**現行產品方向。  
@@ -14,7 +14,7 @@ v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocati
 
 This project is a browser-based, single-page allocation tool. It combines **Schedule**, **COOIS** demand, **ZRMM0028** BOM/outside stock, and **MB52** plant stock under approved business rules, then greedily allocates child stock and exports demand vs provided and remaining stock after each row.
 
-**Current app entry point: `allocation-web.html` (v3.1.3)**  
+**Current app entry point: `allocation-web.html` (v3.1.4)**  
 Spec: [docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
 
 Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only.  
@@ -22,8 +22,8 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
 
 ## 目前狀態
 
-- 狀態：配發引擎 **v3.1.3**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**16 欄**輸出、Y 標記）已實作。
-- 程式版本：`allocation-web.html` **3.1.3**。
+- 狀態：配發引擎 **v3.1.4**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記）已實作。
+- 程式版本：`allocation-web.html` **3.1.4**。
 - 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
 - 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
 - 語言規則：專案說明與規格採繁體中文在前、英文緊接；UI 為 English／繁體中文／မြန်မာ。
@@ -31,8 +31,8 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
 
 ## Current status
 
-- Status: Allocation engine **v3.1.3** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **16-column** output, Y flag) is implemented.
-- App version: `allocation-web.html` **3.1.3**.
+- Status: Allocation engine **v3.1.4** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **18-column** output with mother plant/outside display, Y flag) is implemented.
+- App version: `allocation-web.html` **3.1.4**.
 - Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
 - Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
 - Language rule: Project docs place Traditional Chinese first and English immediately after. UI languages are English, Traditional Chinese, and Myanmar.
@@ -45,7 +45,7 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
 3. **ZRMM0028**：母料 Material → 子料 Article(Com.)；儲位 39* 排除；Batch 須對齊 Segment（BOM 展開不因 J/L=0 丢掉）。
 4. **MB52**：Material + Stock Segment 的 Unrestricted **SUM**（排除 39*）；可配發池 = MB52。
 5. 需求：母料展開（× conversion）＋同料直接 Open Quantity；單位換算同 v2（1:1／SHT 末碼表／M↔YD 白名單）。
-6. 輸出 **16** 欄（含子材料需求、雙 BATCH、Y）。細節見 [docs/07](docs/07-allocation-v3-spec.md)。
+6. 輸出 **18** 欄（含廠內／廠外母材料庫存顯示、子材料需求、雙 BATCH、Y）。細節見 [docs/07](docs/07-allocation-v3-spec.md)。
 
 ## Allocation data flow (v3)
 
@@ -54,7 +54,7 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
 3. **ZRMM0028**: mother Material → child Article(Com.); exclude storage 39*; Batch must match Segment (BOM expand keeps children even when J/L is 0).
 4. **MB52**: SUM Unrestricted by Material + Stock Segment (exclude 39*); allocatable pool = MB52 only.
 5. Demand: mother expansion (× conversion) + direct Open Quantity; unit conversion same as v2.
-6. Output **16** columns (child demand, dual BATCH, Y). See [docs/07](docs/07-allocation-v3-spec.md).
+6. Output **18** columns (mother plant/outside display, child demand, dual BATCH, Y). See [docs/07](docs/07-allocation-v3-spec.md).
 
 ## 文件索引
 

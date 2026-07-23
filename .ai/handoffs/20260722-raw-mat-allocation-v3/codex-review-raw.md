@@ -1,45 +1,25 @@
 **Findings**
 
-Critical：無。
+Critical：未發現。
 
-High：無。
+High：
+- [allocation-web.html](/D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/allocation-web.html:1572) 的 ZH 表頭與 [allocation-web.html](/D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/allocation-web.html:1593) 的 MY 表頭目前呈現 mojibake/亂碼；tooltip 文案也同樣受影響。這直接違反「18 欄輸出契約 EN/ZH/MY 表頭/tips 一致」的交付要求。即使 EN 18 欄與 OUT 索引正確，使用者在中文/緬文模式看到的是不可驗收的輸出契約。
 
 Medium：
-- [README.md](D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/README.md:7) / [README.md](D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/README.md:35)：README 仍宣稱入口與 App version 是 `v3.1.2`，但實作 `allocation-web.html` 的 `APP_VERSION` 已是 `3.1.3`。  
-  風險：交付審核、使用者驗收、後續 issue/commit 追蹤會對不上版本。  
-  建議：README 全部 `v3.1.2` 更新為 `v3.1.3`，並與 release assessment 同步。
+- [verify_allocation_v3.py](/D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py:857) 的 New_0722 smoke 只確認 engine 可跑、列數與部分欄位解析，沒有對真實資料抽樣斷言「母料 MB52 SUM」、「outside per child clamp 後母料加總」、「OUT 18 欄匯出值」是否等於人工/獨立計算結果。fixture 有覆蓋公式，但真實資料證據仍偏弱。
+- [allocation-web.html](/D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/allocation-web.html:3708) 與 [verify_allocation_v3.py](/D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py:170) 是高度鏡像，這有利於同步，但 reality-check 角度不能替代獨立 oracle。若 JS 與 Python 對規格同時誤解，現有測試不容易抓出來。
 
 Low：
-- [allocation-web.html](D:/0.AI-Agent-Workspace/03_projects/RAW%20MAT%20Project/allocation-web.html:4)：檔頭註解仍寫 `Version: 3.0.0`，但 runtime `APP_VERSION` 是 `3.1.3`。  
-  風險：靜態檢查或人工追溯時容易誤判版本。  
-  建議：同步檔頭版本註解。
-- `.ai/handoffs/20260722-raw-mat-allocation-v3/allocation-v3.1.3.diff` 與 `verify-stdout-v313.txt` 目前是 untracked；`brief.md` / `result.md` 也有工作樹修改。  
-  風險：交付證據無法完全從 commit `ac618e9` 重建。  
-  建議：若這是正式交付包，應把 handoff 證據納入明確版本化流程，或在 handoff 中標明「commit 後產生、未納入 commit」。
-
-**Reality Check**
-
-通過項目：
-- 16 欄契約在 JS `OUT`、EN/ZH/MY headers、tips、Python `OUTPUT_HEADERS` 基本一致。
-- F/G/P 舊輸出欄已移除；`stock available` 以 MB52-only running pool 計算，未扣 outside。
-- `child demand` 更名完成，語意仍是母料展開量。
-- Y flag 有排除 MH04 的 `toCheck`；FLT/MTF 分池用 `Material + Segment` key；MH04 保留輸出但不阻擋 Y。
-- JS `runAllocationEngine` 與 Python `verify_allocation_v3.py` 的核心索引與流程高度鏡像。
-- `git diff --name-only fe7b59f ac618e9` 只含 5 個文字檔；`git ls-tree` 未發現 v3.1.3 commit 誤入 `.xlsx/.xls/.xlsm` 或明顯 secrets。工作區有真實 xlsx，但未進 commit。
-
-我重新執行了：
-`PYTHONDONTWRITEBYTECODE=1 python .ai\handoffs\20260722-raw-mat-allocation-v3\verify_allocation_v3.py`
-
-結果：9 個 fixture PASS，`New_0722` smoke OK，`out_rows=465`。
+- 工作樹有未追蹤資料夾 `20260723/`、`bk_0722/`，其中含多個真實 `.xlsx`。我在 `allocation-v3.1.4.diff` 內未搜到 `.xlsx`、常見 secret/private-key/token 字樣，但 commit 前若使用寬鬆 `git add .` 仍有誤入風險。
 
 **測試缺口**
 
-- 缺 JS 端直接執行的 golden snapshot，不能只靠 Python mirror 證明 browser/export 完全一致。
-- 缺 CSV/Excel 匯出檔的 16 欄欄序與三語表頭 snapshot。
-- 缺真實 UI 匯入流程驗證：xlsx 讀取、雙表頭偵測、語言切換、匯出後欄寬/樣式。
-- 缺負向測試：缺欄、空 Segment、未知 unit、SHT suffix 缺失、全 MH04 group 的 Y 行為。
-- 缺 release hygiene test：版本號、README、手冊、規格、handoff 一致性。
+已執行驗證器，結果 PASS；`New_0722` smoke 也通過。缺口是沒有獨立計算的真實資料抽樣，例如指定 2-3 個 mother+segment，從 MB52/ZRMM 原表重算後比對輸出欄 6/7；也沒有瀏覽器端匯出檔檢查 EN/ZH/MY 三種 header 與 tooltip 實際顯示。
 
 **Verdict：NEEDS WORK**
 
-核心 allocation engine 看起來可接受，但文件版本不一致與交付證據未完全版本化，還不足以在 reality-checker 標準下 APPROVE。給 Paul 的短結論：邏輯本體接近過關，先補版本一致性與 golden/export/UI 證據，再升級到 release approval。  
+核心 allocation 邏輯目前沒有看到破壞子料可配發池、provided、Y 的明顯問題；MB52 排除 39*、outside J/L gate、per-child clamp、display-only 的方向也一致。但多語表頭/tips 亂碼屬於輸出契約失敗，不能 approve。
+
+**給 Paul 的短結論**
+
+v3.1.4 的公式方向可以往前，但交付品質還沒過線。先修中文/緬文表頭與 tips 編碼，再補一個真實 New_0722 抽樣重算證據；完成後再進下一輪 review。  

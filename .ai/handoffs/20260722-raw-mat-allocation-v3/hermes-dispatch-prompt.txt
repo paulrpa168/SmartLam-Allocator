@@ -1,43 +1,31 @@
-請同步並完成 Cursor → Diff → **真實 Codex CLI** 品質驗證（codex-dispatcher Pattern B）。
+請以真實 Codex CLI 審查 RAW MAT Allocation **v3.1.4**（工作樹相對 `3ccdadd`，尚未 commit）。
 
 ## 工作目錄
 D:/0.AI-Agent-Workspace/03_projects/RAW MAT Project
 
-## 交件（已備妥）
-- Diff：.ai/handoffs/20260722-raw-mat-allocation-v3/allocation-v3.1.3.diff
+## 交件
+- Diff：.ai/handoffs/20260722-raw-mat-allocation-v3/allocation-v3.1.4.diff
 - Brief：.ai/handoffs/20260722-raw-mat-allocation-v3/brief.md
 - Result：.ai/handoffs/20260722-raw-mat-allocation-v3/result.md
-- Codex prompt：.ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-prompt.txt
 - Spec：docs/07-allocation-v3-spec.md
-- Commit：ac618e9（v3.1.3）
 
-## 強制 Codex 執行方式（上次失敗原因已避開）
-上次失敗：config 預設 `gpt-5.6-luna`，但 `~/codex-cli.exe` 是 **0.140.0-alpha.2** 不支援該 model。
+## 變更重點
+母單位後新增：廠內母材料庫存（MB52 SUM，排除 39*）、廠外母材料庫存（ZRMM max(0,ΣJ−ΣP) 依母+Batch 加總）。僅顯示；子料可配發池仍=MB52。輸出 18 欄。APP_VERSION 3.1.4。
 
-請 **一定要用** 以下指令實際呼叫 Codex（不可只由 Hermes 自己審）：
-
-```text
-~/codex-cli.exe exec review --commit ac618e9 -m gpt-5.5 --title "RAW MAT v3.1.3 quality review" -o .ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-raw.md < .ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-prompt.txt
-```
-
-Windows PowerShell 等價：
+## 強制 Codex（不可 Hermes 代審）
+config 預設 `gpt-5.6-luna` 與 `~/codex-cli.exe` 0.140 不相容 — 必須：
 
 ```powershell
-Get-Content -Raw ".ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-prompt.txt" | & "$env:USERPROFILE\codex-cli.exe" exec review --commit ac618e9 -m gpt-5.5 --title "RAW MAT v3.1.3 quality review" -o ".ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-raw.md"
+cd "D:\0.AI-Agent-Workspace\03_projects\RAW MAT Project"
+$prompt = Get-Content -Raw ".ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-prompt.txt"
+& "$env:USERPROFILE\codex-cli.exe" exec -m gpt-5.5 --sandbox read-only -o ".ai/handoffs/20260722-raw-mat-allocation-v3/codex-review-raw.md" --cd "D:\0.AI-Agent-Workspace\03_projects\RAW MAT Project" $prompt
 ```
 
-若 `gpt-5.5` 失敗，改試 `-m o4-mini` 一次；仍失敗則停止並回報錯誤原文（不要用 Hermes 取代 Codex 結論）。
+若 gpt-5.5 失敗改試 `-m o4-mini` 一次；仍失敗回報錯誤原文。
 
-## 合併報告
-讀 Codex 原始輸出後，寫入：
-`.ai/handoffs/20260722-raw-mat-allocation-v3/review-hermes-codex.md`
+## 產出
+1. 合併報告 → `.ai/handoffs/20260722-raw-mat-allocation-v3/review-hermes-codex.md`（文首：v3.1.4／真實 Codex／model／tokens）
+2. `hermes send --to telegram` Verdict 摘要
+3. stdout 繁中：Verdict、Critical/High 數、路徑、tokens、是否真實 Codex
 
-文首必須標註：
-- v3.1.3 / ac618e9
-- Codex CLI 版本與實際 model
-- tokens used（若有）
-
-並用 `hermes send --to telegram` 發送 Verdict 摘要。
-
-## stdout 回覆（繁中）
-Verdict、Critical/High 數、報告路徑、Codex tokens、是否為真實 Codex（是/否）。
+預設 NEEDS WORK。不要修改業務檔案。

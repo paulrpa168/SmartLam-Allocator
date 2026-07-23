@@ -1,6 +1,6 @@
 # 07 — RAW MAT 庫存配發引擎規格（v3）
 
-> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.3）。  
+> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.4）。  
 > 欄位對應一律使用**英文欄位名稱**，禁止寫死 Excel 欄位字母（A/B/C）。
 
 **狀態 / Status：** CONFIRMED（2026-07-22）  
@@ -73,15 +73,16 @@
 
 ---
 
-## 3. 廠外庫存（輸入規則；目前不輸出）
+## 3. 廠外庫存（母材料顯示欄）
 
-對每個 `(mother Material, child Article, Batch seg)`（僅計入通過 J≠0 且 L≠0 的列）：
+對每個 `(mother Material, child Article, Batch seg)`（僅計入通過 J≠0 且 L≠0 的列；儲位 39* 已排除）：
 
 ```text
 outside(mother, child, seg) = max(0, SUM(J) - SUM(P))
 ```
 
-廠外**不扣減**可配發池，且 **v3.1.3+ 不再輸出**母／子廠外或母材料廠內顯示欄。
+- **廠外母材料庫存**（僅顯示）：母料 `M` + Segment 下，所有子料 pair 的 `outside(M, *, seg)` **加總**。  
+- **不扣減**子料可配發池。
 
 ---
 
@@ -91,9 +92,10 @@ outside(mother, child, seg) = max(0, SUM(J) - SUM(P))
 pool(X, seg) = SUM(MB52.Unrestricted where Material=X, Stock Segment=seg, Storage Location not 39*)
 ```
 
-**不減** 子料廠外。
+**不減** 廠外。
 
 輸出列上：
+- **廠內母材料庫存**（僅顯示）= 同上公式對母料 `M` 的 MB52 SUM；無母料列則空白  
 - **子材料庫存** = 該子料配發前剩餘廠內（起始 MB52，先前列 `provided` 已扣）  
 - **可配發庫存** = 該子料配發前剩餘池（起始 = MB52，先前列已扣）  
 - **扣減後剩餘** = 本列配發後的可配發池  
@@ -135,7 +137,7 @@ pool(X, seg) = SUM(MB52.Unrestricted where Material=X, Stock Segment=seg, Storag
 
 ---
 
-## 7. 輸出 16 欄
+## 7. 輸出 18 欄
 
 | # | 英文表頭 | 中文辨識 |
 |---|----------|----------|
@@ -144,19 +146,21 @@ pool(X, seg) = SUM(MB52.Unrestricted where Material=X, Stock Segment=seg, Storag
 | 3 | mother material | 母材料 |
 | 4 | mother batch | 母材料 BATCH |
 | 5 | mother unit | 母單位 |
-| 6 | child material | 子材料 |
-| 7 | child batch | 子材料 BATCH |
-| 8 | child unit | 子單位 |
-| 9 | child demand | 子材料需求（母料展開） |
-| 10 | demand direct | 子料直接需求 |
-| 11 | demand qty | 需求合計 |
-| 12 | child stock | 子材料庫存（本列配發前剩餘廠內；依序遞減） |
-| 13 | stock available | 可配發庫存（= 廠內剩餘池；依序遞減） |
-| 14 | provided qty | 能提供數量 |
-| 15 | remaining stock after this row | 扣減後剩餘（可配發池） |
-| 16 | pending allocation (Y) | 待配發（Y） |
+| 6 | mother plant stock | 廠內母材料庫存（僅顯示；MB52 SUM，排除 39*） |
+| 7 | mother stock outside | 廠外母材料庫存（僅顯示；Σ max(0,ΣJ−ΣP)） |
+| 8 | child material | 子材料 |
+| 9 | child batch | 子材料 BATCH |
+| 10 | child unit | 子單位 |
+| 11 | child demand | 子材料需求（母料展開） |
+| 12 | demand direct | 子料直接需求 |
+| 13 | demand qty | 需求合計 |
+| 14 | child stock | 子材料庫存（本列配發前剩餘廠內；依序遞減） |
+| 15 | stock available | 可配發庫存（= 廠內剩餘池；依序遞減） |
+| 16 | provided qty | 能提供數量 |
+| 17 | remaining stock after this row | 扣減後剩餘（可配發池） |
+| 18 | pending allocation (Y) | 待配發（Y） |
 
-（已移除：母材料廠內／廠外庫存、子材料廠外庫存顯示欄。）
+母料空白（僅直接需求）時，廠內／廠外母材料庫存欄空白。
 
 ---
 
