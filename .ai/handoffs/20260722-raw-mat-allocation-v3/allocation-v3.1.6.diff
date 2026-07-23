@@ -1,237 +1,234 @@
-# allocation-v3.1.6.diff
-# Base: 610b597 (v3.1.4) -> 24ca14e (feat v3.1.6)
-# Excludes vendor/xlsx.full.min.js (~952KB SheetJS 0.20.3; in repo at vendor/xlsx.full.min.js)
-# Companion: conditions-one-pager.md
-# HEAD: ed3ffa2+
+# allocation-v3.1.6.diff — base 610b597 -> 24ca14e; excludes vendor/xlsx.full.min.js; companion conditions-one-pager.md
+
 diff --git a/.ai/handoffs/20260722-raw-mat-allocation-v3/conditions-one-pager.md b/.ai/handoffs/20260722-raw-mat-allocation-v3/conditions-one-pager.md
 new file mode 100644
 index 0000000..c9cd9ac
 --- /dev/null
 +++ b/.ai/handoffs/20260722-raw-mat-allocation-v3/conditions-one-pager.md
 @@ -0,0 +1,248 @@
-+# RAW MAT Allocation Engine v3.1.6 ΓÇö µó¥Σ╗╢σ«îµò┤µ╕àσû«
++# RAW MAT Allocation Engine v3.1.6 — 條件完整清單
 +
-+**τ░íσá▒Σ╕ÇσÅÑΦ⌐▒∩╝Ü**  
-+> Σ╕ÇσÑù 4,745 ΦíîτÇÅΦª╜σÖ¿σ╝òµôÄ∩╝îσ£¿ **7 σñºΘí₧πÇü~77 µó¥µó¥Σ╗╢** τ┤äµ¥ƒΣ╕ï∩╝îσ«îµêÉσ¢¢Φ╝╕σàÑΓåÆσìüσà½µ¼äΦ╖¿µ¼äΣ╜ìΘàìτÖ╝Φ¿êτ«ù∩╝îµ»Åµ¼íµö╣τëêτ╢ôσñÜ Agent Σ║ñσÅëΘ⌐ùΦ¡ëπÇé
++**簡報一句話：**  
++> 一套 4,745 行瀏覽器引擎，在 **7 大類、~77 條條件** 約束下，完成四輸入→十八欄跨欄位配發計算，每次改版經多 Agent 交叉驗證。
 +
 +---
 +
-+## µó¥Σ╗╢τ╕╜µò╕Φí¿
++## 條件總數表
 +
-+| Θí₧σêÑ | Σ╗úΦÖƒ | µó¥µò╕ | σéÖΦ¿╗ |
++| 類別 | 代號 | 條數 | 備註 |
 +|------|------|------|------|
-+| A. Φ╝╕σç║µ¼äΣ╜ì | OUT | 18 µ¼ä | σÉ½µ¼äσÉì(EN/ZH/MY) + σà¼σ╝Å/ΦªÅσëç + µÿ»σÉªσ╜▒Θƒ┐ΘàìτÖ╝µ▒á |
-+| B. σèáτ╕╜/µ¿₧τ┤ÉΘüïτ«ù | AGG | 14 | group key + σà¼σ╝Å |
-+| C. σ╝òµôÄµ▒║τ¡ûµó¥Σ╗╢ | DEC | 28 | Φº╕τÖ╝µó¥Σ╗╢ ΓåÆ τ╡Éµ₧£∩╝êΦ╖│ΘüÄ/µôïΦ╖æ/σÅ¬σ╜▒Θƒ┐Y/Θí»τñ║∩╝ë |
-+| D. UI-only µó¥Σ╗╢ | UI | 6 | µÿÄτó║µ¿ÖπÇîΣ╕ìµö╣µ▒áπÇì |
-+| E. σû«Σ╜ìµÅ¢τ«ùΘí₧σ₧ï + ΘáÉΦ¿¡τ¿«σ¡É | CONV | 6 Θí₧σ₧ï / 11 τ¿«σ¡Éσêù | σ╝òµôÄ never hardcode |
-+| F. σî»σàÑµ¬óµá╕Θí₧σ₧ï | CHK | 7 | µôïΦ╖æµó¥Σ╗╢ |
-+| G. ΘàìτÖ╝µÄÆσ║Åσ▒ñτ┤Ü | SORT | 6 | µÄÆσ║ÅΘì╡ |
-+| **σÉêΦ¿ê** | | **~85** | µëúΘÖñΘçìτûèσ╛îτ┤ä **77 µó¥τì¿τë╣µó¥Σ╗╢** |
++| A. 輸出欄位 | OUT | 18 欄 | 含欄名(EN/ZH/MY) + 公式/規則 + 是否影響配發池 |
++| B. 加總/樞紐運算 | AGG | 14 | group key + 公式 |
++| C. 引擎決策條件 | DEC | 28 | 觸發條件 → 結果（跳過/擋跑/只影響Y/顯示） |
++| D. UI-only 條件 | UI | 6 | 明確標「不改池」 |
++| E. 單位換算類型 + 預設種子 | CONV | 6 類型 / 11 種子列 | 引擎 never hardcode |
++| F. 匯入檢核類型 | CHK | 7 | 擋跑條件 |
++| G. 配發排序層級 | SORT | 6 | 排序鍵 |
++| **合計** | | **~85** | 扣除重疊後約 **77 條獨特條件** |
 +
 +---
 +
-+## A. Φ╝╕σç║ 18 µ¼ä∩╝êOUT∩╝ë
++## A. 輸出 18 欄（OUT）
 +
-+| # | OUT Θì╡ | EN Φí¿Θá¡ | ZH Φí¿Θá¡ | σà¼σ╝Å/ΦªÅσëç | σ╜▒Θƒ┐ΘàìτÖ╝µ▒á∩╝ƒ |
++| # | OUT 鍵 | EN 表頭 | ZH 表頭 | 公式/規則 | 影響配發池？ |
 +|---|--------|---------|---------|-----------|:----------:|
-+| 1 | cutting | cutting | cutting∩╝êτöƒτöóµùÑ∩╝ë | Schedule µ£Çµù⌐ cutting | σÉª∩╝êµÄÆσ║Åτö¿∩╝ë |
-+| 2 | so | so | so∩╝êΦ¿éσû«∩╝ë | Schedule SO | σÉª∩╝êτ╛ñτ╡äτö¿∩╝ë |
-+| 3 | mother | mother material | µ»ìµ¥ÉµûÖ | ZRMM Material | ΓÇö |
-+| 4 | motherBatch | mother batch | µ»ìµ¥ÉµûÖ BATCH | normalizeSegment(ZRMM.Batch) | ΓÇö |
-+| 5 | motherUnit | mother unit | µ»ìσû«Σ╜ì | COOIS Base UoM || ZRMM OUn | ΓÇö |
-+| **6** | motherStockMb52 | mother plant stock | σ╗áσàºµ»ìµ¥ÉµûÖσ║½σ¡ÿ | **= SUM(MB52.Unrestricted) WHERE Material=mother AND Segment AND storage NOT 39*** | Γ¥î **σâàΘí»τñ║** |
-+| **7** | motherStockOutside | mother stock outside | σ╗áσñûµ»ìµ¥ÉµûÖσ║½σ¡ÿ | **= ╬ú max(0, ╬úJ ΓêÆ ╬úP) over all children of this mother+seg** | Γ¥î **σâàΘí»τñ║** |
-+| 8 | child | child material | σ¡Éµ¥ÉµûÖ | ZRMM Article(Com.) | ΓÇö |
-+| 9 | childBatch | child batch | σ¡Éµ¥ÉµûÖ BATCH | normalizeSegment(ZRMM.Batch) | ΓÇö |
-+| 10 | childUnit | child unit | σ¡Éσû«Σ╜ì | ZRMM BUn | ΓÇö |
-+| 11 | demandFromMother | child demand | σ¡Éµ¥ÉµûÖΘ£Çµ▒é | = ╬ú(OpenQty(M) ├ù conv(unit, sizeSuffix)) | Γ£à µ▒║σ«ÜΘàìτÖ╝ |
-+| 12 | demandDirect | demand direct | σ¡ÉµûÖτ¢┤µÄÑΘ£Çµ▒é | = COOIS Open Qty (when child in 0028.F) | Γ£à µ▒║σ«ÜΘàìτÖ╝ |
-+| 13 | demand | demand qty | Θ£Çµ▒éσÉêΦ¿ê | = demandFromMother + demandDirect | Γ£à |
-+| 14 | stockMb52 | child stock | σ¡Éµ¥ÉµûÖσ║½σ¡ÿ | = µ£¼σêùΘàìτÖ╝σëìσë⌐Θñÿσ╗áσàº∩╝êΦ╡╖σºï=MB52∩╝îσëìσêùσ╖▓µëú∩╝ë | Γ£à |
-+| 15 | stockAvailable | stock available | σÅ»ΘàìτÖ╝σ║½σ¡ÿ | = µ£¼σêùσëìσë⌐Θñÿµ▒á∩╝êΦ╡╖σºï=MB52∩╝îσ╖▓µëúσëìσêù provide∩╝ë | Γ£à |
-+| 16 | provided | provided qty | Φâ╜µÅÉΣ╛¢µò╕ΘçÅ | **= min(demand, max(0, poolBefore))** | Γ£à |
-+| 17 | remaining | remaining stock after this row | µëúµ╕¢σ╛îσë⌐Θñÿ | = poolBefore ΓêÆ provide | Γ£à |
-+| 18 | flagY | pending allocation (Y) | σ╛àΘàìτÖ╝∩╝êY∩╝ë | SO+µ»ì+seg Θ¥₧MH04Σ╕ödemand>0τÜå fully provided ΓåÆ Y | µ¿ÖΦ¿ÿ |
++| 1 | cutting | cutting | cutting（生產日） | Schedule 最早 cutting | 否（排序用） |
++| 2 | so | so | so（訂單） | Schedule SO | 否（群組用） |
++| 3 | mother | mother material | 母材料 | ZRMM Material | — |
++| 4 | motherBatch | mother batch | 母材料 BATCH | normalizeSegment(ZRMM.Batch) | — |
++| 5 | motherUnit | mother unit | 母單位 | COOIS Base UoM || ZRMM OUn | — |
++| **6** | motherStockMb52 | mother plant stock | 廠內母材料庫存 | **= SUM(MB52.Unrestricted) WHERE Material=mother AND Segment AND storage NOT 39*** | ❌ **僅顯示** |
++| **7** | motherStockOutside | mother stock outside | 廠外母材料庫存 | **= Σ max(0, ΣJ − ΣP) over all children of this mother+seg** | ❌ **僅顯示** |
++| 8 | child | child material | 子材料 | ZRMM Article(Com.) | — |
++| 9 | childBatch | child batch | 子材料 BATCH | normalizeSegment(ZRMM.Batch) | — |
++| 10 | childUnit | child unit | 子單位 | ZRMM BUn | — |
++| 11 | demandFromMother | child demand | 子材料需求 | = Σ(OpenQty(M) × conv(unit, sizeSuffix)) | ✅ 決定配發 |
++| 12 | demandDirect | demand direct | 子料直接需求 | = COOIS Open Qty (when child in 0028.F) | ✅ 決定配發 |
++| 13 | demand | demand qty | 需求合計 | = demandFromMother + demandDirect | ✅ |
++| 14 | stockMb52 | child stock | 子材料庫存 | = 本列配發前剩餘廠內（起始=MB52，前列已扣） | ✅ |
++| 15 | stockAvailable | stock available | 可配發庫存 | = 本列前剩餘池（起始=MB52，已扣前列 provide） | ✅ |
++| 16 | provided | provided qty | 能提供數量 | **= min(demand, max(0, poolBefore))** | ✅ |
++| 17 | remaining | remaining stock after this row | 扣減後剩餘 | = poolBefore − provide | ✅ |
++| 18 | flagY | pending allocation (Y) | 待配發（Y） | SO+母+seg 非MH04且demand>0皆 fully provided → Y | 標記 |
 +
-+**Φú£σè⌐ΦªÅσëç∩╝Ü** τäíµ»ìµûÖσêù∩╝êτ¢┤µÄÑΘ£Çµ▒é∩╝ëΓåÆ 6/7 µ¼äτ⌐║τÖ╜
++**補助規則：** 無母料列（直接需求）→ 6/7 欄空白
 +
 +---
 +
-+## B. σèáτ╕╜/µ¿₧τ┤ÉΘüïτ«ù∩╝ê14∩╝ë
++## B. 加總/樞紐運算（14）
 +
-+| # | τ╛ñτ╡ä Key | σà¼σ╝Å | τö¿ΘÇö |
++| # | 群組 Key | 公式 | 用途 |
 +|---|----------|------|------|
-+| AGG-01 | mother\0child\0seg | J gate (JΓëá0 && LΓëá0) ΓåÆ SUM J, SUM P | raw outside pair |
-+| AGG-02 | mother\0seg | ╬ú max(0, AGG-01.J ΓêÆ AGG-01.P) | **σ╗áσñûµ»ìµ¥ÉµûÖσ║½σ¡ÿ∩╝êΘí»τñ║∩╝ë** |
-+| AGG-03 | material\0seg | SUM(MB52.Unrestricted) WHERE storage NOT 39* | MB52 σ╗áσàºσ║½σ¡ÿ |
-+| AGG-04 | ΓÇö | Set(child) from all ZRMM Article | validChildren∩╝êCOOIS ΘüÄµ┐╛∩╝ë |
-+| AGG-05 | ΓÇö | Set(mother) from ZRMM Material | mothersInBom |
++| AGG-01 | mother\0child\0seg | J gate (J≠0 && L≠0) → SUM J, SUM P | raw outside pair |
++| AGG-02 | mother\0seg | Σ max(0, AGG-01.J − AGG-01.P) | **廠外母材料庫存（顯示）** |
++| AGG-03 | material\0seg | SUM(MB52.Unrestricted) WHERE storage NOT 39* | MB52 廠內庫存 |
++| AGG-04 | — | Set(child) from all ZRMM Article | validChildren（COOIS 過濾） |
++| AGG-05 | — | Set(mother) from ZRMM Material | mothersInBom |
 +| AGG-06 | SO | earliest cutting | scheduleMap |
-+| AGG-07 | SO | COOIS rows ΓåÆ array | cooisBySo |
++| AGG-07 | SO | COOIS rows → array | cooisBySo |
 +| AGG-08 | seg\0child | Set of children expanded under any mother | expansionChildren |
 +| AGG-09 | seg\0mother | Set of mothers that expanded | expandedMothers |
-+| AGG-10 | so\|seg\|mother\|child | demandFromMother + demandDirect | Θ£Çµ▒éσ╜Öµò┤ |
-+| AGG-11 | child\0seg | running: plantBefore ΓêÆ provide | σë⌐Θñÿσ╗áσàº |
-+| AGG-12 | child\0seg | running: max(0, poolBefore ΓêÆ provide) | σë⌐ΘñÿσÅ»ΘàìτÖ╝µ▒á |
-+| AGG-13 | ΓÇö | output row array | µ£Çτ╡éτ╡Éµ₧£ |
-+| AGG-14 | SO\|mother\|seg | provided ΓëÑ demand for all non-MH04 demand>0 ΓåÆ Y | Y µ¿ÖΦ¿ÿτ╛ñτ╡ä |
++| AGG-10 | so\|seg\|mother\|child | demandFromMother + demandDirect | 需求彙整 |
++| AGG-11 | child\0seg | running: plantBefore − provide | 剩餘廠內 |
++| AGG-12 | child\0seg | running: max(0, poolBefore − provide) | 剩餘可配發池 |
++| AGG-13 | — | output row array | 最終結果 |
++| AGG-14 | SO\|mother\|seg | provided ≥ demand for all non-MH04 demand>0 → Y | Y 標記群組 |
 +
 +---
 +
-+## C. σ╝òµôÄµ▒║τ¡ûµó¥Σ╗╢∩╝ê28∩╝ë
++## C. 引擎決策條件（28）
 +
-+| # | Φº╕τÖ╝µó¥Σ╗╢ | τ╡Éµ₧£ | Θí₧σêÑ |
++| # | 觸發條件 | 結果 | 類別 |
 +|---|----------|------|:----:|
-+| DEC-01 | COOIS Γåö ZRMM unit/seg Φí¥τ¬ü | Γ¥î µôïΦ╖æ∩╝êshowErrorModal∩╝ë | µôïΦ╖æ |
-+| DEC-02 | Schedule row: so τé║τ⌐║ | ΓÅ¡∩╕Å Φ╖│ΘüÄ | Φ╖│ΘüÄ |
-+| DEC-03 | Schedule: σÉî SO σ╖▓µ£ë earlier cutting | Σ┐¥τòÖµ£Çµù⌐ cutting∩╝îµì¿µúäΦ╝âµÖÜ | Φ╖│ΘüÄ |
-+| DEC-04 | ZRMM row: mother µêû child τé║τ⌐║ | ΓÅ¡∩╕Å Φ╖│ΘüÄ | Φ╖│ΘüÄ |
-+| DEC-05 | ZRMM: storage ΘûïΘá¡ 39 | ΓÅ¡∩╕Å Φ╖│ΘüÄ∩╝êBOM Φêçσ╗áσñûτÜåΣ╕ìΦ¿ê∩╝ë | Φ╖│ΘüÄ |
-+| DEC-06 | ZRMM: σÉî mother Σ╕ìσÉî size suffix | Γ¥î µôïΦ╖æ∩╝êsuffixConflicts∩╝ë | µôïΦ╖æ |
-+| DEC-07 | ZRMM: σÉî mother+child Σ╕ìσÉî BUn | Γ¥î µôïΦ╖æ∩╝êchildUnitConflicts∩╝ë | µôïΦ╖æ |
-+| DEC-08 | ZRMM outside: J=0 µêû L=0 | ΓÅ¡∩╕Å Φ⌐▓σêùΣ╕ìΦ¿êσ╗áσñû∩╝êBOM Σ╗ìΣ┐¥τòÖ∩╝ë | Φ╖│ΘüÄ |
-+| DEC-09 | COOIS row: SO Σ╕ìσ£¿ Schedule | ΓÅ¡∩╕Å Φ╖│ΘüÄ | Φ╖│ΘüÄ |
-+| DEC-10 | COOIS row: Material σ£¿ mothersInBom && seg Θ¥₧τ⌐║ | Γ₧í∩╕Å σ▒òΘûïµ»ìµûÖ∩╝ê├ù conversion∩╝ë | σ▒òΘûï |
-+| DEC-11 | σ▒òΘûïµÖé∩╝Üµ»ìµûÖ SHT τäí size suffix | Φ¿ÿΘîäπÇîmissing-suffixπÇìΓÜá∩╕Å | Φ╖│ΘüÄ |
-+| DEC-12 | σ▒òΘûïµÖé∩╝ÜSHT size suffix τäíσ░ìµçëσÇìτÄç | Φ¿ÿΘîäπÇîmissing-size-ruleπÇìΓÜá∩╕Å | Φ╖│ΘüÄ |
-+| DEC-13 | σ▒òΘûïµÖé∩╝ÜτäíΣ╗╗Σ╜òσû«Σ╜ìµÅ¢τ«ùσî╣Θàì | Φ¿ÿΘîäπÇîmissing-convπÇìΓÜá∩╕Å | Φ╖│ΘüÄ |
-+| DEC-14 | σ▒òΘûïµÖé∩╝Üµ£ëΣ╗╗Σ╕Ç missingRule | Γ¥î µôïΦ╖æ∩╝êerrorConvTitle∩╝ë | µôïΦ╖æ |
-+| DEC-15 | COOIS direct: material = σ╖▓σ▒òΘûïτÜäµ»ìµûÖ | ΓÅ¡∩╕Å Φ╖│ΘüÄ∩╝êσ╖▓σ▒òΘûïσ░▒Σ╕ìΘçìΦñçτò╢τ¢┤µÄÑΘ£Çµ▒é∩╝ë | Φ╖│ΘüÄ |
-+| DEC-16 | COOIS direct: material not in validChildren | ΓÅ¡∩╕Å Φ╖│ΘüÄ∩╝êHC/HU τ¡ëΣ╕ìσ£¿ 0028.F∩╝ë| Φ╖│ΘüÄ |
-+| DEC-17 | COOIS direct: material σ╖▓µÿ»σ▒òΘûïσ¡ÉµûÖ | Γ₧í∩╕Å σÉêΣ╜╡ direct σê░σ▒òΘûïσêù∩╝êdemandDirect∩╝ë | σÉêΣ╜╡ |
-+| DEC-18 | COOIS direct: Σ╗ÑΣ╕èτÜåΘ¥₧ | Γ₧í∩╕Å σ╗║τ½ïτ⌐║τÖ╜µ»ìµûÖΘ£Çµ▒éσêù | µû░σó₧ |
-+| DEC-19 | **ΘàìτÖ╝**∩╝Üpool = child MB52 only∩╝êσ╗áσñûΣ╕ìµëúµ▒á∩╝ë | Γ£à **τäíµ»ìµûÖσ╗áσñûΘÇ▓σàÑ pool** | ΘàìτÖ╝ |
-+| DEC-20 | **provided = min(demand, max(0, poolBefore))** | Γ£à µá╕σ┐âΘàìτÖ╝σà¼σ╝Å | ΘàìτÖ╝ |
-+| DEC-21 | provide < demand∩╝ê1e-9 σ«╣σ╖«∩╝ë | πÇîshortageπÇìΦ¿êµò╕ +1 | Φ¿êµò╕ |
-+| DEC-22 | motherKey σ¡ÿσ£¿ ΓåÆ Φ«ÇσÅû stockMb52 | Γ£à σ»½σàÑ col 6∩╝êµ»ìσ╗áσàº∩╝îσâàΘí»τñ║∩╝ë | Θí»τñ║ |
-+| DEC-23 | motherKey σ¡ÿσ£¿ ΓåÆ Φ«ÇσÅû outsideByMother | Γ£à σ»½σàÑ col 7∩╝êµ»ìσ╗áσñû∩╝îσâàΘí»τñ║∩╝ë | Θí»τñ║ |
-+| DEC-24 | τäíµ»ìµûÖ∩╝êτ¢┤µÄÑΘ£Çµ▒é∩╝ëΓåÆ col 6/7 τ⌐║τÖ╜ | ΓÅ¡∩╕Å τ⌐║τÖ╜ | Θí»τñ║ |
-+| DEC-25 | Y: τ╛ñτ╡ä key = SO\|mother\|seg | σêåτ╡ä | Y |
-+| DEC-26 | Y: child ΘûïΘá¡ MH04 | ΓÅ¡∩╕Å Φ⌐▓σêùΣ╕ìσÅâΦêçΘàìσÑùσêñσ«Ü | Φ╖│ΘüÄ |
-+| DEC-27 | Y: demand>0 Σ╕öµëÇµ£ë non-MH04 provided ΓëÑ demand | Γ£à µ¿Ö Y | Y |
-+| DEC-28 | Y: τäí non-MH04 demand>0 τÜäσêù | ΓÅ¡∩╕Å Σ╕ìµ¿Ö Y | Φ╖│ΘüÄ |
++| DEC-01 | COOIS ↔ ZRMM unit/seg 衝突 | ❌ 擋跑（showErrorModal） | 擋跑 |
++| DEC-02 | Schedule row: so 為空 | ⏭️ 跳過 | 跳過 |
++| DEC-03 | Schedule: 同 SO 已有 earlier cutting | 保留最早 cutting，捨棄較晚 | 跳過 |
++| DEC-04 | ZRMM row: mother 或 child 為空 | ⏭️ 跳過 | 跳過 |
++| DEC-05 | ZRMM: storage 開頭 39 | ⏭️ 跳過（BOM 與廠外皆不計） | 跳過 |
++| DEC-06 | ZRMM: 同 mother 不同 size suffix | ❌ 擋跑（suffixConflicts） | 擋跑 |
++| DEC-07 | ZRMM: 同 mother+child 不同 BUn | ❌ 擋跑（childUnitConflicts） | 擋跑 |
++| DEC-08 | ZRMM outside: J=0 或 L=0 | ⏭️ 該列不計廠外（BOM 仍保留） | 跳過 |
++| DEC-09 | COOIS row: SO 不在 Schedule | ⏭️ 跳過 | 跳過 |
++| DEC-10 | COOIS row: Material 在 mothersInBom && seg 非空 | ➡️ 展開母料（× conversion） | 展開 |
++| DEC-11 | 展開時：母料 SHT 無 size suffix | 記錄「missing-suffix」⚠️ | 跳過 |
++| DEC-12 | 展開時：SHT size suffix 無對應倍率 | 記錄「missing-size-rule」⚠️ | 跳過 |
++| DEC-13 | 展開時：無任何單位換算匹配 | 記錄「missing-conv」⚠️ | 跳過 |
++| DEC-14 | 展開時：有任一 missingRule | ❌ 擋跑（errorConvTitle） | 擋跑 |
++| DEC-15 | COOIS direct: material = 已展開的母料 | ⏭️ 跳過（已展開就不重複當直接需求） | 跳過 |
++| DEC-16 | COOIS direct: material not in validChildren | ⏭️ 跳過（HC/HU 等不在 0028.F）| 跳過 |
++| DEC-17 | COOIS direct: material 已是展開子料 | ➡️ 合併 direct 到展開列（demandDirect） | 合併 |
++| DEC-18 | COOIS direct: 以上皆非 | ➡️ 建立空白母料需求列 | 新增 |
++| DEC-19 | **配發**：pool = child MB52 only（廠外不扣池） | ✅ **無母料廠外進入 pool** | 配發 |
++| DEC-20 | **provided = min(demand, max(0, poolBefore))** | ✅ 核心配發公式 | 配發 |
++| DEC-21 | provide < demand（1e-9 容差） | 「shortage」計數 +1 | 計數 |
++| DEC-22 | motherKey 存在 → 讀取 stockMb52 | ✅ 寫入 col 6（母廠內，僅顯示） | 顯示 |
++| DEC-23 | motherKey 存在 → 讀取 outsideByMother | ✅ 寫入 col 7（母廠外，僅顯示） | 顯示 |
++| DEC-24 | 無母料（直接需求）→ col 6/7 空白 | ⏭️ 空白 | 顯示 |
++| DEC-25 | Y: 群組 key = SO\|mother\|seg | 分組 | Y |
++| DEC-26 | Y: child 開頭 MH04 | ⏭️ 該列不參與配套判定 | 跳過 |
++| DEC-27 | Y: demand>0 且所有 non-MH04 provided ≥ demand | ✅ 標 Y | Y |
++| DEC-28 | Y: 無 non-MH04 demand>0 的列 | ⏭️ 不標 Y | 跳過 |
 +
 +---
 +
-+## D. UI-only µó¥Σ╗╢∩╝ê6∩╝ëΓÇö µÿÄτó║πÇîΣ╕ìµö╣ poolπÇì
++## D. UI-only 條件（6）— 明確「不改 pool」
 +
-+| # | µó¥Σ╗╢ | σ╜▒Θƒ┐τ»äσ£ì | µö╣ pool∩╝ƒ |
++| # | 條件 | 影響範圍 | 改 pool？ |
 +|---|------|---------|:--------:|
-+| UI-01 | Hide zero-demand rows∩╝êcheckbox∩╝ë | ΘáÉΦª╜∩╝ïσî»σç║ | Γ¥î |
-+| UI-02 | Hide all-zero SO∩╝êcheckbox∩╝ë | ΘáÉΦª╜∩╝ïσî»σç║ | Γ¥î |
-+| UI-03 | SO filter∩╝êµûçσ¡ùΦ╝╕σàÑ∩╝ë | ΘáÉΦª╜∩╝ïσî»σç║ | Γ¥î |
-+| UI-04 | Mother/child filter∩╝êchip∩╝ë | ΘáÉΦª╜∩╝ïσî»σç║ | Γ¥î |
-+| UI-05 | Cutting date range | ΘáÉΦª╜∩╝ïσî»σç║ | Γ¥î |
-+| UI-06 | Preview limit 300 rows | σâàΘí»τñ║ | Γ¥î |
++| UI-01 | Hide zero-demand rows（checkbox） | 預覽＋匯出 | ❌ |
++| UI-02 | Hide all-zero SO（checkbox） | 預覽＋匯出 | ❌ |
++| UI-03 | SO filter（文字輸入） | 預覽＋匯出 | ❌ |
++| UI-04 | Mother/child filter（chip） | 預覽＋匯出 | ❌ |
++| UI-05 | Cutting date range | 預覽＋匯出 | ❌ |
++| UI-06 | Preview limit 300 rows | 僅顯示 | ❌ |
 +
-+**µ│¿µäÅ∩╝Ü** µëÇµ£ë UI filter **Θâ╜Σ╕ìΘçìµû░σƒ╖Φíî** `runAllocationEngine()`∩╝¢σâàσ░ì `state.allResultRows` σüÜ slice + µó¥Σ╗╢ΘüÄµ┐╛πÇé
++**注意：** 所有 UI filter **都不重新執行** `runAllocationEngine()`；僅對 `state.allResultRows` 做 slice + 條件過濾。
 +
 +---
 +
-+## E. σû«Σ╜ìµÅ¢τ«ùΘí₧σ₧ï∩╝ê6∩╝ë+ ΘáÉΦ¿¡τ¿«σ¡Éσêù∩╝ê11∩╝ë
++## E. 單位換算類型（6）+ 預設種子列（11）
 +
-+### 6 τ¿«µÅ¢τ«ùΘí₧σ₧ï
++### 6 種換算類型
 +
-+| # | µ»ìσ¡Éσû«Σ╜ì | ΦªÅσëç |
++| # | 母子單位 | 規則 |
 +|---|---------|------|
-+| 1 | σÉîσû«Σ╜ì | 1:1 |
-+| 2 | M Γåö YD | 0.9144 / 1.0936∩╝êΘ¢ÖσÉæ∩╝ë |
-+| 3 | SHT ΓåÆ M | µƒÑ size-suffix Φí¿∩╝ê110x200cm=2, 220x110cm=2, 200x110cm=2.2∩╝ë |
-+| 4 | SHT ΓåÆ YD | µƒÑ size-suffix Φí¿∩╝ê110x200=2.187, 220x110=2.187, 200x110=2.406∩╝ë |
-+| 5 | SHT ΓåÆ SHT | 1:1∩╝êσÉ½τ¢╕σÉî size∩╝ë |
-+| 6 | τäíΣ╗╗Σ╜òσî╣Θàì | Γ¥î **block + µÅÉτñ║ missing rule** |
++| 1 | 同單位 | 1:1 |
++| 2 | M ↔ YD | 0.9144 / 1.0936（雙向） |
++| 3 | SHT → M | 查 size-suffix 表（110x200cm=2, 220x110cm=2, 200x110cm=2.2） |
++| 4 | SHT → YD | 查 size-suffix 表（110x200=2.187, 220x110=2.187, 200x110=2.406） |
++| 5 | SHT → SHT | 1:1（含相同 size） |
++| 6 | 無任何匹配 | ❌ **block + 提示 missing rule** |
 +
-+### 11 τ¡åΘáÉΦ¿¡τ¿«σ¡Éσêù
++### 11 筆預設種子列
 +
-+| # | Θí₧σ₧ï | ΦªÅσëç | σÅ»τ╖¿Φ╝»∩╝ƒ |
++| # | 類型 | 規則 | 可編輯？ |
 +|---|------|------|:-------:|
-+| 1 | Base | M ΓåÆ YD = 1.0936 | Γ£à Reset σÅ»σ╛⌐σÄƒ |
-+| 2 | Base | YD ΓåÆ M = 0.9144 | Γ£à |
-+| 3 | Size | 110x200cm ΓåÆ M = 2 | Γ£à |
-+| 4 | Size | 110x200cm ΓåÆ YD = 2.187227 | Γ£à |
-+| 5 | Size | 110x200cm ΓåÆ SHT = 1 | Γ£à |
-+| 6 | Size | 220x110cm ΓåÆ M = 2 | Γ£à |
-+| 7 | Size | 220x110cm ΓåÆ YD = 2.187227 | Γ£à |
-+| 8 | Size | 220x110cm ΓåÆ SHT = 1 | Γ£à |
-+| 9 | Size | 200x110cm ΓåÆ M = 2.2 | Γ£à |
-+| 10 | Size | 200x110cm ΓåÆ YD = 2.405949 | Γ£à |
-+| 11 | Size | 200x110cm ΓåÆ SHT = 1 | Γ£à |
++| 1 | Base | M → YD = 1.0936 | ✅ Reset 可復原 |
++| 2 | Base | YD → M = 0.9144 | ✅ |
++| 3 | Size | 110x200cm → M = 2 | ✅ |
++| 4 | Size | 110x200cm → YD = 2.187227 | ✅ |
++| 5 | Size | 110x200cm → SHT = 1 | ✅ |
++| 6 | Size | 220x110cm → M = 2 | ✅ |
++| 7 | Size | 220x110cm → YD = 2.187227 | ✅ |
++| 8 | Size | 220x110cm → SHT = 1 | ✅ |
++| 9 | Size | 200x110cm → M = 2.2 | ✅ |
++| 10 | Size | 200x110cm → YD = 2.405949 | ✅ |
++| 11 | Size | 200x110cm → SHT = 1 | ✅ |
 +
 +---
 +
-+## F. σî»σàÑµ¬óµá╕Θí₧σ₧ï∩╝ê7∩╝ë
++## F. 匯入檢核類型（7）
 +
-+| # | µ¬óµá╕ | µó¥Σ╗╢ | τ╡Éµ₧£ |
++| # | 檢核 | 條件 | 結果 |
 +|---|------|------|------|
-+| CHK-01 | τ⌐║µ¬öµíê | headers.length=0 || rows.length=0 | Γ¥î |
-+| CHK-02 | µ£Çσ░æµ¼äµò╕ | headers.length < guard.minCols | Γ¥î |
-+| CHK-03 | σ┐àΦªüµ¼äΣ╜ìΘü║σñ▒ | cols[field.key] < 0 | Γ¥î |
-+| CHK-04 | Header alias µ»öσ░ìσñ▒µòù | normalizeHeader σ╛îτäí alias σî╣Θàì | Γ¥î |
-+| CHK-05 | Φ⌐▓µ¼äσà¿τ⌐║ | µè╜µ¿úτäí non-blank value | Γ¥î |
-+| CHK-06 | σû«Σ╜ìµ¼äσÅ»τûæ | >30% µ¿úσÇ╝σâÅ SO/date | Γ¥î |
-+| CHK-07 | µ¼äΣ╜ìσ₧ïσêÑΣ╕ìτ¼ª | so/date/number/unit Θí₧σ₧ïµ»öσ░ìσñ▒µòù | Γ¥î |
++| CHK-01 | 空檔案 | headers.length=0 || rows.length=0 | ❌ |
++| CHK-02 | 最少欄數 | headers.length < guard.minCols | ❌ |
++| CHK-03 | 必要欄位遺失 | cols[field.key] < 0 | ❌ |
++| CHK-04 | Header alias 比對失敗 | normalizeHeader 後無 alias 匹配 | ❌ |
++| CHK-05 | 該欄全空 | 抽樣無 non-blank value | ❌ |
++| CHK-06 | 單位欄可疑 | >30% 樣值像 SO/date | ❌ |
++| CHK-07 | 欄位型別不符 | so/date/number/unit 類型比對失敗 | ❌ |
 +
 +---
 +
-+## G. ΘàìτÖ╝µÄÆσ║Åσ▒ñτ┤Ü∩╝ê6∩╝ë
++## G. 配發排序層級（6）
 +
-+| σä¬σàê | µÄÆσ║ÅΘì╡ | µû╣σÉæ | Φ¬¬µÿÄ |
++| 優先 | 排序鍵 | 方向 | 說明 |
 +|:----:|--------|:----:|------|
-+| 1 | cutting | ASC | µ£Çµù⌐τöƒτöóµùÑσä¬σàê |
-+| 2 | SO | ASC | σÉî cutting Σ╛¥Φ¿éσû«ΦÖƒ |
-+| 3 | hasMother | 0ΓåÆ1 | µ£ëµ»ìµûÖΦÖƒσêùσä¬σàê∩╝êC µ¼äΘ¥₧τ⌐║∩╝ë |
-+| 4 | mother | ASC | σÉî SO µ£ëµ»ìσêùΣ╛¥µ»ìµûÖΦÖƒ |
-+| 5 | child | ASC | σÉîµ»ìΣ╛¥σ¡ÉµûÖΦÖƒ |
-+| 6 | segment | ASC | Σ╛¥ FLT/MTF σêåτ╡ä |
++| 1 | cutting | ASC | 最早生產日優先 |
++| 2 | SO | ASC | 同 cutting 依訂單號 |
++| 3 | hasMother | 0→1 | 有母料號列優先（C 欄非空） |
++| 4 | mother | ASC | 同 SO 有母列依母料號 |
++| 5 | child | ASC | 同母依子料號 |
++| 6 | segment | ASC | 依 FLT/MTF 分組 |
 +
 +---
 +
-+## Σ╕ëµó¥µ¼èσ¿üσà¼σ╝Å∩╝êτ┤àµ¿Ö∩╝ë
++## 三條權威公式（紅標）
 +
-+### Γæá σ╗áσñû pair = max(0, ╬úJ ΓêÆ ╬úP)
++### ① 廠外 pair = max(0, ΣJ − ΣP)
 +```
-+outside(mother, child, seg) = max(0, SUM(J) ΓêÆ SUM(P))
-+            WHERE J Γëá 0 AND L Γëá 0 AND storage NOT 39*
++outside(mother, child, seg) = max(0, SUM(J) − SUM(P))
++            WHERE J ≠ 0 AND L ≠ 0 AND storage NOT 39*
 +```
-+ΓåÆ µ»ìµûÖΘí»τñ║∩╝ÜσÉî mother+seg Σ╕ïµëÇµ£ë child pair τÜä ╬úoutside ΓåÆ col 7
++→ 母料顯示：同 mother+seg 下所有 child pair 的 Σoutside → col 7
 +
-+### Γæí σ╗áσàº = SUM(MB52 Unrestricted)
++### ② 廠內 = SUM(MB52 Unrestricted)
 +```
 +pool(X, seg) = SUM(MB52.Unrestricted)
 +               WHERE Material = X
 +                 AND Stock Segment = seg
 +                 AND Storage Location NOT LIKE '39%'
 +```
-+ΓåÆ µ»ìµûÖΘí»τñ║∩╝Ücol 6∩╝¢σ¡ÉµûÖµ▒á∩╝Ücol 14(start) + col 15(start)
++→ 母料顯示：col 6；子料池：col 14(start) + col 15(start)
 +
-+### Γæó provided = min(demand, max(0, remaining_pool))
++### ③ provided = min(demand, max(0, remaining_pool))
 +```
 +provided = MIN(demand, MAX(0, poolBefore))
-+remaining = poolBefore ΓêÆ provided
++remaining = poolBefore − provided
 +```
-+**µ▒á = σâà MB52∩╝¢σ╗áσñûΣ╕ìµëúµ▒áπÇé**
++**池 = 僅 MB52；廠外不扣池。**
 +
 +---
 +
-+## σ░ìµçëτ¿ïσ╝Åσç╜σ╝Åσ«ÜΣ╜ì
++## 對應程式函式定位
 +
-+| Θí₧σêÑ | σç╜σ╝Å | Φíîµò╕ (v3.1.6) |
++| 類別 | 函式 | 行數 (v3.1.6) |
 +|------|------|:------------:|
-+| A Φ╝╕σç║µ¼ä | `OUT` / `outputHeadersForLang` | L1514-1533, L1643-1646 |
-+| A Φí¿Θá¡ | `OUTPUT_HEADERS_EN/ZH/MY` | L1553-1614 |
++| A 輸出欄 | `OUT` / `outputHeadersForLang` | L1514-1533, L1643-1646 |
++| A 表頭 | `OUTPUT_HEADERS_EN/ZH/MY` | L1553-1614 |
 +| A tips | `OUTPUT_TIP_KEYS` | L1616-1634 |
-+| B AGG-01~02 | `runAllocationEngine` ΓÇö outsidePair / outsideByMother | L3785-3815 |
-+| B AGG-03 | `runAllocationEngine` ΓÇö stockMb52 loop | L3817-3828 |
-+| B AGG-04~09 | `runAllocationEngine` ΓÇö sets | L3830-3840 |
-+| B AGG-10 | `runAllocationEngine` ΓÇö demand expansion | L3887-3970 |
-+| B AGG-11~13 | `runAllocationEngine` ΓÇö allocation loop | L3998-4044 |
++| B AGG-01~02 | `runAllocationEngine` — outsidePair / outsideByMother | L3785-3815 |
++| B AGG-03 | `runAllocationEngine` — stockMb52 loop | L3817-3828 |
++| B AGG-04~09 | `runAllocationEngine` — sets | L3830-3840 |
++| B AGG-10 | `runAllocationEngine` — demand expansion | L3887-3970 |
++| B AGG-11~13 | `runAllocationEngine` — allocation loop | L3998-4044 |
 +| B AGG-14 | `applyGroupYFlag` | L3665-3693 |
 +| C DEC-01 | `precheckUnitRH` | L3572-3643 |
-+| C DEC-02~08 | `runAllocationEngine` ΓÇö ZRMM loop | L3747-3792 |
++| C DEC-02~08 | `runAllocationEngine` — ZRMM loop | L3747-3792 |
 +| C DEC-06~07 | suffixConflicts / childUnitConflicts check | L3794-3807 |
-+| C DEC-09~18 | `runAllocationEngine` ΓÇö COOIS processing | L3876-3970 |
-+| C DEC-19~24 | `runAllocationEngine` ΓÇö allocation | L3998-4044 |
++| C DEC-09~18 | `runAllocationEngine` — COOIS processing | L3876-3970 |
++| C DEC-19~24 | `runAllocationEngine` — allocation | L3998-4044 |
 +| C DEC-25~28 | `applyGroupYFlag` | L3665-3693 |
 +| D UI-01~06 | `getFilteredRows` / `applyViewFilters` | L4084-4224 |
 +| E CONV | `conversionRatio` / `loadConversionRules` / `loadSizeConversionRules` | L2302-2360 |
@@ -240,23 +237,23 @@ index 0000000..c9cd9ac
 +
 +---
 +
-+## µó¥µò╕µá╕σ░ìΦí¿
++## 條數核對表
 +
-+| Σ╛åµ║É | Θí₧σêÑ | σ«úσæèµò╕ | σ»ªΘÜ¢µá╕σ░ì | σî╣Θàì∩╝ƒ |
++| 來源 | 類別 | 宣告數 | 實際核對 | 匹配？ |
 +|------|------|:------:|:--------:|:-----:|
-+| Cursor spec | A Φ╝╕σç║µ¼ä | 18 | 18 | Γ£à |
-+| Cursor spec | B σèáτ╕╜µ¿₧τ┤É | ~14 | 14 | Γ£à |
-+| Cursor spec | C σ╝òµôÄµ▒║τ¡û | ~26 | 28∩╝êσÉ½ missing-rule τ┤░µïå∩╝ë | Γ£à τòÑσñÜ |
-+| Cursor spec | D UI-only | ~5 | 6∩╝êσÉ½ preview limit∩╝ë | Γ£à |
-+| Cursor spec | E σû«Σ╜ìµÅ¢τ«ù | 6 | 6 | Γ£à |
-+| Cursor spec | E τ¿«σ¡Éσêù | 11 | 11 | Γ£à |
-+| Cursor spec | F σî»σàÑµ¬óµá╕ | 7 | 7 | Γ£à |
-+| Cursor spec | G µÄÆσ║Åσ▒ñτ┤Ü | 6 | 6 | Γ£à |
-+| **τ╕╜Φ¿ê** | | **~84** | **~85** | Γ£à |
++| Cursor spec | A 輸出欄 | 18 | 18 | ✅ |
++| Cursor spec | B 加總樞紐 | ~14 | 14 | ✅ |
++| Cursor spec | C 引擎決策 | ~26 | 28（含 missing-rule 細拆） | ✅ 略多 |
++| Cursor spec | D UI-only | ~5 | 6（含 preview limit） | ✅ |
++| Cursor spec | E 單位換算 | 6 | 6 | ✅ |
++| Cursor spec | E 種子列 | 11 | 11 | ✅ |
++| Cursor spec | F 匯入檢核 | 7 | 7 | ✅ |
++| Cursor spec | G 排序層級 | 6 | 6 | ✅ |
++| **總計** | | **~84** | **~85** | ✅ |
 +
 +---
 +
-+*Generated 2026-07-23 ┬╖ v3.1.6 ┬╖ σ░ìτàºτ¿ïσ╝Åσç╜σ╝ÅΣ╗Ñ `allocation-web.html` τé║µ║ûπÇéΣ╕ìσÉ½τ£ƒσ»ªµÑ¡σïÖµûÖΦÖƒ/SOπÇé*
++*Generated 2026-07-23 · v3.1.6 · 對照程式函式以 `allocation-web.html` 為準。不含真實業務料號/SO。*
 diff --git a/.ai/handoffs/20260722-raw-mat-allocation-v3/smoke_large_coois.js b/.ai/handoffs/20260722-raw-mat-allocation-v3/smoke_large_coois.js
 new file mode 100644
 index 0000000..aa28714
@@ -385,7 +382,7 @@ index 0000000..0009444
 +  <script src="/vendor/xlsx.full.min.js"></script>
 +</head>
 +<body>
-+  <pre id="out">RunningΓÇª</pre>
++  <pre id="out">Running…</pre>
 +  <script>
 +    (async function () {
 +      const out = document.getElementById("out");
@@ -548,17 +545,17 @@ index 9f40178..e5f167e 100644
 +++ b/README.md
 @@ -4,8 +4,9 @@
  
- µ£¼σ░êµíêµÿ»Σ╕ÇσÇïσ£¿Σ╜┐τö¿ΦÇàΘ¢╗ΦàªτÇÅΦª╜σÖ¿σàºσƒ╖ΦíîτÜäσû«Θáüσ╖Ñσà╖∩╝îΣ╛¥µá╕σçåµÑ¡σïÖΦªÅσëçσ░ç **Schedule∩╝êµÄÆτ¿ï∩╝ë**πÇü**COOIS∩╝êΘ£Çµ▒é∩╝ë**πÇü**ZRMM0028∩╝êBOM∩╝Åσ╗áσñû∩╝ë** Φêç **MB52∩╝êσ╗áσàºσ║½σ¡ÿ∩╝ë** σÉêΣ╜╡σ╛îσüÜ**σ║½σ¡ÿΦ▓¬σ⌐¬ΘàìτÖ╝**∩╝îΣ╕ªσî»σç║σÅ»µ»öσ░ìπÇîΘ£Çµ▒é vs Φâ╜µÅÉΣ╛¢πÇìΦêçπÇîµëúµ╕¢σ╛îσë⌐ΘñÿπÇìτÜäτ╡Éµ₧£πÇé
+ 本專案是一個在使用者電腦瀏覽器內執行的單頁工具，依核准業務規則將 **Schedule（排程）**、**COOIS（需求）**、**ZRMM0028（BOM／廠外）** 與 **MB52（廠內庫存）** 合併後做**庫存貪婪配發**，並匯出可比對「需求 vs 能提供」與「扣減後剩餘」的結果。
  
--**τÅ╛Φíîτ¿ïσ╝ÅσàÑσÅú∩╝Ü`allocation-web.html`∩╝êv3.1.4∩╝ë**  
--ΦªÅµá╝∩╝Ü[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
-+**τÅ╛Φíîτ¿ïσ╝ÅσàÑσÅú∩╝Ü`allocation-web.html`∩╝êv3.1.6∩╝ë**  
-+ΦªÅµá╝∩╝Ü[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)  
-+Θ¢óτ╖ÜΘûïσòƒµÖéΦ½ïΣ┐¥τòÖσÉîτ¢«ΘîäτÜä `vendor/xlsx.full.min.js`∩╝êσñºµ¬ö COOIS σî»σàÑτö¿∩╝ëπÇé
+-**現行程式入口：`allocation-web.html`（v3.1.4）**  
+-規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
++**現行程式入口：`allocation-web.html`（v3.1.6）**  
++規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)  
++離線開啟時請保留同目錄的 `vendor/xlsx.full.min.js`（大檔 COOIS 匯入用）。
  
- Φêèµ¬ö `vlookup-web.html` τé║**σ╖▓µ╖ÿµ▒░τÜäσà⌐µ«╡σ╝ÅµƒÑµë╛σÄƒσ₧ï**∩╝îσâàΣ╛¢µ¡╖σÅ▓σ░ìτàº∩╝î**Σ╕ìµÿ»**τÅ╛Φíîτöóσôüµû╣σÉæπÇé  
- v2 σéÖΣ╗╜∩╝Ü`allocation-web-v2.4.0-backup.html`∩╝¢ΦêèΦªÅµá╝Φªï [docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)πÇé
-@@ -14,16 +15,17 @@ v2 σéÖΣ╗╜∩╝Ü`allocation-web-v2.4.0-backup.html`∩╝¢ΦêèΦªÅµá╝Φªï [docs/06-allocati
+ 舊檔 `vlookup-web.html` 為**已淘汰的兩段式查找原型**，僅供歷史對照，**不是**現行產品方向。  
+ v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)。
+@@ -14,16 +15,17 @@ v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocati
  
  This project is a browser-based, single-page allocation tool. It combines **Schedule**, **COOIS** demand, **ZRMM0028** BOM/outside stock, and **MB52** plant stock under approved business rules, then greedily allocates child stock and exports demand vs provided and remaining stock after each row.
  
@@ -571,15 +568,15 @@ index 9f40178..e5f167e 100644
  Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only.  
  v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-allocation-engine-spec.md).
  
- ## τ¢«σëìτïÇµàï
+ ## 目前狀態
  
--- τïÇµàï∩╝ÜΘàìτÖ╝σ╝òµôÄ **v3.1.4**∩╝êσ¢¢Φ╝╕σàÑπÇüΦï▒µûçΦí¿Θá¡Φºúµ₧ÉπÇüSegment FLT/MTFπÇüMB52 SUMπÇüσ▒òΘûï∩╝ïτ¢┤µÄÑΘ£Çµ▒éπÇü**18 µ¼ä**Φ╝╕σç║σÉ½µ»ìσ╗áσàº∩╝Åσ╗áσñûσ║½σ¡ÿΘí»τñ║πÇüY µ¿ÖΦ¿ÿ∩╝ëσ╖▓σ»ªΣ╜£πÇé
--- τ¿ïσ╝Åτëêµ£¼∩╝Ü`allocation-web.html` **3.1.4**πÇé
-+- τïÇµàï∩╝ÜΘàìτÖ╝σ╝òµôÄ **v3.1.6**∩╝êσ¢¢Φ╝╕σàÑπÇüΦï▒µûçΦí¿Θá¡Φºúµ₧ÉπÇüSegment FLT/MTFπÇüMB52 SUMπÇüσ▒òΘûï∩╝ïτ¢┤µÄÑΘ£Çµ▒éπÇü**18 µ¼ä**Φ╝╕σç║σÉ½µ»ìσ╗áσàº∩╝Åσ╗áσñûσ║½σ¡ÿΘí»τñ║πÇüY µ¿ÖΦ¿ÿ∩╝¢µ£¼µ⌐ƒ SheetJS∩╝ïσñºΦí¿ CSV σî»σàÑσèáσ¢║∩╝ëσ╖▓σ»ªΣ╜£πÇé
-+- τ¿ïσ╝Åτëêµ£¼∩╝Ü`allocation-web.html` **3.1.6**∩╝êΘ£Ç `vendor/xlsx.full.min.js`∩╝ëπÇé
- - ΦêèµƒÑµë╛σ╖Ñσà╖∩╝Ü`vlookup-web.html` **1.1.0**∩╝êdeprecated∩╝ëπÇé
- - Σ╜┐τö¿µû╣σ╝Å∩╝Üµ£¼µ⌐ƒΘ¢óτ╖Üσä¬σàê∩╝¢Φ│çµûÖΘéèτòîµá╕σçåσëìΣ╕ìσ╛ùµû░σó₧ΘüÖµ╕¼µêûΘüáτ½»µ£ìσïÖπÇé
- - Φ¬₧Φ¿ÇΦªÅσëç∩╝Üσ░êµíêΦ¬¬µÿÄΦêçΦªÅµá╝µÄíτ╣üΘ½öΣ╕¡µûçσ£¿σëìπÇüΦï▒µûçτ╖èµÄÑ∩╝¢UI τé║ English∩╝Åτ╣üΘ½öΣ╕¡µûç∩╝ÅßÇÖßÇ╝ßÇößÇ║ßÇÖßÇ¼πÇé
+-- 狀態：配發引擎 **v3.1.4**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記）已實作。
+-- 程式版本：`allocation-web.html` **3.1.4**。
++- 狀態：配發引擎 **v3.1.6**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記；本機 SheetJS＋大表 CSV 匯入加固）已實作。
++- 程式版本：`allocation-web.html` **3.1.6**（需 `vendor/xlsx.full.min.js`）。
+ - 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
+ - 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
+ - 語言規則：專案說明與規格採繁體中文在前、英文緊接；UI 為 English／繁體中文／မြန်မာ。
 @@ -31,8 +33,8 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
  
  ## Current status
@@ -599,8 +596,8 @@ index de0dd8b..e1a0e16 100644
    <main>
      <section>
        <p data-i18n="manualIntro">This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.</p>
--      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.4 ΓÇö four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
-+      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.6 ΓÇö four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.</div>
+-      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
++      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.6 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.</div>
      </section>
  
      <section>
@@ -616,47 +613,47 @@ index de0dd8b..e1a0e16 100644
          themeMill: "Mill Ops",
          themeSoft: "Soft Enterprise",
          manualIntro: "This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.",
--        manualVersion: "App version: allocation-web.html v3.1.4 ΓÇö four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
-+        manualVersion: "App version: allocation-web.html v3.1.6 ΓÇö four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.",
-         step1Title: "Step 1 ΓÇö Import Excel files",
+-        manualVersion: "App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
++        manualVersion: "App version: allocation-web.html v3.1.6 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.",
+         step1Title: "Step 1 — Import Excel files",
          step1a: "Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).",
          step1b: "Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.",
          step1c: "Use Sample data to try the tool without real files.",
          step1d: "Import validation must show OK on all four slots before you can run allocation.",
 +        step1e: "Offline Excel: open allocation-web.html from the project folder that also contains vendor/xlsx.full.min.js (do not copy the HTML alone).",
-         step2Title: "Step 2 ΓÇö Mapping & run allocation",
+         step2Title: "Step 2 — Mapping & run allocation",
          step2a: "Review the mapping table and detected headers for all four files.",
-         step2b: "Unit whitelist defaults (editable): MΓåÆYD=1.0936, YDΓåÆM=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.",
+         step2b: "Unit whitelist defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.",
 @@ -384,12 +386,13 @@
-         themeMill: "Mill Ops σ╗áσïÖ",
-         themeSoft: "Soft Σ╝üµÑ¡Θó¿",
-         manualIntro: "µ£¼µëïσåèΦ¬¬µÿÄ RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄ v3∩╝êΘ¢óτ╖ÜτÇÅΦª╜σÖ¿σ╖Ñσà╖∩╝ëπÇéΦ½ïσ£¿Σ╕èµû╣Θü╕µôçΦ¬₧τ│╗πÇé",
--        manualVersion: "τ¿ïσ╝Åτëêµ£¼∩╝Üallocation-web.html v3.1.4 ΓÇö σ¢¢Φ╝╕σàÑπÇü18 µ¼äσî»σç║∩╝êσÉ½σ╗áσàº∩╝Åσ╗áσñûµ»ìµ¥ÉµûÖσ║½σ¡ÿΘí»τñ║∩╝ëπÇüSegment FLT/MTF ΘÄûσ«Ü∩╝¢MH04 Σ┐¥τòÖπÇüY ΘàìσÑùτòÑΘüÄπÇé",
-+        manualVersion: "τ¿ïσ╝Åτëêµ£¼∩╝Üallocation-web.html v3.1.6 ΓÇö σ¢¢Φ╝╕σàÑπÇü18 µ¼äσî»σç║∩╝êσÉ½σ╗áσàº∩╝Åσ╗áσñûµ»ìµ¥ÉµûÖσ║½σ¡ÿΘí»τñ║∩╝ëπÇüSegment FLT/MTF ΘÄûσ«Ü∩╝¢MH04 Σ┐¥τòÖπÇüY ΘàìσÑùτòÑΘüÄπÇéΘ¢óτ╖Ü Excel Φ½ïΣ┐¥τòÖ vendor/xlsx.full.min.js Φêç HTML σÉîΦ│çµûÖσñ╛πÇé",
-         step1Title: "τ¼¼ 1 µ¡Ñ ΓÇö σî»σàÑ Excel",
-         step1a: "Σ╕èσé│µêûΦ▓╝Σ╕èσ¢¢σÇïµ¬öµíê∩╝ÜSchedule µÄÆτ¿ïπÇüCOOIS Θ£Çµ▒éπÇüZRMM0028 BOM∩╝Åσ╗áσñûπÇüMB52 σ║½σ¡ÿπÇé",
-         step1b: "µ¼äΣ╜ìΣ╗ÑΦï▒µûçΦí¿Θá¡σÉìτ¿▒Φºúµ₧É∩╝êσÅ»τö¿ alias∩╝ëπÇéΘ¢ÖΦí¿Θá¡∩╝êΣ╕¡µûç∩╝ïΦï▒µûç∩╝ëµÖéΣ╗ÑΦï▒µûçσêùτé║ headerπÇé",
-         step1c: "σÅ»Σ╜┐τö¿πÇîτ»äΣ╛ïΦ│çµûÖπÇìσ£¿Σ╕ìΣ╜┐τö¿τ£ƒσ»ªµ¬öτÜäµâàµ│üΣ╕ïΦ⌐ªτö¿πÇé",
-         step1d: "σ¢¢σÇïΣ╕èσé│µº╜τÜäσî»σàÑΘ⌐ùΦ¡ëτÜåΘáêΘí»τñ║ OK∩╝îµëìΦâ╜σƒ╖ΦíîΘàìτÖ╝πÇé",
-+        step1e: "Θ¢óτ╖Ü Excel∩╝ÜΦ½ïσ╛₧σÉ½ vendor/xlsx.full.min.js τÜäσ░êµíêΦ│çµûÖσñ╛Θûïσòƒ allocation-web.html∩╝êσï┐σÅ¬ΦñçΦú╜σû«Σ╕Ç HTML∩╝ëπÇé",
-         step2Title: "τ¼¼ 2 µ¡Ñ ΓÇö σ░ìµçëΦêçσƒ╖ΦíîΘàìτÖ╝",
-         step2a: "µ¬óΦªûσ¢¢σÇïµ¬öµíêτÜäσ░ìµçëΦí¿Φêçσü╡µ╕¼σê░τÜäΦí¿Θá¡πÇé",
-         step2b: "σû«Σ╜ìτÖ╜σÉìσû«ΘáÉΦ¿¡∩╝êσÅ»µö╣∩╝ë∩╝ÜMΓåÆYD=1.0936πÇüYDΓåÆM=0.9144∩╝¢σÉîσû«Σ╜ìµ░╕Θüá 1:1πÇéΦí¿τ⌐║τÖ╜µÖéσÅ»µîëπÇîΘçìΦ¿¡ΘáÉΦ¿¡πÇìπÇé",
+         themeMill: "Mill Ops 廠務",
+         themeSoft: "Soft 企業風",
+         manualIntro: "本手冊說明 RAW MAT 庫存配發引擎 v3（離線瀏覽器工具）。請在上方選擇語系。",
+-        manualVersion: "程式版本：allocation-web.html v3.1.4 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。",
++        manualVersion: "程式版本：allocation-web.html v3.1.6 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。離線 Excel 請保留 vendor/xlsx.full.min.js 與 HTML 同資料夾。",
+         step1Title: "第 1 步 — 匯入 Excel",
+         step1a: "上傳或貼上四個檔案：Schedule 排程、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。",
+         step1b: "欄位以英文表頭名稱解析（可用 alias）。雙表頭（中文＋英文）時以英文列為 header。",
+         step1c: "可使用「範例資料」在不使用真實檔的情況下試用。",
+         step1d: "四個上傳槽的匯入驗證皆須顯示 OK，才能執行配發。",
++        step1e: "離線 Excel：請從含 vendor/xlsx.full.min.js 的專案資料夾開啟 allocation-web.html（勿只複製單一 HTML）。",
+         step2Title: "第 2 步 — 對應與執行配發",
+         step2a: "檢視四個檔案的對應表與偵測到的表頭。",
+         step2b: "單位白名單預設（可改）：M→YD=1.0936、YD→M=0.9144；同單位永遠 1:1。表空白時可按「重設預設」。",
 @@ -459,12 +462,13 @@
          themeMill: "Mill Ops",
          themeSoft: "Soft Enterprise",
-         manualIntro: "ßÇñßÇ£ßÇÇßÇ║ßÇàßÇ╜ßÇ▓ßÇ₧ßÇèßÇ║ RAW MAT Allocation Engine v3 (offline ßÇÿßÇ¢ßÇ▒ßÇ¼ßÇÇßÇ║ßÇåßÇ¼ ßÇÇßÇ¡ßÇ¢ßÇ¡ßÇÜßÇ¼) ßÇÇßÇ¡ßÇ» ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇòßÇ╝ßÇ₧ßÇèßÇ║ßüï ßÇíßÇòßÇ▒ßÇ½ßÇ║ßÇÉßÇ╜ßÇäßÇ║ ßÇÿßÇ¼ßÇ₧ßÇ¼ßÇàßÇÇßÇ¼ßÇ╕ ßÇ¢ßÇ╜ßÇ▒ßÇ╕ßÇüßÇ╗ßÇÜßÇ║ßÇòßÇ½ßüï",
--        manualVersion: "ßÇíßÇÇßÇ║ßÇòßÇ║ßÇùßÇ¼ßÇ╕ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕: allocation-web.html v3.1.4 ΓÇö input ßüä ßÇüßÇ»ßüè ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ ßüüßüê ßÇüßÇ» (ßÇÖßÇ¡ßÇüßÇäßÇ║ ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ ßÇòßÇ╝ßÇ₧ßÇ¢ßÇößÇ║)ßüè Segment FLT/MTF ßÇ₧ßÇ▒ßÇ¼ßÇ╖ßÇüßÇÉßÇ║ßüè MH04 ßÇæßÇ¼ßÇ╕ßÇòßÇ╝ßÇ«ßÇ╕ Y ßÇÉßÇ╜ßÇäßÇ║ ßÇÇßÇ╗ßÇ▒ßÇ¼ßÇ║ßüï",
-+        manualVersion: "ßÇíßÇÇßÇ║ßÇòßÇ║ßÇùßÇ¼ßÇ╕ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕: allocation-web.html v3.1.6 ΓÇö input ßüä ßÇüßÇ»ßüè ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ ßüüßüê ßÇüßÇ» (ßÇÖßÇ¡ßÇüßÇäßÇ║ ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ ßÇòßÇ╝ßÇ₧ßÇ¢ßÇößÇ║)ßüè Segment FLT/MTF ßÇ₧ßÇ▒ßÇ¼ßÇ╖ßÇüßÇÉßÇ║ßüè MH04 ßÇæßÇ¼ßÇ╕ßÇòßÇ╝ßÇ«ßÇ╕ Y ßÇÉßÇ╜ßÇäßÇ║ ßÇÇßÇ╗ßÇ▒ßÇ¼ßÇ║ßüï Offline Excel ßÇíßÇÉßÇ╜ßÇÇßÇ║ vendor/xlsx.full.min.js ßÇÇßÇ¡ßÇ» HTML ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇÉßÇàßÇ║ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÉßÇ╜ßÇ▓ßÇÉßÇ╜ßÇäßÇ║ ßÇæßÇ¼ßÇ╕ßÇòßÇ½ßüï",
-         step1Title: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüü ΓÇö Excel ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇ¢ßÇößÇ║",
-         step1a: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßüä ßÇüßÇ» ßÇÉßÇäßÇ║ßÇòßÇ½/ßÇÇßÇ░ßÇ╕ßÇæßÇèßÇ╖ßÇ║ßÇòßÇ½ ΓÇö Scheduleßüè COOIS (ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║)ßüè ZRMM0028 (BOM/ßÇòßÇ╝ßÇäßÇ║ßÇò)ßüè MB52 (ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║)ßüï",
-         step1b: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇíßÇäßÇ║ßÇ╣ßÇéßÇ£ßÇ¡ßÇòßÇ║ ßÇüßÇ▒ßÇ½ßÇäßÇ║ßÇ╕ßÇàßÇëßÇ║ßÇíßÇÖßÇèßÇ║ßÇûßÇ╝ßÇäßÇ╖ßÇ║ ßÇûßÇ╝ßÇ▒ßÇ¢ßÇ╛ßÇäßÇ║ßÇ╕ßÇ₧ßÇèßÇ║ (alias ßÇüßÇ╜ßÇäßÇ╖ßÇ║ßÇòßÇ╝ßÇ»)ßüï ßÇößÇ╛ßÇàßÇ║ßÇæßÇòßÇ║ßÇüßÇ▒ßÇ½ßÇäßÇ║ßÇ╕ßÇàßÇëßÇ║ (ßÇÉßÇ¢ßÇ»ßÇÉßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ ßÇíßÇäßÇ║ßÇ╣ßÇéßÇ£ßÇ¡ßÇòßÇ║) ßÇÉßÇ╜ßÇäßÇ║ ßÇíßÇäßÇ║ßÇ╣ßÇéßÇ£ßÇ¡ßÇòßÇ║ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÇßÇ¡ßÇ» ßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇ₧ßÇèßÇ║ßüï",
-         step1c: "ßÇíßÇàßÇàßÇ║ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÖßÇ£ßÇ¡ßÇ»ßÇÿßÇ▓ ßÇàßÇÖßÇ║ßÇ╕ßÇ¢ßÇößÇ║ Sample data ßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║ßüï",
-         step1d: "slot ßÇ£ßÇ▒ßÇ╕ßÇüßÇ»ßÇ£ßÇ»ßÇ╢ßÇ╕ Import validation OK ßÇÖßÇ╝ßÇäßÇ║ßÇÖßÇ╛ Run allocation ßÇ£ßÇ»ßÇòßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║ßüï",
-+        step1e: "Offline Excel: vendor/xlsx.full.min.js ßÇòßÇ½ßÇ₧ßÇ▒ßÇ¼ ßÇûßÇ¡ßÇ»ßÇ£ßÇ║ßÇÆßÇ½ßÇÖßÇ╛ allocation-web.html ßÇÇßÇ¡ßÇ» ßÇûßÇ╜ßÇäßÇ╖ßÇ║ßÇòßÇ½ (HTML ßÇÉßÇàßÇ║ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÉßÇèßÇ║ßÇ╕ ßÇÖßÇÇßÇ░ßÇ╕ßÇòßÇ½ßÇößÇ╛ßÇäßÇ╖ßÇ║)ßüï",
-         step2Title: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüé ΓÇö ßÇíßÇÖßÇ╛ßÇÉßÇ║ßÇíßÇ₧ßÇ¼ßÇ╕ ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇößÇ║",
-         step2a: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇ£ßÇ▒ßÇ╕ßÇüßÇ»ßüÅ mapping ßÇçßÇÜßÇ¼ßÇ╕ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇÉßÇ╜ßÇ▒ßÇ╖ßÇ¢ßÇ╛ßÇ¡ßÇ₧ßÇ▒ßÇ¼ ßÇüßÇ▒ßÇ½ßÇäßÇ║ßÇ╕ßÇàßÇëßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇòßÇ½ßüï",
-         step2b: "ßÇÜßÇ░ßÇößÇàßÇ║ whitelist ßÇòßÇ»ßÇ╢ßÇÖßÇ╛ßÇößÇ║ (ßÇòßÇ╝ßÇäßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║): MΓåÆYD=1.0936ßüè YDΓåÆM=0.9144ßüï ßÇÉßÇ░ßÇèßÇ«ßÇÜßÇ░ßÇößÇàßÇ║ßÇ₧ßÇèßÇ║ ßÇíßÇÖßÇ╝ßÇ▓ 1:1ßüï ßÇçßÇÜßÇ¼ßÇ╕ßÇùßÇ£ßÇ¼ßÇûßÇ╝ßÇàßÇ║ßÇòßÇ½ßÇÇ Reset defaults ßÇ₧ßÇ»ßÇ╢ßÇ╕ßÇòßÇ½ßüï",
+         manualIntro: "ဤလက်စွဲသည် RAW MAT Allocation Engine v3 (offline ဘရောက်ဆာ ကိရိယာ) ကို ရှင်းပြသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
+-        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.4 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။",
++        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.6 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။ Offline Excel အတွက် vendor/xlsx.full.min.js ကို HTML နှင့် တစ်ဖိုင်တွဲတွင် ထားပါ။",
+         step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
+         step1a: "ဖိုင် ၄ ခု တင်ပါ/ကူးထည့်ပါ — Schedule၊ COOIS (လိုအပ်ချက်)၊ ZRMM0028 (BOM/ပြင်ပ)၊ MB52 (သိုလှောင်)။",
+         step1b: "ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ဖြေရှင်းသည် (alias ခွင့်ပြု)။ နှစ်ထပ်ခေါင်းစဉ် (တရုတ်ပြီး အင်္ဂလိပ်) တွင် အင်္ဂလိပ်အတန်းကို သုံးသည်။",
+         step1c: "အစစ်ဖိုင် မလိုဘဲ စမ်းရန် Sample data သုံးနိုင်သည်။",
+         step1d: "slot လေးခုလုံး Import validation OK မြင်မှ Run allocation လုပ်နိုင်သည်။",
++        step1e: "Offline Excel: vendor/xlsx.full.min.js ပါသော ဖိုလ်ဒါမှ allocation-web.html ကို ဖွင့်ပါ (HTML တစ်ဖိုင်တည်း မကူးပါနှင့်)။",
+         step2Title: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု လုပ်ဆောင်ရန်",
+         step2a: "ဖိုင်လေးခု၏ mapping ဇယားနှင့် တွေ့ရှိသော ခေါင်းစဉ်များကို စစ်ဆေးပါ။",
+         step2b: "ယူနစ် whitelist ပုံမှန် (ပြင်နိုင်): M→YD=1.0936၊ YD→M=0.9144။ တူညီယူနစ်သည် အမြဲ 1:1။ ဇယားဗလာဖြစ်ပါက Reset defaults သုံးပါ။",
 diff --git a/allocation-web.html b/allocation-web.html
 index e55b990..b18e26a 100644
 --- a/allocation-web.html
@@ -684,7 +681,7 @@ index e55b990..b18e26a 100644
      (function () {
        try {
 @@ -1399,7 +1401,7 @@
-   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">Γåæ Top</button>
+   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
  
    <script>
 -    const APP_VERSION = "3.1.4";
@@ -722,37 +719,37 @@ index e55b990..b18e26a 100644
          importValidateRunTitle: "Fix import errors before allocation",
          importValidateBlocked: "Fix the Step 1 import errors before running allocation.",
 @@ -1962,12 +1971,15 @@
-         importing: "µ¡úσ£¿σî»σàÑµ¬öµíê",
-         readingFile: "µ¡úσ£¿Φ«ÇσÅûµ¬öµíêΓÇª",
-         parsingFile: "µ¡úσ£¿Φºúµ₧ÉΦí¿µá╝ΓÇª",
-+        parsingLargeFile: "µ¡úσ£¿Φºúµ₧Éσñºσ₧ïµ┤╗Θáüτ░┐∩╝êσÅ»Φâ╜Θ£ÇΦªüΣ╕ÇΘ╗₧µÖéΘûô∩╝ëΓÇª",
-         processing: "µ¡úσ£¿σƒ╖ΦíîΘàìτÖ╝",
-         expanding: "µ¡úσ£¿σ▒òΘûïΘ£Çµ▒éσêùΓÇª",
-         allocating: "µ¡úσ£¿ΘàìτÖ╝σ║½σ¡ÿΓÇª",
-         rendering: "µ¡úσ£¿τöóτöƒΘáÉΦª╜ΓÇª",
-         loaded: "σ╖▓Φ╝ëσàÑ {rows} σêùπÇü{cols} µ¼äπÇé",
-         importError: "τäíµ│òΦ«ÇσÅûµ¬öµíê∩╝Ü{message}",
-+        importTooLarge: "µ¬öµíêΘüÄσñºµêûτÇÅΦª╜σÖ¿ΦÖòτÉåσñ▒µòù∩╝ê{message}∩╝ëπÇéΦ½ïΘù£Θûëσà╢Σ╗ûσêåΘáüσ╛îΘçìΦ⌐ªπÇév3.1.6 Φ╡╖σñºΦí¿ CSV∩╝Åxlsx Φí¿Θá¡σü╡µ╕¼σ╖▓σèáσ¢║∩╝¢ΦïÑΣ╗ìσñ▒µòùσÅ»Φâ╜µÿ»Φ¿ÿµå╢Θ½öΣ╕ìΦ╢│πÇé",
-+        sheetjsMissing: "µë╛Σ╕ìσê░ Excel Φºúµ₧ÉσÖ¿∩╝ÜΦ½ïσ░ç vendor/xlsx.full.min.js Φêç allocation-web.html µö╛σ£¿σÉîΣ╕ÇΦ│çµûÖσñ╛Σ╕ªσ╛₧µ¡ñΘûïσòƒ∩╝êΘ¢óτ╖Ü∩╝ëπÇé",
-         importValidateTitle: "{file} µá╝σ╝Åµ¬óµƒÑσñ▒µòù",
-         importValidateRunTitle: "Φ½ïσàêΣ┐«µ¡úσî»σàÑΘî»Φ¬ñ∩╝îσåìσƒ╖ΦíîΘàìτÖ╝",
-         importValidateBlocked: "Φ½ïσàêΣ┐«µ¡úτ¼¼ 1 µ¡ÑτÜäσî»σàÑΘî»Φ¬ñ∩╝îσåìσƒ╖ΦíîΘàìτÖ╝πÇé",
+         importing: "正在匯入檔案",
+         readingFile: "正在讀取檔案…",
+         parsingFile: "正在解析表格…",
++        parsingLargeFile: "正在解析大型活頁簿（可能需要一點時間）…",
+         processing: "正在執行配發",
+         expanding: "正在展開需求列…",
+         allocating: "正在配發庫存…",
+         rendering: "正在產生預覽…",
+         loaded: "已載入 {rows} 列、{cols} 欄。",
+         importError: "無法讀取檔案：{message}",
++        importTooLarge: "檔案過大或瀏覽器處理失敗（{message}）。請關閉其他分頁後重試。v3.1.6 起大表 CSV／xlsx 表頭偵測已加固；若仍失敗可能是記憶體不足。",
++        sheetjsMissing: "找不到 Excel 解析器：請將 vendor/xlsx.full.min.js 與 allocation-web.html 放在同一資料夾並從此開啟（離線）。",
+         importValidateTitle: "{file} 格式檢查失敗",
+         importValidateRunTitle: "請先修正匯入錯誤，再執行配發",
+         importValidateBlocked: "請先修正第 1 步的匯入錯誤，再執行配發。",
 @@ -2134,12 +2146,15 @@
-         importing: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║",
-         readingFile: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇûßÇÉßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
-         parsingFile: "ßÇçßÇÜßÇ¼ßÇ╕ ßÇüßÇ╜ßÇ▓ßÇüßÇ╝ßÇÖßÇ║ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
-+        parsingLargeFile: "ßÇÇßÇ╝ßÇ«ßÇ╕ßÇÖßÇ¼ßÇ╕ßÇ₧ßÇ▒ßÇ¼ workbook ßÇüßÇ╜ßÇ▓ßÇüßÇ╝ßÇÖßÇ║ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║ (ßÇíßÇüßÇ╗ßÇ¡ßÇößÇ║ßÇÜßÇ░ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇ₧ßÇèßÇ║)...",
-         processing: "ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇåßÇ▒ßÇ¼ßÇäßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║",
-         expanding: "ßÇ£ßÇ¡ßÇ»ßÇíßÇòßÇ║ßÇüßÇ╗ßÇÇßÇ║ ßÇíßÇÉßÇößÇ║ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇûßÇößÇ║ßÇÉßÇ«ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
-         allocating: "ßÇ₧ßÇ¡ßÇ»ßÇ£ßÇ╛ßÇ▒ßÇ¼ßÇäßÇ║ßÇ¢ßÇ»ßÇ╢ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
-         rendering: "ßÇíßÇàßÇÖßÇ║ßÇ╕ßÇÇßÇ╝ßÇèßÇ╖ßÇ║ ßÇòßÇ╝ßÇäßÇ║ßÇåßÇäßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
-         loaded: "ßÇíßÇÉßÇößÇ║ßÇ╕ {rows} ßÇüßÇ»ßüè ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ {cols} ßÇüßÇ» ßÇÉßÇäßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ßÇòßÇ½ßÇòßÇ╝ßÇ«ßüï",
-         importError: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÖßÇûßÇÉßÇ║ßÇößÇ¡ßÇ»ßÇäßÇ║ßÇòßÇ½ ΓÇö {message}",
-+        importTooLarge: "Workbook ßÇÇßÇ╝ßÇ«ßÇ╕ßÇ£ßÇ╜ßÇößÇ║ßÇ╕ßÇüßÇ╝ßÇäßÇ║ßÇ╕ ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ memory ßÇÖßÇ£ßÇ»ßÇ╢ßÇ£ßÇ▒ßÇ¼ßÇÇßÇ║ ({message})ßüï ßÇÉßÇÿßÇ║ßÇÖßÇ╗ßÇ¼ßÇ╕ ßÇòßÇ¡ßÇÉßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ ßÇæßÇòßÇ║ßÇÇßÇ╝ßÇ¡ßÇ»ßÇ╕ßÇàßÇ¼ßÇ╕ßÇòßÇ½ßüè ßÇ₧ßÇ¡ßÇ»ßÇ╖ßÇÖßÇƒßÇ»ßÇÉßÇ║ CSV ßÇ₧ßÇ¡ßÇÖßÇ║ßÇ╕ / ßÇÇßÇ░ßÇ╕ßÇæßÇèßÇ╖ßÇ║ßÇòßÇ½ßüï",
-+        sheetjsMissing: "Excel parser ßÇÖßÇ¢ßÇ╛ßÇ¡ßÇòßÇ½ ΓÇö vendor/xlsx.full.min.js ßÇÇßÇ¡ßÇ» allocation-web.html ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇÉßÇàßÇ║ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇÉßÇ╜ßÇ▓ßÇÉßÇ╜ßÇäßÇ║ ßÇæßÇ¼ßÇ╕ßÇòßÇ╝ßÇ«ßÇ╕ ßÇæßÇ¡ßÇ»ßÇûßÇ¡ßÇ»ßÇ£ßÇ║ßÇÆßÇ½ßÇÖßÇ╛ ßÇûßÇ╜ßÇäßÇ╖ßÇ║ßÇòßÇ½ (offline)ßüï",
-         importValidateTitle: "{file} ßÇûßÇ¡ßÇ»ßÇäßÇ║ßÇòßÇ»ßÇ╢ßÇàßÇ╢ ßÇàßÇàßÇ║ßÇåßÇ▒ßÇ╕ßÇÖßÇ╛ßÇ» ßÇÖßÇíßÇ▒ßÇ¼ßÇäßÇ║ßÇÖßÇ╝ßÇäßÇ║ßÇòßÇ½",
-         importValidateRunTitle: "ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇÖßÇ£ßÇ»ßÇòßÇ║ßÇÖßÇ« ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇÖßÇ╛ßÇ» ßÇíßÇÖßÇ╛ßÇ¼ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇòßÇ╝ßÇäßÇ║ßÇòßÇ½",
-         importValidateBlocked: "ßÇíßÇåßÇäßÇ╖ßÇ║ ßüü ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇÖßÇ╛ßÇ» ßÇíßÇÖßÇ╛ßÇ¼ßÇ╕ßÇÖßÇ╗ßÇ¼ßÇ╕ßÇÇßÇ¡ßÇ» ßÇíßÇ¢ßÇäßÇ║ßÇòßÇ╝ßÇäßÇ║ßÇòßÇ╝ßÇ«ßÇ╕ßÇÖßÇ╛ ßÇüßÇ╜ßÇ▓ßÇ¥ßÇ▒ßÇÖßÇ╛ßÇ» ßÇ£ßÇ»ßÇòßÇ║ßÇòßÇ½ßüï",
+         importing: "ဖိုင် တင်သွင်းနေသည်",
+         readingFile: "ဖိုင် ဖတ်နေသည်...",
+         parsingFile: "ဇယား ခွဲခြမ်းနေသည်...",
++        parsingLargeFile: "ကြီးမားသော workbook ခွဲခြမ်းနေသည် (အချိန်ယူနိုင်သည်)...",
+         processing: "ခွဲဝေမှု လုပ်ဆောင်နေသည်",
+         expanding: "လိုအပ်ချက် အတန်းများ ဖန်တီးနေသည်...",
+         allocating: "သိုလှောင်ရုံ ခွဲဝေနေသည်...",
+         rendering: "အစမ်းကြည့် ပြင်ဆင်နေသည်...",
+         loaded: "အတန်း {rows} ခု၊ ကော်လံ {cols} ခု တင်ပြီးပါပြီ။",
+         importError: "ဖိုင် မဖတ်နိုင်ပါ — {message}",
++        importTooLarge: "Workbook ကြီးလွန်းခြင်း သို့မဟုတ် memory မလုံလောက် ({message})။ တဘ်များ ပိတ်ပြီး ထပ်ကြိုးစားပါ၊ သို့မဟုတ် CSV သိမ်း / ကူးထည့်ပါ။",
++        sheetjsMissing: "Excel parser မရှိပါ — vendor/xlsx.full.min.js ကို allocation-web.html နှင့် တစ်ဖိုင်တွဲတွင် ထားပြီး ထိုဖိုလ်ဒါမှ ဖွင့်ပါ (offline)။",
+         importValidateTitle: "{file} ဖိုင်ပုံစံ စစ်ဆေးမှု မအောင်မြင်ပါ",
+         importValidateRunTitle: "ခွဲဝေမှု မလုပ်မီ တင်သွင်းမှု အမှားများကို ပြင်ပါ",
+         importValidateBlocked: "အဆင့် ၁ တင်သွင်းမှု အမှားများကို အရင်ပြင်ပြီးမှ ခွဲဝေမှု လုပ်ပါ။",
 @@ -2897,7 +2912,9 @@
      }
  
@@ -774,7 +771,7 @@ index e55b990..b18e26a 100644
 -        const out = [];
 -        for (let i = 0; i < width; i++) out.push(row[i] ?? "");
 +      if (!rows || !rows.length) return { headerRowIndex: 0, headers: [], dataRows: [], rows: [] };
-+      // Avoid Math.max(...arr) ΓÇö spread of 100k+ row lengths blows the call stack.
++      // Avoid Math.max(...arr) — spread of 100k+ row lengths blows the call stack.
 +      let width = 0;
 +      for (const row of rows) {
 +        if (row && row.length > width) width = row.length;
@@ -983,13 +980,13 @@ index 084bf72..daa6534 100644
 --- a/docs/07-allocation-v3-spec.md
 +++ b/docs/07-allocation-v3-spec.md
 @@ -1,6 +1,6 @@
- # 07 ΓÇö RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄΦªÅµá╝∩╝êv3∩╝ë
+ # 07 — RAW MAT 庫存配發引擎規格（v3）
  
--> µ£¼µûçΣ╗╢τé║ **v3** σ╖▓τó║Φ¬ìµÑ¡σïÖΦªÅσëçπÇéσ»ªΣ╜£σàÑσÅú∩╝Ü`allocation-web.html`∩╝ê`APP_VERSION` 3.1.4∩╝ëπÇé  
-+> µ£¼µûçΣ╗╢τé║ **v3** σ╖▓τó║Φ¬ìµÑ¡σïÖΦªÅσëçπÇéσ»ªΣ╜£σàÑσÅú∩╝Ü`allocation-web.html`∩╝ê`APP_VERSION` 3.1.6∩╝¢Θ¢óτ╖Ü Excel Σ╛¥Φ│┤ `vendor/xlsx.full.min.js`∩╝ëπÇé  
- > µ¼äΣ╜ìσ░ìµçëΣ╕Çσ╛ïΣ╜┐τö¿**Φï▒µûçµ¼äΣ╜ìσÉìτ¿▒**∩╝îτªüµ¡óσ»½µ¡╗ Excel µ¼äΣ╜ìσ¡ùµ»ì∩╝êA/B/C∩╝ëπÇé
+-> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.4）。  
++> 本文件為 **v3** 已確認業務規則。實作入口：`allocation-web.html`（`APP_VERSION` 3.1.6；離線 Excel 依賴 `vendor/xlsx.full.min.js`）。  
+ > 欄位對應一律使用**英文欄位名稱**，禁止寫死 Excel 欄位字母（A/B/C）。
  
- **τïÇµàï / Status∩╝Ü** CONFIRMED∩╝ê2026-07-22∩╝ë  
+ **狀態 / Status：** CONFIRMED（2026-07-22）  
 diff --git a/vendor/README.md b/vendor/README.md
 new file mode 100644
 index 0000000..19de8f4
@@ -1002,4 +999,4 @@ index 0000000..19de8f4
 +
 +Keep this file next to `allocation-web.html` (same relative path `vendor/xlsx.full.min.js`). Opening only the HTML without this file will show a clear import error.
 +
-+Do not replace with a CDN `<script>` ΓÇö this project stays local/offline-first.
++Do not replace with a CDN `<script>` — this project stays local/offline-first.
