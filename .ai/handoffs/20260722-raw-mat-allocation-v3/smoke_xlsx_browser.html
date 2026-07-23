@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>xlsx import smoke</title>
+  <script src="/vendor/xlsx.full.min.js"></script>
+</head>
+<body>
+  <pre id="out">Running…</pre>
+  <script>
+    (async function () {
+      const out = document.getElementById("out");
+      try {
+        if (typeof XLSX === "undefined" || !XLSX.read) throw new Error("XLSX missing");
+        const res = await fetch("/New_0722/COOIS.xlsx");
+        if (!res.ok) throw new Error("fetch " + res.status);
+        const buf = await res.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: false });
+        const name = wb.SheetNames[0];
+        const matrix = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "", blankrows: false });
+        const rows = matrix
+          .map(r => (Array.isArray(r) ? r : []).map(c => (c == null ? "" : String(c))))
+          .filter(r => r.some(c => String(c).trim()));
+        const msg = "SMOKE_OK sheet=" + name + " rows=" + rows.length + " xlsx=" + XLSX.version;
+        out.textContent = msg;
+        document.title = msg;
+        console.log(msg);
+      } catch (err) {
+        const msg = "SMOKE_FAIL " + (err && err.message ? err.message : String(err));
+        out.textContent = msg;
+        document.title = msg;
+        console.error(msg);
+      }
+    })();
+  </script>
+</body>
+</html>

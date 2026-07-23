@@ -4,8 +4,9 @@
 
 本專案是一個在使用者電腦瀏覽器內執行的單頁工具，依核准業務規則將 **Schedule（排程）**、**COOIS（需求）**、**ZRMM0028（BOM／廠外）** 與 **MB52（廠內庫存）** 合併後做**庫存貪婪配發**，並匯出可比對「需求 vs 能提供」與「扣減後剩餘」的結果。
 
-**現行程式入口：`allocation-web.html`（v3.1.4）**  
-規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
+**現行程式入口：`allocation-web.html`（v3.1.6）**  
+規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)  
+離線開啟時請保留同目錄的 `vendor/xlsx.full.min.js`（大檔 COOIS 匯入用）。
 
 舊檔 `vlookup-web.html` 為**已淘汰的兩段式查找原型**，僅供歷史對照，**不是**現行產品方向。  
 v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)。
@@ -14,16 +15,17 @@ v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocati
 
 This project is a browser-based, single-page allocation tool. It combines **Schedule**, **COOIS** demand, **ZRMM0028** BOM/outside stock, and **MB52** plant stock under approved business rules, then greedily allocates child stock and exports demand vs provided and remaining stock after each row.
 
-**Current app entry point: `allocation-web.html` (v3.1.4)**  
-Spec: [docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)
+**Current app entry point: `allocation-web.html` (v3.1.6)**  
+Spec: [docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)  
+Keep `vendor/xlsx.full.min.js` beside the HTML when opening offline (required for large COOIS xlsx import).
 
 Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only.  
 v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-allocation-engine-spec.md).
 
 ## 目前狀態
 
-- 狀態：配發引擎 **v3.1.4**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記）已實作。
-- 程式版本：`allocation-web.html` **3.1.4**。
+- 狀態：配發引擎 **v3.1.6**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記；本機 SheetJS＋大表 CSV 匯入加固）已實作。
+- 程式版本：`allocation-web.html` **3.1.6**（需 `vendor/xlsx.full.min.js`）。
 - 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
 - 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
 - 語言規則：專案說明與規格採繁體中文在前、英文緊接；UI 為 English／繁體中文／မြန်မာ。
@@ -31,8 +33,8 @@ v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-al
 
 ## Current status
 
-- Status: Allocation engine **v3.1.4** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **18-column** output with mother plant/outside display, Y flag) is implemented.
-- App version: `allocation-web.html` **3.1.4**.
+- Status: Allocation engine **v3.1.6** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **18-column** output with mother plant/outside display, Y flag; local SheetJS + large CSV import hardening) is implemented.
+- App version: `allocation-web.html` **3.1.6** (requires `vendor/xlsx.full.min.js`).
 - Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
 - Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
 - Language rule: Project docs place Traditional Chinese first and English immediately after. UI languages are English, Traditional Chinese, and Myanmar.

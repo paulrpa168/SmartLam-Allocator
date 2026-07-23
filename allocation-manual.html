@@ -183,7 +183,7 @@
   <main>
     <section>
       <p data-i18n="manualIntro">This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.</p>
-      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.</div>
+      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.6 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.</div>
     </section>
 
     <section>
@@ -193,6 +193,7 @@
         <li data-i18n="step1b">Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.</li>
         <li data-i18n="step1c">Use Sample data to try the tool without real files.</li>
         <li data-i18n="step1d">Import validation must show OK on all four slots before you can run allocation.</li>
+        <li data-i18n="step1e">Offline Excel: open allocation-web.html from the project folder that also contains vendor/xlsx.full.min.js (do not copy the HTML alone).</li>
       </ul>
     </section>
 
@@ -309,12 +310,13 @@
         themeMill: "Mill Ops",
         themeSoft: "Soft Enterprise",
         manualIntro: "This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.",
-        manualVersion: "App version: allocation-web.html v3.1.4 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit.",
+        manualVersion: "App version: allocation-web.html v3.1.6 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.",
         step1Title: "Step 1 — Import Excel files",
         step1a: "Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).",
         step1b: "Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.",
         step1c: "Use Sample data to try the tool without real files.",
         step1d: "Import validation must show OK on all four slots before you can run allocation.",
+        step1e: "Offline Excel: open allocation-web.html from the project folder that also contains vendor/xlsx.full.min.js (do not copy the HTML alone).",
         step2Title: "Step 2 — Mapping & run allocation",
         step2a: "Review the mapping table and detected headers for all four files.",
         step2b: "Unit whitelist defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.",
@@ -384,12 +386,13 @@
         themeMill: "Mill Ops 廠務",
         themeSoft: "Soft 企業風",
         manualIntro: "本手冊說明 RAW MAT 庫存配發引擎 v3（離線瀏覽器工具）。請在上方選擇語系。",
-        manualVersion: "程式版本：allocation-web.html v3.1.4 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。",
+        manualVersion: "程式版本：allocation-web.html v3.1.6 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。離線 Excel 請保留 vendor/xlsx.full.min.js 與 HTML 同資料夾。",
         step1Title: "第 1 步 — 匯入 Excel",
         step1a: "上傳或貼上四個檔案：Schedule 排程、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。",
         step1b: "欄位以英文表頭名稱解析（可用 alias）。雙表頭（中文＋英文）時以英文列為 header。",
         step1c: "可使用「範例資料」在不使用真實檔的情況下試用。",
         step1d: "四個上傳槽的匯入驗證皆須顯示 OK，才能執行配發。",
+        step1e: "離線 Excel：請從含 vendor/xlsx.full.min.js 的專案資料夾開啟 allocation-web.html（勿只複製單一 HTML）。",
         step2Title: "第 2 步 — 對應與執行配發",
         step2a: "檢視四個檔案的對應表與偵測到的表頭。",
         step2b: "單位白名單預設（可改）：M→YD=1.0936、YD→M=0.9144；同單位永遠 1:1。表空白時可按「重設預設」。",
@@ -459,12 +462,13 @@
         themeMill: "Mill Ops",
         themeSoft: "Soft Enterprise",
         manualIntro: "ဤလက်စွဲသည် RAW MAT Allocation Engine v3 (offline ဘရောက်ဆာ ကိရိယာ) ကို ရှင်းပြသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
-        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.4 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။",
+        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.6 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။ Offline Excel အတွက် vendor/xlsx.full.min.js ကို HTML နှင့် တစ်ဖိုင်တွဲတွင် ထားပါ။",
         step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
         step1a: "ဖိုင် ၄ ခု တင်ပါ/ကူးထည့်ပါ — Schedule၊ COOIS (လိုအပ်ချက်)၊ ZRMM0028 (BOM/ပြင်ပ)၊ MB52 (သိုလှောင်)။",
         step1b: "ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ဖြေရှင်းသည် (alias ခွင့်ပြု)။ နှစ်ထပ်ခေါင်းစဉ် (တရုတ်ပြီး အင်္ဂလိပ်) တွင် အင်္ဂလိပ်အတန်းကို သုံးသည်။",
         step1c: "အစစ်ဖိုင် မလိုဘဲ စမ်းရန် Sample data သုံးနိုင်သည်။",
         step1d: "slot လေးခုလုံး Import validation OK မြင်မှ Run allocation လုပ်နိုင်သည်။",
+        step1e: "Offline Excel: vendor/xlsx.full.min.js ပါသော ဖိုလ်ဒါမှ allocation-web.html ကို ဖွင့်ပါ (HTML တစ်ဖိုင်တည်း မကူးပါနှင့်)။",
         step2Title: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု လုပ်ဆောင်ရန်",
         step2a: "ဖိုင်လေးခု၏ mapping ဇယားနှင့် တွေ့ရှိသော ခေါင်းစဉ်များကို စစ်ဆေးပါ။",
         step2b: "ယူနစ် whitelist ပုံမှန် (ပြင်နိုင်): M→YD=1.0936၊ YD→M=0.9144။ တူညီယူနစ်သည် အမြဲ 1:1။ ဇယားဗလာဖြစ်ပါက Reset defaults သုံးပါ။",
