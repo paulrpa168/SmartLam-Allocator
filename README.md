@@ -1,91 +1,64 @@
-# RAW MAT 庫存配發引擎
+# RAW MAT 庫存配發引擎 / RAW MAT Allocation Engine
 
-## 專案定位
+## 專案定位 / Project purpose
 
-本專案是一個在使用者電腦瀏覽器內執行的單頁工具，依核准業務規則將 **Schedule（排程）**、**COOIS（需求）**、**ZRMM0028（BOM／廠外）** 與 **MB52（廠內庫存）** 合併後做**庫存貪婪配發**，並匯出可比對「需求 vs 能提供」與「扣減後剩餘」的結果。
+本專案是完全在本機瀏覽器執行的配發工具。它整合 Schedule、COOIS、ZRMM0028 與 MB52，依核准規則計算母料覆蓋、子料需求、可配發量及逐列剩餘庫存。<br>
+This project is a local browser-based allocation tool. It combines Schedule, COOIS, ZRMM0028, and MB52 to calculate mother coverage, child demand, provided quantity, and running stock under approved rules.
 
-**現行程式入口：`allocation-web.html`（v3.1.6）**  
-規格：[docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)  
-離線開啟時請保留同目錄的 `vendor/xlsx.full.min.js`（大檔 COOIS 匯入用）。
+**現行入口 / Current app:** `allocation-web.html` v3.4.1<br>
+**現行規格 / Current spec:** [`docs/07-allocation-v3-spec.md`](docs/07-allocation-v3-spec.md)<br>
+**操作手冊 / Manual:** [`allocation-manual.html`](allocation-manual.html)<br>
+**共用換算設定 / Shared conversion config:** [`config/conversion-rules.v1.json`](config/conversion-rules.v1.json)
 
-舊檔 `vlookup-web.html` 為**已淘汰的兩段式查找原型**，僅供歷史對照，**不是**現行產品方向。  
-v2 備份：`allocation-web-v2.4.0-backup.html`；舊規格見 [docs/06-allocation-engine-spec.md](docs/06-allocation-engine-spec.md)。
+離線開啟時，請保留 `vendor/xlsx.full.min.js` 與主程式的相對位置。`vlookup-web.html` 是已淘汰的兩段式查找原型，只保留歷史對照。<br>
+When opening offline, keep `vendor/xlsx.full.min.js` in its current relative location. `vlookup-web.html` is a deprecated two-stage lookup prototype retained only for historical reference.
 
-## Project purpose
+## v3.4.1 核心行為 / v3.4.1 core behavior
 
-This project is a browser-based, single-page allocation tool. It combines **Schedule**, **COOIS** demand, **ZRMM0028** BOM/outside stock, and **MB52** plant stock under approved business rules, then greedily allocates child stock and exports demand vs provided and remaining stock after each row.
+- 在任何計算前，0028 的母料或子料若以 `MB` 開頭，整列排除。/ Before any calculation, exclude every 0028 row whose mother or child starts with `MB`.
+- COOIS 依 `SO + Material + Segment` 加總全部 `Open Quantity`。/ Aggregate COOIS Open Quantity by `SO + Material + Segment`.
+- 母料需求先由共用 F+G 池覆蓋；不足量才展開子料。/ Cover mother demand from the shared F+G pool; expand only the shortage to children.
+- 廠外 G 採同單位優先：若母料有任一同單位子料，只加總這些同單位子料的 J/P；若完全無同單位子料，改用原 J/P 聚合且不換算，並將 G 標紅。/ Outside G uses a same-unit-first rule: if a mother has any same-unit child, sum only those same-unit children; if none exist, use raw J/P aggregation without conversion and mark G in red.
+- Rule D 已恢復：直接子料需求永遠保留，先由母料需求扣除後的母料餘量覆蓋，未覆蓋量才由子料 MB52 配發。/ Rule D is restored: direct child demand remains visible, is first covered by the mother balance after mother demand, and only the uncovered amount uses child MB52.
+- 同一 SO＋Segment 直接子料可歸多母時，先列出衝突並確認；確認後依母料 Open Qty 比例拆分，取消則停止。/ When direct child demand could belong to multiple mothers in the same SO + Segment, list conflicts and confirm; confirm splits by mother Open Qty, cancel stops.
+- 排序為 cutting → Schedule 原始 SO 列序 → COOIS 母料首次列序。/ Ordering is cutting → original Schedule SO row → first COOIS mother row.
+- 輸出維持 19 欄；H 是本列前母料餘量，Q 是實際子料 MB52 領用量，N 維持完整需求。/ Output remains at 19 columns; H is the mother balance before the row, Q is actual child-MB52 usage, and N remains the full demand.
+- `合貼備料齊套 / Lamination Kit Ready` 只適用於有母料且有正數非 MH04 需求、並全部足量的群組。/ Lamination Kit Ready applies only to mother groups with positive non-MH04 demand that is fully supplied.
+- 缺少或衝突的換算規則會停止整批。/ Missing or conflicting conversion rules stop the entire run.
 
-**Current app entry point: `allocation-web.html` (v3.1.6)**  
-Spec: [docs/07-allocation-v3-spec.md](docs/07-allocation-v3-spec.md)  
-Keep `vendor/xlsx.full.min.js` beside the HTML when opening offline (required for large COOIS xlsx import).
+## 快速使用 / Quick use
 
-Legacy `vlookup-web.html` is a **deprecated two-stage lookup prototype** kept for historical reference only.  
-v2 backup: `allocation-web-v2.4.0-backup.html`; prior spec: [docs/06](docs/06-allocation-engine-spec.md).
+1. 以瀏覽器開啟 `allocation-web.html`。/ Open `allocation-web.html` in a browser.
+2. 匯入 Schedule、COOIS、ZRMM0028、MB52。/ Import Schedule, COOIS, ZRMM0028, and MB52.
+3. 確認欄位對應與換算設定；需要時匯入 `config/conversion-rules.v1.json`。/ Confirm mappings and conversions; import `config/conversion-rules.v1.json` when needed.
+4. 執行配發並檢查摘要與 19 欄結果。/ Run allocation and review the summary and 19-column result.
+5. 匯出 CSV 或 XLSX。任何輸入或設定變更後必須重新執行。/ Export CSV or XLSX. Rerun after any input or configuration change.
 
-## 目前狀態
+## 驗證 / Verification
 
-- 狀態：配發引擎 **v3.1.6**（四輸入、英文表頭解析、Segment FLT/MTF、MB52 SUM、展開＋直接需求、**18 欄**輸出含母廠內／廠外庫存顯示、Y 標記；本機 SheetJS＋大表 CSV 匯入加固）已實作。
-- 程式版本：`allocation-web.html` **3.1.6**（需 `vendor/xlsx.full.min.js`）。
-- 舊查找工具：`vlookup-web.html` **1.1.0**（deprecated）。
-- 使用方式：本機離線優先；資料邊界核准前不得新增遙測或遠端服務。
-- 語言規則：專案說明與規格採繁體中文在前、英文緊接；UI 為 English／繁體中文／မြန်မာ。
-- 正式上線判定：`NEEDS WORK`（待真實檔 UI 驗收）。
+Fixture 與全量驗證器：<br>
+Fixture and full-data verifier:
 
-## Current status
+```powershell
+python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
+python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py `
+  --real-data 20260723 `
+  --conversion-config config/conversion-rules.v1.json
+```
 
-- Status: Allocation engine **v3.1.6** (four inputs, English header resolution, Segment FLT/MTF, MB52 SUM, expand + direct demand, **18-column** output with mother plant/outside display, Y flag; local SheetJS + large CSV import hardening) is implemented.
-- App version: `allocation-web.html` **3.1.6** (requires `vendor/xlsx.full.min.js`).
-- Legacy lookup tool: `vlookup-web.html` **1.1.0** (deprecated).
-- Operating model: Local/offline first. Telemetry and remote services are prohibited until the data boundary is approved.
-- Language rule: Project docs place Traditional Chinese first and English immediately after. UI languages are English, Traditional Chinese, and Myanmar.
-- Release assessment: Still `NEEDS WORK` pending real-file UI acceptance.
+20260723 已驗證：3,505 筆輸出、短缺 71 筆；MB 過濾 389 列／45 組關係；雙重身分 0；錨點 H=0.496708、N=0.02、Q=0、R=43.046。<br>
+The 20260723 baseline is verified: 3,505 output rows and 71 shortages; 389 MB rows and 45 relationships removed; zero dual identities; anchor H=0.496708, N=0.02, Q=0, and R=43.046.
 
-## 配發資料流程（v3）
+## 文件索引 / Documentation index
 
-1. **Schedule**：Order／so → cutting；同 SO 取最早 cutting。
-2. **COOIS**：SD Document + Material + Open Quantity + Requirement Segment + Base Unit；雙表頭時以英文列為 header。
-3. **ZRMM0028**：母料 Material → 子料 Article(Com.)；儲位 39* 排除；Batch 須對齊 Segment（BOM 展開不因 J/L=0 丢掉）。
-4. **MB52**：Material + Stock Segment 的 Unrestricted **SUM**（排除 39*）；可配發池 = MB52。
-5. 需求：母料展開（× conversion）＋同料直接 Open Quantity；單位換算同 v2（1:1／SHT 末碼表／M↔YD 白名單）。
-6. 輸出 **18** 欄（含廠內／廠外母材料庫存顯示、子材料需求、雙 BATCH、Y）。細節見 [docs/07](docs/07-allocation-v3-spec.md)。
+- [`docs/07-allocation-v3-spec.md`](docs/07-allocation-v3-spec.md)：v3.3 公開行為契約 / v3.3 public behavior contract
+- [`docs/04-test-and-acceptance.md`](docs/04-test-and-acceptance.md)：測試與驗收治理 / Test and acceptance governance
+- [`docs/03-collaboration-governance.md`](docs/03-collaboration-governance.md)：跨 Agent／人員交辦 / Cross-agent/person handoff
+- [`docs/05-repair-flow-architecture.md`](docs/05-repair-flow-architecture.md)：修正流程與架構圖 / Repair flow and architecture
+- [`.ai/handoffs/20260724-raw-mat-allocation-handoff/brief.md`](.ai/handoffs/20260724-raw-mat-allocation-handoff/brief.md)：本次交接主檔 / Current handoff brief
+- [`.ai/handoffs/20260724-raw-mat-allocation-handoff/result.md`](.ai/handoffs/20260724-raw-mat-allocation-handoff/result.md)：v3.3 實作與驗證結果 / v3.3 implementation and evidence
 
-## Allocation data flow (v3)
+## 安全與版本治理 / Security and version governance
 
-1. **Schedule**: Order/so → cutting; earliest cutting wins per SO.
-2. **COOIS**: SD Document + Material + Open Quantity + Requirement Segment + Base Unit; dual-header sheets use the English header row.
-3. **ZRMM0028**: mother Material → child Article(Com.); exclude storage 39*; Batch must match Segment (BOM expand keeps children even when J/L is 0).
-4. **MB52**: SUM Unrestricted by Material + Stock Segment (exclude 39*); allocatable pool = MB52 only.
-5. Demand: mother expansion (× conversion) + direct Open Quantity; unit conversion same as v2.
-6. Output **18** columns (mother plant/outside display, child demand, dual BATCH, Y). See [docs/07](docs/07-allocation-v3-spec.md).
-
-## 文件索引
-
-- [配發引擎規格 v3（現行）](docs/07-allocation-v3-spec.md)
-- [操作手冊（EN／繁中／မြန်မာ）](allocation-manual.html)
-- [配發引擎規格 v2（歷史）](docs/06-allocation-engine-spec.md)
-- Fixture 驗證（v3）：`.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py`（`python ...`；有 `New_0722/` 時一併 smoke）
-- [現況系統規格（含歷史 VLOOKUP 描述）](docs/01-current-system-spec.md)
-- [程式碼審查與優化 Roadmap](docs/02-code-review-and-roadmap.md)
-- [跨 Agent／跨人員協作治理](docs/03-collaboration-governance.md)
-- [測試與驗收規格](docs/04-test-and-acceptance.md)
-- [修正流程與架構圖](docs/05-repair-flow-architecture.md)
-
-## Documentation index
-
-- [Allocation engine specification v3 (current)](docs/07-allocation-v3-spec.md)
-- [Operation manual (EN / ZH / MY)](allocation-manual.html)
-- [Allocation engine specification v2 (historical)](docs/06-allocation-engine-spec.md)
-- Fixture verifier (v3): `.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py` (optional `New_0722/` smoke)
-- [Current system specification (includes historical VLOOKUP notes)](docs/01-current-system-spec.md)
-- [Code review and optimization roadmap](docs/02-code-review-and-roadmap.md)
-- [Cross-agent and cross-person collaboration governance](docs/03-collaboration-governance.md)
-- [Test and acceptance specification](docs/04-test-and-acceptance.md)
-- [Repair flow and architecture diagrams](docs/05-repair-flow-architecture.md)
-
-## 安全與版本治理
-
-真實來源檔與任何匯出結果均由 `.gitignore` 排除。跨 Agent 或跨人員交辦只能傳遞規格、雜湊、摘要、去識別 fixture 與驗證證據，不得傳遞真實業務資料。
-
-## Security and version governance
-
-Real source workbooks and generated exports are excluded by `.gitignore`. Cross-agent or cross-person handoffs may contain specifications, hashes, summaries, sanitized fixtures, and verification evidence, but must not contain real business data.
+真實業務檔案、產生的測試輸出與匯出檔由 `.gitignore` 排除。跨 Agent 或跨人員只傳遞規格、程式差異、雜湊、去識別 fixtures 與驗證摘要，不傳送真實來源資料。程式目前不使用遙測、上傳或遠端服務。<br>
+Real business files, generated test output, and exports are excluded by `.gitignore`. Cross-agent/person handoffs may include specifications, code diffs, hashes, sanitized fixtures, and test summaries, but not real source data. The application currently uses no telemetry, upload, or remote service.

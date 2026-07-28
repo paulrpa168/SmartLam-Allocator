@@ -1,179 +1,122 @@
-# RAW MAT 測試與驗收規格
+# RAW MAT 配發引擎 v3.3 測試與驗收規格 / RAW MAT Allocation Engine v3.3 Test and Acceptance Specification
 
-- 文件狀態：Draft
-- 日期：2026-07-17
-- 適用版本：`vlookup-web.html` SHA-256 `88AAD977615B67C575EBB84881D70208481446A15DBF805CC744BD7B06D798C3`
+**狀態 / Status:** 已更新；核心與全量基準通過，互動式瀏覽器點驗待人工完成。/ Updated; core and full-data baseline passed, interactive browser clicking remains manual.<br>
+**日期 / Date:** 2026-07-24<br>
+**適用版本 / Applies to:** `allocation-web.html` 3.3.0
 
-# RAW MAT Test and Acceptance Specification
+## 1. 測試資料政策 / Test-data policy
 
-- Document status: Draft
-- Date: 2026-07-17
-- Applicable version: `vlookup-web.html` SHA-256 `88AAD977615B67C575EBB84881D70208481446A15DBF805CC744BD7B06D798C3`
+- 真實 20260723 檔只可在本機唯讀驗收，不提交 Git、不放 prompt／handoff／截圖。/ Real 20260723 files are local read-only acceptance data and must not enter Git, prompts, handoffs, or screenshots.
+- Handoff 可記 SHA-256、列數與彙總證據，不包含真實資料列。/ Handoffs may record SHA-256, row counts, and aggregate evidence, but not real rows.
+- 自動分享使用去識別 fixtures。/ Shared automated testing uses sanitized fixtures.
+- 產生的 CSV／XLSX 測試輸出由 `.gitignore` 排除。/ Generated CSV/XLSX output is excluded by `.gitignore`.
 
-## 1. 測試資料政策
+## 2. 必要測試矩陣 / Required test matrix
 
-- 真實 `1.xlsx`、`2.xlsx`、`3.xlsx` 只可在本機以唯讀方式做最終驗收。
-- 真實資料、擷取內容與匯出結果不得提交 Git、放進 handoff、prompt、issue 或截圖。
-- 自動測試與跨人員協作使用小型去識別 fixture；fixture 必須保留必要資料型別、重複鍵與日期邊界，但不得保留真實料號、供應商或描述。
-- 每次驗收以 SHA-256 確認來源版本，避免同名檔案被替換後仍沿用舊結論。
+| ID | 中文案例 | English case | 預期 / Expected |
+|---|---|---|---|
+| A-001 | 0028 母料 MB* | 0028 mother MB* | 計算前整列排除 / Row excluded before calculation |
+| A-002 | 0028 子料 MB* | 0028 child MB* | 計算前整列排除 / Row excluded before calculation |
+| A-003 | MB 過濾後自我配對 | Self-link after MB filter | 0 |
+| A-004 | COOIS 同鍵多列 | Duplicate COOIS key rows | 依 SO+Material+Segment 加總 / Aggregate all rows |
+| A-005 | 母料 F+G 覆蓋 | Mother F+G coverage | 不足才展開 / Expand only shortage |
+| A-006 | 廠外 pair 單位 | Outside pair units | 先換回母料 OUn 再加總 / Convert to mother OUn before sum |
+| A-007 | Rule D 直接子料需求 | Rule D direct child demand | 先扣母料餘量，未覆蓋量才扣子料 MB52 / Mother balance first; uncovered amount uses child MB52 |
+| A-008 | 直接需求可歸多母 | Direct demand maps to multiple mothers | 列出全部衝突並確認；確認後按母料 Open Qty 比例拆分，取消則整批停止 / List conflicts and confirm; on confirm split by mother Open Qty; cancel stops run |
+| A-009 | 共享子料 | Shared child | 依核准順序共扣同池 / Consume common pool in order |
+| A-010 | 220x110 SHT→YD | 220x110 SHT→YD | 2.187227 |
+| A-011 | 缺換算／衝突 | Missing/conflicting conversion | 整批停止，不略過 / Stop; never skip |
+| A-012 | 19 欄 | 19 columns | 預覽、CSV、XLSX 同值同序 / Same values/order |
+| A-013 | child stock | child stock | 固定原始 MB52 總量 / Fixed original MB52 total |
+| A-014 | stock available | stock available | 本列前餘量 / Pre-row balance |
+| A-015 | Y 正常群組 | Valid Y group | 有母、有正數非 MH04、全部足量才 Y / Mother + positive non-MH04 + fully supplied |
+| A-016 | 零需求／純直接／MH04-only | Zero/direct-only/MH04-only | Y 空白 / Blank Y |
+| A-017 | 結果失效 | Result invalidation | 清舊結果並停用 CSV/XLSX / Clear results and disable exports |
+| A-018 | 語言切換 | Language switch | en/zh 不改資料與選取 / No data or selection drift |
+| A-019 | CSV 安全 | CSV safety | UTF-8 BOM、引號／換行、公式字首防護 / BOM, quoting, multiline, formula safety |
+| A-020 | XLSX 可用性 | XLSX usability | Excel 可開啟且與 CSV 一致 / Opens in Excel and matches CSV |
+| A-021 | 母料完整覆蓋直接需求 | Full mother coverage | H 正確、Q=0、R 不扣 / Correct H, Q=0, R unchanged |
+| A-022 | 母料部分覆蓋直接需求 | Partial mother coverage | Q 只等於未覆蓋量 / Q equals uncovered amount only |
+| A-023 | 多直接子料共母料池 | Multiple direct children | 依 0028 列序，H 逐列遞減 / 0028 order; H decreases per row |
+| A-024 | 母料池跨 SO | Mother pool across SOs | 母料需求與 Rule D 均延續扣減 / Both mother demand and Rule D persist |
+| A-025 | 不同母子單位 | Different mother/child units | 覆蓋量與回扣依相同係數 / Coverage and deduction use the same ratio |
 
-## 1. Test-data policy
+## 3. 排序驗收 / Ordering acceptance
 
-- The real `1.xlsx`, `2.xlsx`, and `3.xlsx` files may be used only for read-only local acceptance testing.
-- Real data, extracted contents, exports, screenshots, and row samples must not enter Git, handoffs, prompts, or issues.
-- Automated and shared testing uses small sanitized fixtures that preserve necessary data types, duplicate-key behavior, and date boundaries without real materials, suppliers, or descriptions.
-- Every acceptance run verifies the source SHA-256 values so conclusions are not reused after same-named files are replaced.
+必須依序驗證：cutting 升冪 → 同日 Schedule SO 原始列序 → 同 SO COOIS 母料首次列序 → 同母 0028 子料首次列序。<br>
+Verify in this exact order: cutting ascending → original Schedule SO row for equal dates → first COOIS mother row within SO → first 0028 child row within mother.
 
-## 2. 現況基準測試
+多個母料共用一個子料時，所有列必須依此順序共扣同一 Material + Segment 池。<br>
+When mothers share a child, all rows consume the same Material + Segment pool in this order.
 
-### 設定
+## 4. 錨點與全量基準 / Anchor and full-data baseline
 
-- Excel 1 lookup：`so`
-- Excel 2 lookup：`SD Document`
-- Excel 2 return：`SD Document`、`Material`
-- Result lookup：`Excel 2 Material`
-- Excel 3 lookup：`Material`
-- Excel 3 return：`Material Full Description(EN)`、`PO Quantity`
-- Date column：`cutting`
-- From：`2026-07-01`
-- To：`2026-07-31`
-- Case sensitive：off
-- First match only：on
+錨點 `10189518 / MN090134761 / MA020147549`：<br>
+Anchor `10189518 / MN090134761 / MA020147549`:
 
-### 預期結果
-
-| 指標 | 預期值 |
+| Metric | Expected |
 |---|---:|
-| Excel 1 資料列 | 43 |
-| 輸出列 | 17 |
-| Excel 2 matched | 17 |
-| Excel 3 matched | 17 |
-| Date skipped | 26 |
+| F mother plant stock | 0 |
+| G mother stock outside | 1.996708 |
+| mother Open Quantity | 1.5 |
+| H mother stock before row | 0.496708 |
+| N demand qty | 0.02 |
+| Q provided from child MB52 | 0 |
+| R child remaining | 43.046 |
+| shortage | false |
 
-上述結果已用唯讀 workbook 分析重現。尚未在 Phase 1 完成真實瀏覽器端到端操作，因此 UI journey 狀態為 `not tested`。
+20260723 全量：<br>
+20260723 full dataset:
 
-## 2. Current baseline test
-
-### Configuration
-
-- Excel 1 lookup: `so`
-- Excel 2 lookup: `SD Document`
-- Excel 2 return: `SD Document`, `Material`
-- Result lookup: `Excel 2 Material`
-- Excel 3 lookup: `Material`
-- Excel 3 return: `Material Full Description(EN)`, `PO Quantity`
-- Date column: `cutting`
-- From: `2026-07-01`
-- To: `2026-07-31`
-- Case sensitive: off
-- First match only: on
-
-### Expected result
-
-| Metric | Expected value |
+| Metric | Expected |
 |---|---:|
-| Excel 1 data rows | 43 |
-| Output rows | 17 |
-| Excel 2 matched | 17 |
-| Excel 3 matched | 17 |
-| Date skipped | 26 |
+| Schedule rows | 246 |
+| COOIS rows | 129,993 |
+| ZRMM0028 rows | 16,307 |
+| MB52 rows | 7,050 |
+| Output rows | 3,505 |
+| Mothers | 499 |
+| Shortage rows | 71 |
+| MB rows excluded | 389 |
+| Relationships removed | 45 |
+| Dual identities | 0 |
 
-The result was reproduced through read-only workbook analysis. A real browser end-to-end journey was not completed during Phase 1, so UI journey status is `not tested`.
+## 5. 自動驗證 / Automated verification
 
-## 3. 去識別功能案例
+```powershell
+python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
+python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py `
+  --real-data 20260723 `
+  --conversion-config config/conversion-rules.v1.json
+python .ai/handoffs/20260724-raw-mat-allocation-handoff/verify_ui_contract_v3_3.py
+```
 
-| ID | 案例 | 預期行為 |
-|---|---|---|
-| T-001 | 一對一兩段匹配 | 產生一筆 `Matched All` |
-| T-002 | Excel 2 無匹配 | 保留 Excel 1；Excel 2/3 欄位空白；正確狀態 |
-| T-003 | Excel 2 匹配、Excel 3 無匹配 | 保留前兩段資料；Excel 3 欄位空白 |
-| T-004 | 空白 key 在兩側都存在 | 不得互相匹配；記錄 warning |
-| T-005 | 大小寫不同 | insensitive 模式匹配；sensitive 模式不匹配 |
-| T-006 | Excel 2 重複 key，first-only on | 依來源順序取一筆並顯示候選數警告 |
-| T-007 | Excel 3 重複 key，first-only on | 依來源順序取一筆並顯示候選數警告 |
-| T-008 | first-only off | 依核准規則展開，且不得以空白重複欄位破壞平面資料完整性 |
-| T-009 | From／To 邊界日 | 起訖日均包含 |
-| T-010 | From 大於 To | 阻擋執行並顯示錯誤 |
-| T-011 | 無效或空白資料日期 | 啟用日期篩選時排除並計數 |
-| T-012 | Excel 日期序號含時間 | 正確比較日期並以可讀日期時間輸出 |
-| T-013 | 中文、逗號、雙引號、換行 | XLSX/CSV 開啟後內容完整 |
-| T-014 | `=`, `+`, `-`, `@` 開頭 | CSV 不得在 Excel 中執行公式 |
-| T-015 | 重複欄名 | 輸出欄位可用 stable ID 獨立選取 |
-| T-016 | 英文／繁中切換 | 設定、狀態代碼與結果不漂移 |
-| T-017 | 任一設定在結果後變更 | 結果立即失效，所有匯出停用 |
-| T-018 | 合法 CSV quoted newline | parser 保留為同一 cell／row |
-| T-019 | 多工作表 XLSX | 依公開契約讀第一表，或在新增 selector 後讀使用者指定表 |
-| T-020 | 不支援或毀損檔案 | 不產生部分錯誤結果；顯示可行處理方式 |
+13 組 Python fixtures、New_0722 smoke、20260723 全量與 v3.3 靜態 UI／匯出契約於 2026-07-24 通過。<br>
+Thirteen Python fixtures, New_0722 smoke, the 20260723 full dataset, and the v3.3 static UI/export contract passed on 2026-07-24.
 
-## 3. Sanitized functional cases
+## 6. 人工 UI 驗收 / Manual UI acceptance
 
-| ID | Case | Expected behavior |
-|---|---|---|
-| T-001 | One-to-one two-stage match | Produce one `Matched All` row |
-| T-002 | No Excel 2 match | Preserve Excel 1; leave Excel 2/3 fields blank; use the correct status |
-| T-003 | Excel 2 match, no Excel 3 match | Preserve the first two stages; leave Excel 3 fields blank |
-| T-004 | Blank key on both sides | Do not match; record a warning |
-| T-005 | Different letter case | Match in insensitive mode and not in sensitive mode |
-| T-006 | Duplicate Excel 2 key, first-only on | Select source-order first row and show candidate-count warning |
-| T-007 | Duplicate Excel 3 key, first-only on | Select source-order first row and show candidate-count warning |
-| T-008 | First-only off | Expand per the approved rule without blanking repeated cells in a way that breaks flat-table integrity |
-| T-009 | From/To boundary dates | Include both boundary dates |
-| T-010 | From later than To | Block execution and display an error |
-| T-011 | Invalid or blank source date | Exclude and count when the date filter is active |
-| T-012 | Excel serial date with time | Compare dates correctly and export readable date/time values |
-| T-013 | Chinese, comma, quote, and newline | Preserve content after opening XLSX/CSV |
-| T-014 | Values beginning with `=`, `+`, `-`, `@` | CSV must not execute a formula in Excel |
-| T-015 | Duplicate headers | Stable IDs allow independent output selection |
-| T-016 | English/Traditional Chinese switch | Settings, status codes, and results do not drift |
-| T-017 | Any result-affecting setting changes | Invalidate results immediately and disable every export action |
-| T-018 | Valid CSV quoted newline | Preserve the field and row correctly |
-| T-019 | Multi-sheet XLSX | Read the first sheet per current contract, or the selected sheet after a selector is approved |
-| T-020 | Unsupported or damaged file | Do not produce a partial incorrect result; show an actionable error |
+1. 開啟本機 `allocation-web.html`，確認版本 3.3.0 與 English／繁體中文兩種語言。/ Open the local app and confirm version 3.3.0 and the two languages.
+2. 用 Sample data 執行，確認預覽 19 欄。/ Run Sample data and confirm 19 preview columns.
+3. 切換語言，確認資料、映射、篩選與列數不變。/ Switch language and confirm data, mappings, filters, and row counts remain unchanged.
+4. 修改一般換算、尺寸換算與任一輸入，確認結果清除且兩個匯出鍵停用。/ Change conversions and an input; confirm results clear and both exports disable.
+5. 匯出 CSV／XLSX，以 Excel 開啟後逐欄比較。/ Export CSV/XLSX, open in Excel, and compare column by column.
+6. 用真實 20260723 檔重跑，只記錄彙總，不保存或提交輸出。/ Rerun real 20260723 files, recording only aggregates and committing no output.
 
-## 4. Phase 2 UI 驗收 Journey
+本次自動瀏覽器因 `file://` URL 安全政策未執行，狀態為 `NOT TESTED`，不得誤標 PASS。<br>
+Automated interactive browser testing was not run because `file://` was blocked by URL policy. Its status is `NOT TESTED`, not PASS.
 
-1. 開啟本機工具，確認不需網路且沒有非必要外部請求。
-2. 上傳三份 sanitized fixture，確認列數與欄位。
-3. 設定兩段查找、輸出欄位與日期，建立結果。
-4. 檢查 metrics、狀態、預覽與第一／最後一筆。
-5. 匯出 XLSX 與 CSV，以 Excel 開啟並核對內容、型別、日期與中文。
-6. 返回步驟二依序改變每個設定，確認結果失效與匯出停用。
-7. 切換英文／繁中，確認選取與結果不變。
-8. 重新執行並確認輸出可追溯到相同設定摘要。
+## 7. 效能記錄 / Performance recording
 
-## 4. Phase 2 UI acceptance journey
+至少記錄四份輸入列數、總執行時間、瀏覽器記憶體異常、輸出列數與短缺列。未取得重複量測前不設定臆測 SLA。<br>
+Record input row counts, total runtime, browser memory failures, output rows, and shortages. Do not invent an SLA before repeat measurements exist.
 
-1. Open the local tool and confirm that it works without network access or unnecessary external requests.
-2. Upload the three sanitized fixtures and verify row and column counts.
-3. Configure both lookups, output columns, and date range, then build the result.
-4. Check metrics, statuses, preview rows, and the first/last result.
-5. Export XLSX and CSV, open both in Excel, and reconcile content, types, dates, and Chinese text.
-6. Return to Step 2 and change every result-affecting setting in turn; verify invalidation and disabled exports.
-7. Switch between English and Traditional Chinese; verify that selection and result state do not change.
-8. Rebuild and confirm the export is traceable to the same configuration summary.
+## 8. 完成判定 / Completion classification
 
-## 5. 效能與資源基準
+- `PASS`：已執行且有證據符合預期。/ Executed with evidence matching expectations.
+- `FAIL`：已執行但不符。/ Executed but did not match.
+- `BLOCKED`：外部條件阻擋且已記錄缺口。/ Blocked by an external condition with the gap documented.
+- `NOT TESTED`：尚未執行，不得以規格或靜態檢查替代。/ Not executed; specifications or static checks do not substitute.
 
-以 43／10,842／25,064 資料列記錄匯入時間、查找時間、預覽時間、峰值記憶體、輸出列數與瀏覽器錯誤。Phase 1 只記錄資料量，不虛構 SLA；Phase 2 第一次量測後由 Paul 與原開發者核准可接受門檻。
-
-## 5. Performance and resource baseline
-
-Using 43, 10,842, and 25,064 data rows, record import time, lookup time, preview time, peak memory, output rows, and browser errors. Phase 1 records dataset size only and does not invent an SLA. Paul and the original developer approve acceptable thresholds after the first Phase 2 measurement.
-
-## 6. 完成判定
-
-- `PASS`：有實際執行證據且符合預期。
-- `FAIL`：已執行但結果不符。
-- `BLOCKED`：外部權限、業務決策或環境阻擋，且已記錄所缺條件。
-- `NOT TESTED`：尚未執行，不得用規格或自述替代。
-
-Phase 2 不得在 RM-001 至 RM-006 任一未通過、真實 17/17/26 基準未重現、或第一筆規則被未授權改變時宣告完成。
-
-## 6. Completion classification
-
-- `PASS`: Executed evidence exists and matches the expectation.
-- `FAIL`: The check ran but did not meet the expectation.
-- `BLOCKED`: Permission, business decision, or environment prevents execution, and the missing condition is recorded.
-- `NOT TESTED`: The check was not executed; specifications or self-reported claims do not substitute for evidence.
-
-Phase 2 must not be declared complete if any of RM-001 through RM-006 fails, the real 17/17/26 baseline is not reproduced, or first-match behavior changes without authorization.
+正式簽核前，A-001 至 A-025、錨點、全量基準與人工 UI 六步都必須有明確狀態。<br>
+Before final sign-off, A-001 through A-025, the anchor, full baseline, and six manual UI steps must each have an explicit status.

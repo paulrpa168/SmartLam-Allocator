@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   RAW MAT Allocation Engine
-  Version: 3.1.6
+  Version: 3.4.1
   Product direction: inventory allocation (supersedes two-stage VLOOKUP)
   Spec: docs/07-allocation-v3-spec.md
   UI: Mill Ops (default) / Soft Enterprise theme toggle + L2 one-step screens
@@ -64,7 +64,7 @@
       --stripe-even: #e8eef4;
       --stripe-odd: #ffffff;
       --group-rule: #64748b;
-      --font: "IBM Plex Sans", "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+      --font: "IBM Plex Sans", "Segoe UI", Arial, "Microsoft JhengHei", sans-serif;
       --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
       --progress-a: #6366f1;
       --progress-b: #334155;
@@ -839,8 +839,15 @@
       color: #1565c0;
       font-weight: 700;
     }
+    table.result td.outside-fallback {
+      color: #c62828;
+      font-weight: 700;
+    }
     html[data-theme="soft"] table.result td.mat-dual {
       color: #0d47a1;
+    }
+    html[data-theme="soft"] table.result td.outside-fallback {
+      color: #b71c1c;
     }
 
     .filter-bar {
@@ -1020,6 +1027,40 @@
       border: 1px solid var(--line);
     }
 
+    .modal-card-wide {
+      width: min(920px, 100%);
+      max-height: min(85vh, 720px);
+    }
+
+    .modal-intro {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .ambiguous-list {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      max-height: min(48vh, 420px);
+      overflow: auto;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) - 2px);
+      background: var(--bg, transparent);
+    }
+
+    .ambiguous-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
     .error-modal-close-x {
       position: absolute;
       top: 10px;
@@ -1142,7 +1183,7 @@
         <select id="languageSelect" aria-label="Language">
           <option value="en">English</option>
           <option value="zh">繁體中文</option>
-          <option value="my">မြန်မာ</option>
+
         </select>
         <div class="status" id="statusText">Ready</div>
       </div>
@@ -1274,6 +1315,9 @@
           <div class="actions">
             <button type="button" class="secondary" id="addSizeConvRow" data-i18n="sizeConvAdd">Add size rule</button>
             <button type="button" class="secondary" id="resetSizeConv" data-i18n="sizeConvReset">Reset size defaults</button>
+            <button type="button" class="secondary" id="exportConversionConfig" data-i18n="convExportConfig">Export conversion config</button>
+            <button type="button" class="secondary" id="importConversionConfig" data-i18n="convImportConfig">Import conversion config</button>
+            <input id="conversionConfigFile" type="file" accept=".json,application/json" hidden>
           </div>
         </div>
 
@@ -1362,7 +1406,7 @@
           </div>
         </div>
         <div class="message" id="resultMessage" data-i18n="resultEmpty">Run allocation to preview and export.</div>
-        <div class="message" id="dualMatLegend" data-i18n="dualMatLegend" hidden>Blue material codes = dual identity (appears as both mother and child in ZRMM0028).</div>
+
         <div class="table-wrap thin-scroll">
           <table class="result">
             <thead><tr id="resultHead"></tr></thead>
@@ -1390,6 +1434,19 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="ambiguousConfirmModal">
+    <div class="modal-card modal-card-wide">
+      <button type="button" id="ambiguousConfirmX" class="error-modal-close-x" aria-label="Close">×</button>
+      <strong id="ambiguousConfirmTitle">Ambiguous direct child demand</strong>
+      <p id="ambiguousConfirmIntro" class="modal-intro"></p>
+      <pre id="ambiguousConfirmBody" class="ambiguous-list"></pre>
+      <div class="actions ambiguous-actions">
+        <button type="button" id="ambiguousConfirmCancel" class="secondary" data-i18n="ambiguousCancel">Cancel</button>
+        <button type="button" id="ambiguousConfirmOk" data-i18n="ambiguousConfirm">Confirm and continue</button>
+      </div>
+    </div>
+  </div>
+
   <div class="progress-overlay" id="progressOverlay">
     <div class="progress-card">
       <strong id="progressTitle">Working</strong>
@@ -1401,7 +1458,8 @@
   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
 
   <script>
-    const APP_VERSION = "3.1.6";
+    const APP_VERSION = "3.4.1";
+    const CONVERSION_SCHEMA_VERSION = 1;
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
     const CONV_STORAGE_KEY = "rawmat.allocation.conversionRules.v21";
@@ -1510,7 +1568,7 @@
       }
     };
 
-    // Output indexes (18 columns; mother plant/outside display after mother unit)
+    // Output indexes (19 columns; raw F/G plus mother pool available before current SO)
     const OUT = {
       cutting: 0,
       so: 1,
@@ -1519,17 +1577,18 @@
       motherUnit: 4,
       motherStockMb52: 5,
       motherStockOutside: 6,
-      child: 7,
-      childBatch: 8,
-      childUnit: 9,
-      demandFromMother: 10,
-      demandDirect: 11,
-      demand: 12,
-      stockMb52: 13,
-      stockAvailable: 14,
-      provided: 15,
-      remaining: 16,
-      flagY: 17
+      motherStockAvailable: 7,
+      child: 8,
+      childBatch: 9,
+      childUnit: 10,
+      demandFromMother: 11,
+      demandDirect: 12,
+      demand: 13,
+      stockMb52: 14,
+      stockAvailable: 15,
+      provided: 16,
+      remaining: 17,
+      flagY: 18
     };
 
     const DEFAULT_CONVERSION_RULES = [
@@ -1558,6 +1617,7 @@
       "mother unit",
       "mother plant stock",
       "mother stock outside",
+      "mother stock available before this row",
       "child material",
       "child batch",
       "child unit",
@@ -1568,7 +1628,7 @@
       "stock available",
       "provided qty",
       "remaining stock after this row",
-      "pending allocation (Y)"
+      "lamination kit ready (Y)"
     ];
 
     const OUTPUT_HEADERS_ZH = [
@@ -1579,6 +1639,7 @@
       "母單位",
       "廠內母材料庫存",
       "廠外母材料庫存",
+      "本列配發前母料可用池",
       "子材料",
       "子材料 BATCH",
       "子單位",
@@ -1589,29 +1650,9 @@
       "可配發庫存",
       "能提供數量",
       "扣減後剩餘",
-      "待配發（Y）"
+      "合貼備料齊套（Y）"
     ];
 
-    const OUTPUT_HEADERS_MY = [
-      "cutting",
-      "so",
-      "မိခင်ပစ္စည်း",
-      "မိခင် BATCH",
-      "မိခင်ယူနစ်",
-      "မိခင် စက်ရုံသိုလှောင်",
-      "မိခင် ပြင်ပသိုလှောင်",
-      "သားပစ္စည်း",
-      "သား BATCH",
-      "သားယူနစ်",
-      "သားပစ္စည်း လိုအပ်ချက်",
-      "တိုက်ရိုက် လိုအပ်ချက်",
-      "လိုအပ်ချက် စုစုပေါင်း",
-      "သားပစ္စည်း သိုလှောင်",
-      "ခွဲဝေနိုင်သော စတော့",
-      "ပေးနိုင်သော ပမာဏ",
-      "ကျန်ရှိ သိုလှောင်ရုံ",
-      "ခွဲဝေရန် (Y)"
-    ];
 
     const OUTPUT_TIP_KEYS = [
       "tipColCutting",
@@ -1621,6 +1662,7 @@
       "tipColMotherUnit",
       "tipColMotherStockMb52",
       "tipColMotherStockOutside",
+      "tipColMotherStockAvailable",
       "tipColChild",
       "tipColChildBatch",
       "tipColChildUnit",
@@ -1636,13 +1678,13 @@
 
     function htmlLangFor(code) {
       if (code === "zh") return "zh-Hant";
-      if (code === "my") return "my";
+
       return "en";
     }
 
     function outputHeadersForLang(lang) {
       if (lang === "zh") return OUTPUT_HEADERS_ZH;
-      if (lang === "my") return OUTPUT_HEADERS_MY;
+
       return OUTPUT_HEADERS_EN;
     }
 
@@ -1777,7 +1819,7 @@
         mapColumn: "Column",
         mapMeaning: "Meaning",
         mapDetected: "Detected header",
-        mappingHelp: "Pre-check: COOIS Base Unit must match ZRMM OUn for same mother. Conversion: same units 1:1; SHT uses size-suffix table (ZRMM description); else unit whitelist (default M↔YD). Missing rule blocks run.",
+        mappingHelp: "Before all checks, ZRMM0028 rows whose mother or child starts with MB are excluded. COOIS Base Unit must match ZRMM OUn for the same mother. Missing or conflicting conversion rules block the full run.",
         back: "Back",
         runAllocate: "Run allocation",
         resultTitle: "Filter, preview and export",
@@ -1870,6 +1912,11 @@
         sizeChildUnit: "Child unit",
         sizeConvAdd: "Add size rule",
         sizeConvReset: "Reset size defaults",
+        convExportConfig: "Export conversion config",
+        convImportConfig: "Import conversion config",
+        convConfigExported: "Conversion config exported",
+        convConfigImported: "Conversion config imported. Run allocation again.",
+        convConfigInvalid: "Invalid conversion config: {message}",
         sizeSuffixCustom: "Custom…",
         sizeSuffixPlaceholder: "e.g. 110x200cm",
         filterSo: "Filter SO",
@@ -1884,7 +1931,7 @@
         tipRowsExported: "Rows in the current filtered preview. Same set is used for CSV/Excel export.",
         tipDemandKeys: "Count of unique allocation demand keys (SO + segment + mother + child) after expansion and direct demand merge.",
         tipMothersMatched: "Count of ZRMM mother materials that have at least one child after filters.",
-        tipShortageRows: "Count of rows in the full allocation result where provided qty < demand qty. Filters do not change this number.",
+        tipShortageRows: "Count of rows where provided < demand. Filters do not change this number.",
         tipHelpAria: "Explain this metric",
         tipFilterSo: "Type an SO prefix or comma-separated list. Preview and export update immediately.",
         tipFilterCutting: "Keep rows whose cutting date is within this range (inclusive).",
@@ -1896,25 +1943,31 @@
         tipColMother: "Mother material (blank for direct-only demand).",
         tipColMotherBatch: "Mother / requirement segment (FLT/MTF).",
         tipColMotherUnit: "Mother unit (ZRMM OUn or COOIS unit).",
-        tipColMotherStockMb52: "Display only: MB52 Unrestricted SUM for mother material + segment (excl. storage 39*). Not used for allocation.",
-        tipColMotherStockOutside: "Display only: sum of max(0, ΣJ−ΣP) for each child under this mother + segment (J=0 or L=0 rows skipped). Not used for allocation.",
+        tipColMotherStockMb52: "Mother plant stock (MB52 SUM, excl. 39*). With outside stock, covers COOIS mother Open Qty (R) before BOM expand; depleting by schedule order.",
+        tipColMotherStockOutside: "Mother outside stock after each child pair is converted to the mother OUn, then summed. With plant stock, it covers mother R first.",
+        tipColMotherStockAvailable: "Mother F+G pool remaining after mother demand and immediately before this child row. It is already a calculated balance; do not add it to F or G.",
         tipColChild: "Child material allocated against stock.",
         tipColChildBatch: "Child stock segment (FLT/MTF).",
         tipColChildUnit: "Child unit (ZRMM BUn or COOIS/MB52 unit).",
-        tipColDemandFromMother: "Child demand from mother expansion (Open Quantity × conversion).",
-        tipColDemandDirect: "Direct Open Quantity on this material.",
+        tipColDemandFromMother: "Child demand from remaining mother R after F+G cover (qtyExpand × conversion).",
+        tipColDemandDirect: "Direct COOIS Open Quantity on this child. Always retained; Rule D first uses the remaining mother pool, and only the uncovered amount uses child MB52.",
         tipColDemand: "child demand + demand direct.",
-        tipColStockMb52: "Child plant stock remaining before this row (MB52 − prior provided). Decreases down the list by cutting/SO order.",
-        tipColStockAvailable: "Allocatable pool remaining before this row = child MB52 after prior provided. Decreases as stock is provided.",
-        tipColProvided: "Quantity allocated to this row from remaining pool.",
+        tipColStockMb52: "Original child MB52 total for this material and segment. This display value does not decrease.",
+        tipColStockAvailable: "Child MB52 pool remaining before this row. Debited only by provided qty (Q).",
+        tipColProvided: "Actual quantity issued from child MB52 after Rule D uses the remaining mother pool. Fulfillment and kit readiness use mother coverage plus this quantity.",
         tipColRemaining: "Allocatable pool remaining after this row.",
-        tipColY: "Y when every non-MH04 demand>0 row in the SO+mother+segment group is fully provided (MH04 children ignored for kit). Column label: pending allocation.",
-        dualMatLegend: "Blue material codes = dual identity (appears as both mother and child in ZRMM0028). Also applied in Excel export.",
+        tipColY: "Lamination Kit Ready: a mother group has at least one positive non-MH04 demand and every positive non-MH04 demand is fully provided. Direct-only, zero-demand and MH04-only groups remain blank.",
         errorClose: "OK",
         errorPrecheckTitle: "Unit pre-check failed (COOIS unit vs ZRMM OUn)",
         errorConvTitle: "Missing conversion rules (mother unit vs child unit)",
         errorPrecheckIntro: "Same mother material must have matching units. Fix source data then re-run.",
-        errorConvIntro: "Add the missing mother→child unit ratios in the conversion table, then re-run."
+        errorConvIntro: "Add the missing mother→child unit ratios in the conversion table, then re-run.",
+        errorAmbiguousDirectTitle: "Ambiguous direct child demand",
+        errorAmbiguousDirectIntro: "These direct child demands can be linked to multiple mothers in the same SO and segment.",
+        ambiguousConfirmHint: "If you confirm, each direct Open Qty will be split across the listed mothers by mother Open Qty share on that SO + segment, then allocation continues. Cancel keeps the run stopped.",
+        ambiguousCancel: "Cancel",
+        ambiguousConfirm: "Confirm and continue",
+        ambiguousCancelled: "Allocation stopped: ambiguous direct demand was not confirmed."
       },
       zh: {
         appTitle: "RAW MAT 庫存配發引擎",
@@ -1953,7 +2006,7 @@
         mapColumn: "欄位",
         mapMeaning: "語意",
         mapDetected: "偵測到的表頭",
-        mappingHelp: "事前檢查：同母料 COOIS 單位必須等於 ZRMM OUn。換算：單位相同則 1:1；母單位為 SHT 則查末碼表（ZRMM 說明）；否則查單位白名單（預設 M↔YD）。缺規則則停止。",
+        mappingHelp: "所有檢核前先排除 ZRMM0028 母料或子料以 MB 開頭的整列。同母料 COOIS 單位必須等於 ZRMM OUn；換算規則缺漏或衝突時整批停止。",
         back: "返回",
         runAllocate: "執行配發",
         resultTitle: "篩選、預覽與匯出",
@@ -2046,6 +2099,11 @@
         sizeChildUnit: "子單位",
         sizeConvAdd: "新增末碼規則",
         sizeConvReset: "還原末碼預設",
+        convExportConfig: "匯出換算設定",
+        convImportConfig: "匯入換算設定",
+        convConfigExported: "換算設定已匯出",
+        convConfigImported: "換算設定已匯入，請重新執行配發。",
+        convConfigInvalid: "換算設定無效：{message}",
         sizeSuffixCustom: "自訂…",
         sizeSuffixPlaceholder: "例如 110x200cm",
         filterSo: "篩選 SO",
@@ -2071,200 +2129,31 @@
         tipColMother: "母材料（僅直接需求時可空白）。",
         tipColMotherBatch: "母料／需求區段（FLT/MTF）。",
         tipColMotherUnit: "母單位（ZRMM OUn 或 COOIS）。",
-        tipColMotherStockMb52: "僅顯示：母料 + Segment 的 MB52 Unrestricted SUM（排除儲位 39*）。不參與配發。",
-        tipColMotherStockOutside: "僅顯示：本母料 + Segment 下各子料 pair 的 max(0, ΣJ−ΣP) 加總（J=0 或 L=0 不計）。不參與配發。",
+        tipColMotherStockMb52: "廠內母材料庫存（MB52 SUM，排除 39*）。與廠外先蓋 COOIS 母料 Open Qty（R），剩餘再 BOM 展開；依排程可耗盡。",
+        tipColMotherStockOutside: "每個母子 pair 的廠外量先換算成母料 OUn，再加總；與廠內庫存合併後先覆蓋母料 R。",
+        tipColMotherStockAvailable: "母料需求扣除後、本列子料處理前的 F+G 共用池餘量；此欄已是運算後餘量，不得再與 F 或 G 相加。",
         tipColChild: "對庫存配發的子材料。",
         tipColChildBatch: "子料庫存區段（FLT/MTF）。",
         tipColChildUnit: "子單位（ZRMM BUn 或 COOIS/MB52）。",
-        tipColDemandFromMother: "子材料需求（母料展開：Open Quantity × 換算）。",
-        tipColDemandDirect: "此料號的直接 Open Quantity。",
+        tipColDemandFromMother: "F+G 蓋完母料 R 後的剩餘展開需求（qtyExpand × 換算）。",
+        tipColDemandDirect: "此子料在 COOIS 的直接 Open Quantity；永遠保留；Rule D 先用母料餘量覆蓋，未覆蓋量才使用子料 MB52。",
         tipColDemand: "子材料需求 + 直接需求合計。",
-        tipColStockMb52: "子材料廠內剩餘（本列配發前）= MB52 − 先前已配發量；依 cutting／SO 往下遞減。",
-        tipColStockAvailable: "可配發剩餘（本列配發前）= 子料 MB52 扣除先前配發後。",
-        tipColProvided: "本列自剩餘池配到的數量。",
+        tipColStockMb52: "此子料＋Segment 的原始 MB52 總量；顯示值固定，不隨配發遞減。",
+        tipColStockAvailable: "子料 MB52 剩餘池（本列前）。只被 Q「能提供數量」扣減。",
+        tipColProvided: "Rule D 先用母料餘量覆蓋後，實際從子料 MB52 領用的數量；短缺與齊套以「母料覆蓋量＋本欄」判斷。",
         tipColRemaining: "本列扣減後可配發剩餘。",
-        tipColY: "同 SO+母料+Segment：非 MH04 且 demand>0 列皆 fully provided 時標 Y（MH04 子料不參與配套判定）。欄名：待配發。",
-        dualMatLegend: "藍色料號＝雙重身分（在 ZRMM0028 中既可當母料也可當子料）；預覽與匯出 Excel 皆會標藍。",
+        tipColY: "合貼備料齊套：具有母料、至少一筆非 MH04 正需求，且所有非 MH04 正需求皆足量時標 Y；純直接、零需求及僅 MH04 群組留白。",
         errorClose: "確定",
         errorPrecheckTitle: "單位事前檢查失敗（COOIS 單位 vs ZRMM OUn）",
         errorConvTitle: "缺少換算規則（母單位 vs 子單位）",
         errorPrecheckIntro: "同母料單位必須一致。請修正原始資料後重跑。",
-        errorConvIntro: "請在換算表補上缺少的母→子單位乘數後再執行。"
-      },
-      my: {
-        appTitle: "RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင်",
-        brandKicker: "ခွဲဝေမှု လုပ်ငန်းခုံ",
-        manualLink: "လုပ်ဆောင်ချက် လက်စွဲ",
-        themeMill: "Mill Ops",
-        themeSoft: "Soft Enterprise",
-        ready: "အဆင်သင့်",
-        step1: "ဖိုင်များ တင်သွင်းရန်",
-        step2: "အမှတ်အသား နှင့် လုပ်ဆောင်ရန်",
-        step3: "စစ်ထုတ် နှင့် အစမ်းကြည့်ရန်",
-        importTitle: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
-        importHelp: "Schedule၊ COOIS၊ ZRMM0028 နှင့် MB52 ကို တင်ပါ။ ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ရှာသည်။",
-        sideSchedule: "Schedule",
-        sideCoois: "COOIS — Demand",
-        sideZrmm: "ZRMM0028 — BOM / Outside",
-        sideMb52: "MB52 — Stock",
-        excel1: "Schedule",
-        excel2: "COOIS",
-        excel3: "ZRMM0028",
-        uploadFile: "ဖိုင် တင်ရန်",
-        pasteExcel: "သို့မဟုတ် Excel မှ ကူးထည့်ရန်",
-        sampleData: "နမူန်ဒေတာ",
-        clearSchedule: "Schedule ရှင်းရန်",
-        clearCoois: "COOIS ရှင်းရန်",
-        clearZrmm: "ZRMM0028 ရှင်းရန်",
-        clearMb52: "MB52 ရှင်းရန်",
-        clearExcel1: "Schedule ရှင်းရန်",
-        clearExcel2: "COOIS ရှင်းရန်",
-        clearExcel3: "ZRMM0028 ရှင်းရန်",
-        nextMapping: "နောက်တစ်ဆင့် — အမှတ်အသား",
-        backToTop: "↑ အပေါ်သို့",
-        mappingTitle: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု",
-        fixedMapping: "သတ်မှတ် အမှတ်အသား",
-        mapSource: "ရင်းမြစ်",
-        mapColumn: "ကော်လံ",
-        mapMeaning: "အဓိပ္ပာယ်",
-        mapDetected: "တွေ့ရှိသော ခေါင်းစဉ်",
-        mappingHelp: "စစ်ဆေးမှု — COOIS ယူနစ်နှင့် ZRMM OUn တူညီရမည်။ ယူနစ်တူ 1:1။ SHT ဆိုပါက ZRMM ဖော်ပြချက် နောက်ဆုံးစာလုံး။",
-        back: "နောက်သို့",
-        runAllocate: "ခွဲဝေမှု လုပ်ဆောင်ရန်",
-        resultTitle: "စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
-        previewLimit: "ဇယား အစမ်းကြည့် အများဆုံး ၃၀၀ · ထုတ်ယူမှုသည် စစ်ထုတ်ပြီး အားလုံး",
-        filterLiveHelp: "စစ်ထုတ်မှုသည် ဤစာမျက်နှာတွင်သာ ရှိသည်။ ပြောင်းလဲမှုသည် အစမ်းကြည့်နှင့် ထုတ်ယူမှုကို ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်။",
-        rowsExported: "ထုတ်ယူသော အတန်းများ",
-        demandKeys: "ထိန်းသိမ်းထားသော လိုအပ်ချက်",
-        mothersMatched: "ကိုက်ညီသော မိခင်ပစ္စည်း",
-        shortageRows: "မလုံလောက် (အပြည့်)",
-        resultEmpty: "အစမ်းကြည့်နှင့် ထုတ်ယူရန် ခွဲဝေမှု လုပ်ဆောင်ပါ။",
-        exportCsv: "CSV ထုတ်ယူရန်",
-        exportExcel: "Excel ထုတ်ယူရန်",
-        copyTable: "ဇယား ကူးယူရန်",
-        loading: "ဖွင့်နေသည်",
-        importing: "ဖိုင် တင်သွင်းနေသည်",
-        readingFile: "ဖိုင် ဖတ်နေသည်...",
-        parsingFile: "ဇယား ခွဲခြမ်းနေသည်...",
-        parsingLargeFile: "ကြီးမားသော workbook ခွဲခြမ်းနေသည် (အချိန်ယူနိုင်သည်)...",
-        processing: "ခွဲဝေမှု လုပ်ဆောင်နေသည်",
-        expanding: "လိုအပ်ချက် အတန်းများ ဖန်တီးနေသည်...",
-        allocating: "သိုလှောင်ရုံ ခွဲဝေနေသည်...",
-        rendering: "အစမ်းကြည့် ပြင်ဆင်နေသည်...",
-        loaded: "အတန်း {rows} ခု၊ ကော်လံ {cols} ခု တင်ပြီးပါပြီ။",
-        importError: "ဖိုင် မဖတ်နိုင်ပါ — {message}",
-        importTooLarge: "Workbook ကြီးလွန်းခြင်း သို့မဟုတ် memory မလုံလောက် ({message})။ တဘ်များ ပိတ်ပြီး ထပ်ကြိုးစားပါ၊ သို့မဟုတ် CSV သိမ်း / ကူးထည့်ပါ။",
-        sheetjsMissing: "Excel parser မရှိပါ — vendor/xlsx.full.min.js ကို allocation-web.html နှင့် တစ်ဖိုင်တွဲတွင် ထားပြီး ထိုဖိုလ်ဒါမှ ဖွင့်ပါ (offline)။",
-        importValidateTitle: "{file} ဖိုင်ပုံစံ စစ်ဆေးမှု မအောင်မြင်ပါ",
-        importValidateRunTitle: "ခွဲဝေမှု မလုပ်မီ တင်သွင်းမှု အမှားများကို ပြင်ပါ",
-        importValidateBlocked: "အဆင့် ၁ တင်သွင်းမှု အမှားများကို အရင်ပြင်ပြီးမှ ခွဲဝေမှု လုပ်ပါ။",
-        importValidateEmpty: "{file}: အသုံးပြုနိုင်သော ခေါင်းစဉ်/ဒေတာ အတန်း မတွေ့ပါ。",
-        importValidateMinCols: "{file}: အနည်းဆုံး ကော်လံ {need} လိုအပ်သော်လည်း ယခု {got} ကော်လံသာ ရှိသည်။",
-        importValidateHeader: "{file}: ကော်လံ {col} ခေါင်းစဉ် မမှန်ကန်သလို ဖြစ်နေသည် ({header})။",
-        importValidateBlankColumn: "{file}: နမူနာဒေတာတွင် ကော်လံ {col} အလွတ်ဖြစ်နေသည်။",
-        importValidateUnitLikeWrong: "{file}: ကော်လံ {col} သည် ယူနစ် ဖြစ်သင့်သော်လည်း နမူနာတန်ဖိုး မမှန်ကန်သလို ဖြစ်နေသည် ({sample})။",
-        importValidateColumnType: "{file}: ကော်လံ {col} သည် {type} မဟုတ်သလို ဖြစ်နေသည်။",
-        importTypeUnit: "ယူနစ်",
-        importTypeSo: "SO နံပါတ်",
-        importTypeDate: "ရက်စွဲ",
-        importTypeNumber: "ကိန်းဂဏန်း ပမာဏ",
-        needBoth: "Schedule၊ COOIS၊ ZRMM0028 နှင့် MB52 ကို အရင် တင်ပါ။",
-        built: "အတန်း {rows} · စစ်ထုတ်/ထုတ်ယူ {shown} · ဇယား အစမ်းကြည့် {preview}/{limit}{capNote} · မလုံလောက် (အပြည့်) {shortage}",
-        builtCapNote: " (ထုတ်ယူမှုတွင် စစ်ထုတ်ပြီး အားလုံး ပါဝင်ဆဲ)",
-        exported: "CSV ထုတ်ယူပြီး",
-        exportedExcel: "Excel ထုတ်ယူပြီး",
-        excelExportFailed: "Excel ထုတ်ယူမှု မအောင်မြင် — {message}",
-        copied: "ဇယား ကူးယူပြီး",
-        copyUnavailable: "ကူးယူ၍ မရပါ",
-        resultStale: "ထည့်သွင်းမှု ပြောင်းလဲပြီး။ ထုတ်ယူမီ ခွဲဝေမှု ပြန်လုပ်ပါ။",
-        workbookUnsupported: "ဤဘရောက်ဆာသည် .xlsx မဖတ်နိုင်ပါ။ CSV သို့မဟုတ် ကူးထည့်မှု သုံးပါ။",
-        missingHeader: "(အညွှန်း {index}၊ ခေါင်းစဉ် မရှိ)",
-        mapSo: "မှာယူမှု",
-        mapCutting: "ထုတ်လုပ်ရက် cutting",
-        mapSd: "မှာယူမှု (SD Document)",
-        mapMaterial: "Material (COOIS)",
-        mapUnitCoois: "Base Unit (COOIS)",
-        mapSegment: "Requirement Segment",
-        mapMother: "Mother (ZRMM)",
-        mapGiJ: "GI SC",
-        mapVendorL: "Stock of Vendor",
-        mapGrP: "GR SC",
-        mapStorage: "Storage Location",
-        mapBatch: "Batch",
-        mapOun: "OUn",
-        mapBun: "BUn",
-        mapDesc: "Description",
-        mapMb52Material: "Material (MB52)",
-        mapStockSegment: "Stock Segment",
-        mapMb52Storage: "Storage (MB52)",
-        mapMb52Unit: "Base Unit (MB52)",
-        mapMother2: "မိခင်ပစ္စည်း",
-        mapQty: "Open Quantity (လိုအပ်ချက်)",
-        mapUnitR: "မိခင်ယူနစ် (2.R)",
-        mapMother3: "မိခင်ပစ္စည်း",
-        mapDescF: "မိခင်အမည် အပြည့်အစုံ (အရွယ်အစား နောက်ဆုံးစာလုံး)",
-        mapUnitH: "မိခင်ယူနစ် စစ်ဆေးမှု (3.H)",
-        mapChild: "သားပစ္စည်း Article(Com.)",
-        mapUnitM: "သားယူနစ် (3.M)",
-        mapStock: "Unrestricted (သားပစ္စည်းတစ်ခုလျှင် MAX)",
-        convTitle: "ယူနစ် ပြောင်းလဲမှု whitelist",
-        convHelp: "မိခင်ယူနစ် × အချိုး = သားပစ္စည်း လိုအပ်ချက်။ ပုံမှန် (ပြင်နိုင်) M→YD=1.0936၊ YD→M=0.9144။ ယူနစ် တူညီပါက 1:1။",
-        convMotherUnit: "မိခင်ယူနစ် (2.R)",
-        convChildUnit: "သားယူနစ် (3.M)",
-        convRatio: "ပြောင်းလဲမှု အချိုး",
-        convAdd: "ပြောင်းလဲမှု ထည့်ရန်",
-        convReset: "ပုံမှန် ပြန်ထားရန်",
-        convRemove: "ဖျက်ရန်",
-        sizeConvTitle: "SHT အရွယ်အစား နောက်ဆုံးစာလုံး ပြောင်းလဲမှု",
-        sizeConvHelp: "မိခင်ယူနစ် (2.R) သည် SHT ဖြစ်ပြီး သားယူနစ် မတူညီပါက — လိုအပ်ချက် = Q × ဤဇယားအချိုး (Excel3.F မိခင်အမည် မှ နောက်ဆုံးစာလုံး)။ SHT→SHT သည် 1:1။ စာရင်းထည့်/ပြင်/ဖျက်နိုင်သည်။",
-        sizeSuffix: "နောက်ဆုံးစာလုံး (3.F မှ)",
-        sizeChildUnit: "သားယူနစ် (3.M)",
-        sizeConvAdd: "အရွယ်အစား စည်းမျဉ်း ထည့်ရန်",
-        sizeConvReset: "အရွယ်အစား ပုံမှန် ပြန်ထားရန်",
-        sizeSuffixCustom: "ကိုယ်ပိုင်...",
-        sizeSuffixPlaceholder: "ဥပမာ 110x200cm",
-        filterSo: "SO စစ်ထုတ်ရန်",
-        filterCutting: "Cutting ရက်စွဲ အစ — အဆုံး",
-        filterMother: "မိခင် / သားပစ္စည်း စစ်ထုတ်ရန်",
-        filterMotherPlaceholder: "ရှေ့စာလုံး ရိုက်ပြီး Enter — သို့မဟုတ် စာရင်းမှ ရွေးပါ",
-        filterMotherClear: "အားလုံး ရှင်းရန်",
-        filterMotherCount: "ရွေးထားသည် {count}",
-        hideSoAllZero: "လိုအပ်ချက် သုည ဖြစ်သော SO များ ဖျောက်ရန်",
-        hideRowZero: "လိုအပ်ချက် သုည အတန်းများ ဖျောက်ရန်",
-        tipRowsExported: "လက်ရှိ စစ်ထုတ်ပြီး အစမ်းကြည့် အတန်းအရေအတွက်။ CSV/Excel ထုတ်ယူမှုနှင့် တူညီသည်။",
-        tipDemandKeys: "Excel2 မှ ထိန်းသိမ်းထားသော (SO + မိခင်ပစ္စည်း) ပေါင်းစပ်အရေအတွက် (Excel3 BOM တွင် ရှိရမည်)။",
-        tipMothersMatched: "Excel3 တွင် သားပစ္စည်း အနည်းဆုံး တစ်ခု ရှိသော မိခင်ပစ္စည်း အရေအတွက်။",
-        tipShortageRows: "ခွဲဝေမှု အပြည့်အစုံတွင် provided < demand ဖြစ်သော အတန်းအရေအတွက်။ အပေါ် SO/မိခင်/ရက်စွဲ စစ်ထုတ်မှုကြောင့် ဤဂဏန်း မပြောင်းပါ။",
-        tipHelpAria: "ဤစာရင်းဇယားကို ရှင်းပြရန်",
-        tipFilterSo: "SO ရှေ့စာလုံး သို့မဟုတ် ကော်မာဖြင့် ခွဲထားသော စာရင်း ရိုက်ပါ။",
-        tipFilterCutting: "cutting ရက်စွဲ ဤအကွာအဝေးအတွင်းရှိ အတန်းများကိုသာ ထားပါ။",
-        tipFilterMother: "ရွေးထားသော မိခင်များကို အပေါ်တွင် chip အဖြစ် ပြသသည်။ ရှေ့စာလုံး ရိုက်ပြီး Enter သို့မဟုတ် အကြံပြုချက် ရွေးပါ။ × ဖြင့် ဖယ်ရှားနိုင်သည်။",
-        tipHideSoAllZero: "SO တစ်ခုလုံး၏ လိုအပ်ချက် ပေါင်းလဒ် သုည ဖြစ်ပါက ထို SO အတန်းအားလုံး ဖျောက်ပါ။",
-        tipHideRowZero: "လိုအပ်ချက် သုည ဖြစ်သော တစ်တန်းချင်း ဖျောက်ပါ။",
-        tipColCutting: "Schedule မှ cutting ရက်စွဲ။",
-        tipColSo: "မှာယူမှု နံပါတ်။",
-        tipColMother: "မိခင်ပစ္စည်း (တိုက်ရိုက်သာ ဆိုပါက အလွတ်)။",
-        tipColMotherBatch: "Segment FLT/MTF။",
-        tipColMotherUnit: "မိခင်ယူနစ် (OUn)။",
-        tipColMotherStockMb52: "ပြသရန်သာ: မိခင် + Segment MB52 SUM (storage 39* ဖယ်)။ ခွဲဝေမှု မသုံး။",
-        tipColMotherStockOutside: "ပြသရန်သာ: မိခင် + Segment အတွက် သားအားလုံး၏ max(0, ΣJ−ΣP) ပေါင်း (J=0 သို့မဟုတ် L=0 ကျော်)။ ခွဲဝေမှု မသုံး။",
-        tipColChild: "သားပစ္စည်း။",
-        tipColChildBatch: "သား Segment။",
-        tipColChildUnit: "သားယူနစ် (BUn)။",
-        tipColDemandFromMother: "သားပစ္စည်း လိုအပ်ချက် (မိခင်မှ ချဲ့ထားသော)။",
-        tipColDemandDirect: "တိုက်ရိုက် Open Quantity။",
-        tipColDemand: "လိုအပ်ချက် စုစုပေါင်း။",
-        tipColStockMb52: "သား စက်ရုံသိုလှောင် (ဤအတန်းမီ) — ယခင် provided နှုတ်ပြီး cutting/SO အလိုက် လျော့သည်။",
-        tipColStockAvailable: "ခွဲဝေနိုင်သော ကျန် (ဤအတန်းမီ) = MB52 − ယခင် provided။",
-        tipColProvided: "ခွဲဝေပေးသော ပမာဏ။",
-        tipColRemaining: "ဤအတန်းပြီး ခွဲဝေနိုင်သော ကျန်။",
-        tipColY: "SO+မိခင်+Segment အုပ်စုတွင် MH04 မဟုတ်သော demand>0 အတန်းများ အပြည့် ခွဲဝေပြီးမှ Y (MH04 ကို ကျော်သည်)။ ကော်လံအမည်: ခွဲဝေရန်။",
-        dualMatLegend: "အပြာရောင် ကုဒ် = မိခင်နှင့် သား နှစ်မျိုးလုံး ဖြစ်နိုင်သော ပစ္စည်း (ZRMM0028)။",
-        errorClose: "အိုကေ",
-        errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (COOIS vs ZRMM OUn)",
-        errorConvTitle: "ပြောင်းလဲမှု စည်းမျဉ်း မရှိ",
-        errorPrecheckIntro: "တူညီသော မိခင်ပစ္စည်းတွင် ယူနစ် တူညီရမည်။ ဒေတာ ပြင်ပြီး ပြန်လုပ်ပါ။",
-        errorConvIntro: "ပြောင်းလဲမှု ဇယားတွင် မိခင်→သား ယူနစ် အချိုးများ ထည့်ပြီး ပြန်လုပ်ပါ။"
+        errorConvIntro: "請在換算表補上缺少的母→子單位乘數後再執行。",
+        errorAmbiguousDirectTitle: "直接子料需求歸屬不明",
+        errorAmbiguousDirectIntro: "下列直接子料需求在同一 SO＋Segment 可同時歸入多個母料。",
+        ambiguousConfirmHint: "若按確認，將依各母料在該 SO＋Segment 的 Open Qty 比例拆分直接需求後繼續配發。按取消則整批停止、不產結果。",
+        ambiguousCancel: "取消",
+        ambiguousConfirm: "確認並繼續",
+        ambiguousCancelled: "已取消：歸屬不明未確認，配發未執行。"
       }
     };
 
@@ -2341,6 +2230,84 @@
       localStorage.setItem(SIZE_CONV_STORAGE_KEY, JSON.stringify(rules));
     }
 
+    function buildConversionConfig() {
+      return {
+        schemaVersion: CONVERSION_SCHEMA_VERSION,
+        appVersion: APP_VERSION,
+        conversionRules: state.conversionRules.map(rule => ({
+          motherUnit: normalize(rule.motherUnit).toUpperCase(),
+          childUnit: normalizeChildUnit(rule.childUnit),
+          ratio: Number(rule.ratio)
+        })),
+        sizeConversionRules: state.sizeConversionRules.map(rule => ({
+          suffix: normalizeSizeSuffix(rule.suffix),
+          childUnit: normalizeChildUnit(rule.childUnit),
+          ratio: Number(rule.ratio)
+        }))
+      };
+    }
+
+    function parseConversionConfig(value) {
+      if (!value || Number(value.schemaVersion) !== CONVERSION_SCHEMA_VERSION) {
+        throw new Error(`schemaVersion must be ${CONVERSION_SCHEMA_VERSION}`);
+      }
+      if (!Array.isArray(value.conversionRules) || !Array.isArray(value.sizeConversionRules)) {
+        throw new Error("conversionRules and sizeConversionRules must be arrays");
+      }
+      const conversionRules = value.conversionRules.map((rule, index) => {
+        const motherUnit = normalize(rule.motherUnit).toUpperCase();
+        const childUnit = normalizeChildUnit(rule.childUnit);
+        const ratio = Number(rule.ratio);
+        if (!motherUnit || !childUnit || !Number.isFinite(ratio) || ratio <= 0) {
+          throw new Error(`conversionRules[${index}] is invalid`);
+        }
+        return { motherUnit, childUnit, ratio };
+      });
+      const sizeConversionRules = value.sizeConversionRules.map((rule, index) => {
+        const suffix = normalizeSizeSuffix(rule.suffix);
+        const childUnit = normalizeChildUnit(rule.childUnit);
+        const ratio = Number(rule.ratio);
+        if (!suffix || !childUnit || !Number.isFinite(ratio) || ratio <= 0) {
+          throw new Error(`sizeConversionRules[${index}] is invalid`);
+        }
+        return { suffix, childUnit, ratio };
+      });
+      return { conversionRules, sizeConversionRules };
+    }
+
+    function exportConversionConfig() {
+      const text = JSON.stringify(buildConversionConfig(), null, 2);
+      const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `raw-mat-conversion-config-v${CONVERSION_SCHEMA_VERSION}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      elements.statusText.textContent = t("convConfigExported");
+    }
+
+    async function importConversionConfig(file) {
+      if (!file) return;
+      try {
+        const parsed = parseConversionConfig(JSON.parse(await file.text()));
+        state.conversionRules = parsed.conversionRules;
+        state.sizeConversionRules = parsed.sizeConversionRules;
+        saveConversionRules(state.conversionRules);
+        saveSizeConversionRules(state.sizeConversionRules);
+        renderConversionTable();
+        renderSizeConversionTable();
+        markResultDirty();
+        elements.statusText.textContent = t("convConfigImported");
+      } catch (error) {
+        showErrorModal(t("convConfigInvalid", { message: error.message }), String(error.message || error));
+      } finally {
+        if (elements.conversionConfigFile) elements.conversionConfigFile.value = "";
+      }
+    }
+
     const state = {
       lang: "en",
       step: 1,
@@ -2361,7 +2328,6 @@
       sizeConversionRules: loadSizeConversionRules(),
       stats: { demandKeys: 0, mothers: 0, shortage: 0 },
       motherFilters: [],
-      dualIdentityMaterials: new Set(),
       allocating: false
     };
 
@@ -2385,8 +2351,10 @@
       mappingMessage: document.getElementById("mappingMessage"),
       convBody: document.getElementById("convBody"),
       sizeConvBody: document.getElementById("sizeConvBody"),
+      exportConversionConfig: document.getElementById("exportConversionConfig"),
+      importConversionConfig: document.getElementById("importConversionConfig"),
+      conversionConfigFile: document.getElementById("conversionConfigFile"),
       resultMessage: document.getElementById("resultMessage"),
-      dualMatLegend: document.getElementById("dualMatLegend"),
       resultHead: document.getElementById("resultHead"),
       resultBody: document.getElementById("resultBody"),
       exportCsv: document.getElementById("exportCsv"),
@@ -2409,6 +2377,13 @@
       errorModalBody: document.getElementById("errorModalBody"),
       errorModalClose: document.getElementById("errorModalClose"),
       errorModalX: document.getElementById("errorModalX"),
+      ambiguousConfirmModal: document.getElementById("ambiguousConfirmModal"),
+      ambiguousConfirmTitle: document.getElementById("ambiguousConfirmTitle"),
+      ambiguousConfirmIntro: document.getElementById("ambiguousConfirmIntro"),
+      ambiguousConfirmBody: document.getElementById("ambiguousConfirmBody"),
+      ambiguousConfirmCancel: document.getElementById("ambiguousConfirmCancel"),
+      ambiguousConfirmOk: document.getElementById("ambiguousConfirmOk"),
+      ambiguousConfirmX: document.getElementById("ambiguousConfirmX"),
       statRows: document.getElementById("statRows"),
       statDemand: document.getElementById("statDemand"),
       statMothers: document.getElementById("statMothers"),
@@ -3019,6 +2994,7 @@
       const cooisUnit = state.coois.cols?.unit ?? -1;
       const zrmmOun = state.zrmm.cols?.oun ?? -1;
       const zrmmBun = state.zrmm.cols?.bun ?? -1;
+      const zrmmRows = effectiveZrmmRows(state.zrmm, state.zrmm.cols);
       if (cooisUnit >= 0) {
         for (const row of state.coois.rows) {
           const u = normalize(row[cooisUnit]).toUpperCase();
@@ -3026,13 +3002,13 @@
         }
       }
       if (zrmmOun >= 0) {
-        for (const row of state.zrmm.rows) {
+        for (const row of zrmmRows) {
           const u = normalize(row[zrmmOun]).toUpperCase();
           if (u) units.add(u);
         }
       }
       if (zrmmBun >= 0) {
-        for (const row of state.zrmm.rows) {
+        for (const row of zrmmRows) {
           const u = normalize(row[zrmmBun]).toUpperCase();
           if (u) units.add(u);
         }
@@ -3096,8 +3072,9 @@
     function collectDetectedSizeSuffixes() {
       const suffixes = new Set();
       const descIdx = state.zrmm.cols?.desc ?? -1;
+      const zrmmRows = effectiveZrmmRows(state.zrmm, state.zrmm.cols);
       if (descIdx >= 0) {
-        for (const row of state.zrmm.rows) {
+        for (const row of zrmmRows) {
           const suffix = extractSizeSuffix(row[descIdx]);
           if (suffix) suffixes.add(suffix);
         }
@@ -3112,8 +3089,9 @@
     function collectSizeChildUnitOptions() {
       const units = new Set(["M", "YD", "SHT"]);
       const bunIdx = state.zrmm.cols?.bun ?? -1;
+      const zrmmRows = effectiveZrmmRows(state.zrmm, state.zrmm.cols);
       if (bunIdx >= 0) {
-        for (const row of state.zrmm.rows) {
+        for (const row of zrmmRows) {
           const u = normalizeChildUnit(row[bunIdx]);
           if (u) units.add(u);
         }
@@ -3223,8 +3201,69 @@
       elements.errorModal.classList.remove("show");
     }
 
+    function formatAmbiguityList(ambiguities) {
+      return (ambiguities || []).map((item, index) => {
+        const mothers = (item.mothers || [])
+          .map(m => `    ${m.mother}  OpenQty=${Number(m.openQty) || 0}`)
+          .join("\n");
+        return [
+          `#${index + 1}  SO ${item.so} / ${item.seg} / child ${item.child}`,
+          `  child OpenQty=${Number(item.childOpenQty) || 0}${item.childUnit ? ` ${item.childUnit}` : ""}`,
+          `  mothers (${(item.mothers || []).length}):`,
+          mothers
+        ].join("\n");
+      }).join("\n\n");
+    }
+
+    function showAmbiguousConfirmModal(ambiguities) {
+      return new Promise(resolve => {
+        let settled = false;
+        const finish = value => {
+          if (settled) return;
+          settled = true;
+          elements.ambiguousConfirmModal.classList.remove("show");
+          elements.ambiguousConfirmOk.onclick = null;
+          elements.ambiguousConfirmCancel.onclick = null;
+          if (elements.ambiguousConfirmX) elements.ambiguousConfirmX.onclick = null;
+          resolve(value);
+        };
+        elements.ambiguousConfirmTitle.textContent = t("errorAmbiguousDirectTitle");
+        elements.ambiguousConfirmIntro.textContent =
+          `${t("errorAmbiguousDirectIntro")}\n${t("ambiguousConfirmHint")}`.replace(/\n/g, " ");
+        elements.ambiguousConfirmBody.textContent = formatAmbiguityList(ambiguities);
+        elements.ambiguousConfirmOk.textContent = t("ambiguousConfirm");
+        elements.ambiguousConfirmCancel.textContent = t("ambiguousCancel");
+        elements.ambiguousConfirmOk.onclick = () => finish(true);
+        elements.ambiguousConfirmCancel.onclick = () => finish(false);
+        if (elements.ambiguousConfirmX) elements.ambiguousConfirmX.onclick = () => finish(false);
+        elements.ambiguousConfirmModal.classList.add("show");
+      });
+    }
+
+    /** Split direct Open Qty across mother candidates by mother Open Qty weights. */
+    function splitDirectDemandByMotherOpen(qty, candidates, motherOpenQtys) {
+      const n = candidates.length;
+      if (!n || !(qty > 0)) return;
+      const weights = candidates.map((_, i) => Math.max(0, Number(motherOpenQtys[i]) || 0));
+      const weightSum = weights.reduce((sum, w) => sum + w, 0);
+      let allocated = 0;
+      for (let i = 0; i < n; i += 1) {
+        let part;
+        if (i === n - 1) {
+          part = qty - allocated;
+        } else if (weightSum > 1e-12) {
+          part = qty * (weights[i] / weightSum);
+        } else {
+          part = qty / n;
+        }
+        candidates[i].demandDirect += part;
+        allocated += part;
+      }
+    }
+
     function conversionRatio(motherUnit, childUnit, unitRules, sizeRules, sizeSuffix) {
-      const m = normalize(motherUnit).toUpperCase();
+      const rawMother = normalize(motherUnit).toUpperCase();
+      const m = rawMother === "Y" ? "YD" : rawMother;
       const c = normalizeChildUnit(childUnit);
       if (!m || !c) return { ok: false, ratio: 0, reason: "blank-unit" };
       if (m === c) return { ok: true, ratio: 1 };
@@ -3519,7 +3558,7 @@
         cols: validation.cols || resolveSideCols(side, headers)
       };
       state.importValidation[side] = validation;
-      if (side === "zrmm") refreshDualIdentityMaterials();
+
       markResultDirty();
       refreshMappingTable();
       renderConversionTable();
@@ -3554,7 +3593,7 @@
       elements.copyTable.disabled = true;
       elements.resultMessage.textContent = t("resultEmpty");
       elements.resultMessage.className = "message";
-      if (elements.dualMatLegend) elements.dualMatLegend.hidden = true;
+
     }
 
     function markResultDirty() {
@@ -3661,59 +3700,77 @@
     /**
      * Y flag: group by so+mother+segment; mother="" groups per child alone.
      * MH04* children are kept in output but ignored for kit completeness (配套).
+     * Satisfied when mother coverage + child MB52 provided quantity meets demand.
      */
-    function applyGroupYFlag(rows) {
+    function applyGroupYFlag(rows, fulfilledByRow) {
       const groups = new Map();
       rows.forEach((row, idx) => {
         const so = normalize(row[OUT.so]);
         const mother = normalize(row[OUT.mother]);
+        if (!mother) return;
         const segment = normalizeSegment(row[OUT.motherBatch]) || normalizeSegment(row[OUT.childBatch]);
-        const child = normalize(row[OUT.child]);
-        const key = mother
-          ? `${so}\u0000${mother}\u0000${segment}`
-          : `${so}\u0000\u0000${segment}\u0000${child}`;
+        const key = `${so}\u0000${mother}\u0000${segment}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(idx);
       });
       for (const indices of groups.values()) {
-        const toCheck = indices.filter(i => {
-          if (isMh04Child(rows[i][OUT.child])) return false;
-          return parseNumber(rows[i][OUT.demand]) > 0;
-        });
-        const qualifies = toCheck.length > 0 && toCheck.every(i => {
+        const positiveNonMh04 = indices.filter(i =>
+          !isMh04Child(rows[i][OUT.child]) && parseNumber(rows[i][OUT.demand]) > 1e-9
+        );
+        const qualifies = positiveNonMh04.length > 0 && positiveNonMh04.every(i => {
           const demand = parseNumber(rows[i][OUT.demand]);
-          const provided = parseNumber(rows[i][OUT.provided]);
-          return provided >= demand - 1e-9;
+          const fulfilled = Number(fulfilledByRow?.[i] || 0);
+          return fulfilled >= demand - 1e-9;
         });
-        for (const i of indices) {
-          rows[i][OUT.flagY] = qualifies ? "Y" : "";
-        }
+        for (const i of indices) rows[i][OUT.flagY] = qualifies ? "Y" : "";
       }
       return rows;
+    }
+
+    function isMbMaterial(value) {
+      return normalize(value).toUpperCase().startsWith("MB");
+    }
+
+    function effectiveZrmmRows(zrmm, cols) {
+      const z = cols || zrmm.cols || resolveSideCols("zrmm", zrmm.headers);
+      return (zrmm.rows || []).filter(row => {
+        const mother = z.mother >= 0 ? row[z.mother] : "";
+        const child = z.child >= 0 ? row[z.child] : "";
+        return !isMbMaterial(mother) && !isMbMaterial(child);
+      });
     }
 
     function storageExcluded(storage) {
       return normalize(storage).startsWith("39");
     }
 
-    /** MH04* child: still allocated/exported; ignored only for pending allocation (Y) kit check. */
+    /** MH04* child: still allocated/exported; ignored only for lamination-kit readiness (Y). */
     function isMh04Child(child) {
       return normalize(child).toUpperCase().startsWith("MH04");
     }
 
     /**
-     * Core allocation engine v3.
-     * runAllocationEngine(schedule, coois, zrmm, mb52, conversionRules, sizeConversionRules)
+     * Core allocation engine v3.4.
+     * runAllocationEngine(schedule, coois, zrmm, mb52, conversionRules, sizeConversionRules, options?)
+     * options.confirmAmbiguousSplit: after user confirms, split ambiguous direct demand by mother Open Qty.
      */
-    function runAllocationEngine(schedule, coois, zrmm, mb52, conversionRules, sizeConversionRules) {
+    function runAllocationEngine(schedule, coois, zrmm, mb52, conversionRules, sizeConversionRules, options) {
+      const confirmAmbiguousSplit = Boolean(options && options.confirmAmbiguousSplit);
+      const ambiguities = [];
       const sc = schedule.cols || resolveSideCols("schedule", schedule.headers);
       const cc = coois.cols || resolveSideCols("coois", coois.headers);
       const zc = zrmm.cols || resolveSideCols("zrmm", zrmm.headers);
       const mc = mb52.cols || resolveSideCols("mb52", mb52.headers);
 
+      // Business rule v3.3: remove any ZRMM row touching an MB* material before
+      // unit checks, BOM construction, outside-stock math, or child eligibility.
+      const filteredZrmmRows = effectiveZrmmRows(zrmm, zc);
+      const zrmmCalc = { ...zrmm, rows: filteredZrmmRows, cols: zc };
+      const mbExcluded = (zrmm.rows || []).length - filteredZrmmRows.length;
+
       const preErrors = precheckUnitRH(
         { ...coois, cols: cc },
-        { ...zrmm, cols: zc }
+        zrmmCalc
       );
       if (preErrors.length) {
         return {
@@ -3724,38 +3781,40 @@
       }
 
       const scheduleMap = new Map();
-      for (const row of schedule.rows) {
+      schedule.rows.forEach((row, sourceOrder) => {
         const so = normalize(row[sc.so]);
-        if (!so) continue;
+        if (!so) return;
         const cuttingRaw = row[sc.cutting] ?? "";
         const cuttingDisplay = formatCellDate(cuttingRaw);
         const sortKey = cuttingSortKey(cuttingRaw);
         const prev = scheduleMap.get(so);
-        if (!prev || sortKey < prev.sortKey) {
-          scheduleMap.set(so, { cutting: cuttingDisplay, sortKey, cuttingRaw });
+        if (!prev || sortKey < prev.sortKey || (sortKey === prev.sortKey && sourceOrder < prev.sourceOrder)) {
+          scheduleMap.set(so, { cutting: cuttingDisplay, sortKey, cuttingRaw, sourceOrder });
         }
-      }
+      });
 
-      // ZRMM filtered rows + BOM + mother outside (display)
-      const outsidePair = new Map(); // mother\0child\0seg -> {j,p}
-      const childrenByMotherSeg = new Map(); // mother\0seg -> Map(child -> meta)
+      const missingRules = [];
+      const outsidePair = new Map();
+      const childrenByMotherSeg = new Map();
+      const motherChildrenAll = new Map();
+      const motherSameUnitChildren = new Map();
       const motherSuffix = new Map();
       const motherUnitH = new Map();
       const suffixConflicts = [];
       const childUnitConflicts = [];
 
-      zrmm.rows.forEach((row, idx) => {
+      filteredZrmmRows.forEach((row, idx) => {
         const mother = normalize(row[zc.mother]);
         const child = normalize(row[zc.child]);
         if (!mother || !child) return;
+        const storage = zc.storage >= 0 ? row[zc.storage] : "";
+        if (storageExcluded(storage)) return;
         const j = parseNumber(row[zc.giJ]);
         const l = parseNumber(row[zc.vendorL]);
         const p = parseNumber(row[zc.grP]);
-        const storage = zc.storage >= 0 ? row[zc.storage] : "";
-        if (storageExcluded(storage)) return;
         const batch = zc.batch >= 0 ? normalizeSegment(row[zc.batch]) : "";
-        const oun = zc.oun >= 0 ? normalize(row[zc.oun]).toUpperCase() : "";
-        const bun = zc.bun >= 0 ? normalize(row[zc.bun]).toUpperCase() : "";
+        const oun = zc.oun >= 0 ? normalizeChildUnit(row[zc.oun]) : "";
+        const bun = zc.bun >= 0 ? normalizeChildUnit(row[zc.bun]) : "";
         const desc = zc.desc >= 0 ? row[zc.desc] : "";
 
         if (!motherUnitH.has(mother) && oun) motherUnitH.set(mother, oun);
@@ -3770,51 +3829,64 @@
           }
         }
 
-        // BOM / 合貼：只要母子+Batch 存在且非 39* 儲位就展開；不因 J/L=0 丢掉關係
+        if (!motherChildrenAll.has(mother)) motherChildrenAll.set(mother, new Set());
+        motherChildrenAll.get(mother).add(child);
+        if (oun && bun && oun === bun) {
+          if (!motherSameUnitChildren.has(mother)) motherSameUnitChildren.set(mother, new Set());
+          motherSameUnitChildren.get(mother).add(child);
+        }
+
         const msKey = `${mother}\u0000${batch}`;
         if (!childrenByMotherSeg.has(msKey)) childrenByMotherSeg.set(msKey, new Map());
         const childMap = childrenByMotherSeg.get(msKey);
         if (!childMap.has(child)) {
-          childMap.set(child, { bun, oun });
+          childMap.set(child, { bun, oun, sourceOrder: idx });
         } else if (childMap.get(child).bun && bun && childMap.get(child).bun !== bun) {
           childUnitConflicts.push(
             `ZRMM row ${idx + 2}: mother ${mother} child ${child} conflicting BUn (${childMap.get(child).bun} vs ${bun})`
           );
         }
 
-        // 廠外母材料庫存：J=0 或 L=0 不計入
         if (j === 0 || l === 0) return;
-        const pairSeg = `${mother}\u0000${child}\u0000${batch}`;
-        if (!outsidePair.has(pairSeg)) outsidePair.set(pairSeg, { j: 0, p: 0 });
-        const agg = outsidePair.get(pairSeg);
+        const pairKey = `${mother}\u0000${child}\u0000${batch}`;
+        if (!outsidePair.has(pairKey)) {
+          outsidePair.set(pairKey, { j: 0, p: 0, oun, bun, suffix, sourceOrder: idx });
+        }
+        const agg = outsidePair.get(pairKey);
         agg.j += j;
         agg.p += p;
       });
 
-      if (suffixConflicts.length) {
+      if (suffixConflicts.length || childUnitConflicts.length) {
+        const errors = [...new Set([...suffixConflicts, ...childUnitConflicts])];
         return {
           ok: false,
           errorTitle: t("errorPrecheckTitle"),
-          errorBody: `${t("errorPrecheckIntro")}\n\n${[...new Set(suffixConflicts)].slice(0, 80).join("\n")}`
-        };
-      }
-      if (childUnitConflicts.length) {
-        return {
-          ok: false,
-          errorTitle: t("errorPrecheckTitle"),
-          errorBody: `${t("errorPrecheckIntro")}\n\n${childUnitConflicts.slice(0, 80).join("\n")}`
+          errorBody: `${t("errorPrecheckIntro")}\n\n${errors.slice(0, 80).join("\n")}`
         };
       }
 
-      const outsideByMother = new Map(); // mother\0seg — display only
-      for (const [key, { j, p }] of outsidePair.entries()) {
-        const [mother, , seg] = key.split("\u0000");
-        const outside = Math.max(0, j - p);
-        const mk = poolKey(mother, seg);
-        outsideByMother.set(mk, (outsideByMother.get(mk) || 0) + outside);
+      // Same-unit children define the normal mother-outside calculation. If a
+      // mother has no same-unit child anywhere in effective 0028, fall back to
+      // the legacy J/P aggregation without applying a conversion ratio.
+      const outsideByMother = new Map();
+      const outsideFallbackByMother = new Map();
+      for (const [key, agg] of outsidePair.entries()) {
+        const [mother, child, seg] = key.split("\u0000");
+        const outsideChildUnit = Math.max(0, agg.j - agg.p);
+        const hasSameUnitChild = (motherSameUnitChildren.get(mother) || new Set()).size > 0;
+        const useSameUnitOnly = hasSameUnitChild;
+        if (useSameUnitOnly && !(agg.oun && agg.bun && agg.oun === agg.bun)) {
+          continue;
+        }
+        let outsideMotherUnit = outsideChildUnit;
+        if (!useSameUnitOnly) {
+          outsideFallbackByMother.set(poolKey(mother, seg), true);
+        }
+        const motherKey = poolKey(mother, seg);
+        outsideByMother.set(motherKey, (outsideByMother.get(motherKey) || 0) + outsideMotherUnit);
       }
 
-      // MB52 stock SUM by Material + Stock Segment only (never mix FLT with MTF)
       const stockMb52 = new Map();
       for (const row of mb52.rows) {
         const material = normalize(row[mc.material]);
@@ -3827,30 +3899,60 @@
         stockMb52.set(key, (stockMb52.get(key) || 0) + stock);
       }
 
-      // Valid child codes from ZRMM Article (after J-L / 39* filters; MH04 kept)
       const validChildren = new Set();
       for (const childMap of childrenByMotherSeg.values()) {
         for (const child of childMap.keys()) validChildren.add(child);
       }
-
-      // Mothers present in ZRMM (any seg)
       const mothersInBom = new Set();
-      for (const key of childrenByMotherSeg.keys()) {
-        mothersInBom.add(key.split("\u0000")[0]);
-      }
+      for (const key of childrenByMotherSeg.keys()) mothersInBom.add(key.split("\u0000")[0]);
 
       function childrenForMotherSeg(mother, seg) {
-        const exact = childrenByMotherSeg.get(`${mother}\u0000${seg}`);
-        if (exact && exact.size) return exact;
-        // blank seg: do not mix FLT/MTF
-        if (!seg) return new Map();
-        return new Map();
+        return childrenByMotherSeg.get(`${mother}\u0000${seg}`) || new Map();
       }
 
-      // Build demand rows keyed by so|seg|mother|child
-      const demandRows = new Map();
-      const missingRules = [];
+      // Aggregate all COOIS lines by SO + Material + Segment, preserving the first
+      // source row for deterministic allocation within an SO.
+      const cooisBySo = new Map();
+      const cooisAggregate = new Map();
+      const cooisUnitConflicts = [];
+      coois.rows.forEach((row, sourceOrder) => {
+        const so = normalize(row[cc.so]);
+        if (!so || !scheduleMap.has(so)) return;
+        const material = normalize(row[cc.material]);
+        if (!material) return;
+        const seg = cc.segment >= 0 ? normalizeSegment(row[cc.segment]) : "";
+        const unit = cc.unit >= 0 ? normalizeChildUnit(row[cc.unit]) : "";
+        const key = `${so}\u0000${material}\u0000${seg}`;
+        if (!cooisAggregate.has(key)) {
+          const item = { so, material, seg, unit, qty: 0, sourceOrder };
+          cooisAggregate.set(key, item);
+          if (!cooisBySo.has(so)) cooisBySo.set(so, []);
+          cooisBySo.get(so).push(item);
+        }
+        const item = cooisAggregate.get(key);
+        if (item.unit && unit && item.unit !== unit) {
+          cooisUnitConflicts.push(`${so} / ${material} / ${seg}: ${item.unit} vs ${unit}`);
+        } else if (!item.unit && unit) {
+          item.unit = unit;
+        }
+        item.qty += parseNumber(row[cc.qty]);
+      });
+      if (cooisUnitConflicts.length) {
+        return {
+          ok: false,
+          errorTitle: t("errorPrecheckTitle"),
+          errorBody: `${t("errorPrecheckIntro")}\n\n${[...new Set(cooisUnitConflicts)].slice(0, 80).join("\n")}`
+        };
+      }
 
+      const sortedSos = [...scheduleMap.entries()]
+        .sort((a, b) => {
+          if (a[1].sortKey !== b[1].sortKey) return a[1].sortKey < b[1].sortKey ? -1 : 1;
+          return a[1].sourceOrder - b[1].sourceOrder;
+        })
+        .map(([so]) => so);
+
+      const demandRows = new Map();
       function ensureDemand(so, seg, mother, child, meta) {
         const key = rowKey(so, seg, mother, child);
         if (!demandRows.has(key)) {
@@ -3858,12 +3960,19 @@
           demandRows.set(key, {
             cutting: sched ? sched.cutting : "",
             sortCutting: sched ? sched.sortKey : "\uffff",
+            scheduleOrder: sched ? sched.sourceOrder : Number.MAX_SAFE_INTEGER,
             so,
             segment: seg,
             mother,
             child,
             motherUnit: meta.motherUnit || "",
             childUnit: meta.childUnit || "",
+            motherOrder: Number.isFinite(meta.motherOrder) ? meta.motherOrder : Number.MAX_SAFE_INTEGER,
+            childOrder: Number.isFinite(meta.childOrder) ? meta.childOrder : Number.MAX_SAFE_INTEGER,
+            directOrder: Number.isFinite(meta.directOrder) ? meta.directOrder : Number.MAX_SAFE_INTEGER,
+            conversionRatio: Number(meta.conversionRatio) || 1,
+            motherStockAvailable: null,
+            motherCoverChild: 0,
             demandFromMother: 0,
             demandDirect: 0
           });
@@ -3871,104 +3980,146 @@
         return demandRows.get(key);
       }
 
-      // Process COOIS lines for SOs in schedule
-      const cooisBySo = new Map();
-      for (const row of coois.rows) {
-        const so = normalize(row[cc.so]);
-        if (!so || !scheduleMap.has(so)) continue;
-        if (!cooisBySo.has(so)) cooisBySo.set(so, []);
-        cooisBySo.get(so).push(row);
-      }
-
-      const sortedSos = [...scheduleMap.entries()]
-        .sort((a, b) => (a[1].sortKey < b[1].sortKey ? -1 : a[1].sortKey > b[1].sortKey ? 1 : a[0].localeCompare(b[0])))
-        .map(([so]) => so);
-
+      // Shared F+G mother pool. Each SO first consumes its mother demand; Rule D
+      // then uses the remaining mother pool for direct child demand before the
+      // next SO is processed.
+      const remainingCoverMother = new Map();
       for (const so of sortedSos) {
-        const lines = cooisBySo.get(so) || [];
-        const expansionChildren = new Set(); // seg\0child under any mother on this SO
-        const expandedMothers = new Set(); // seg\0mother — skip mother self as direct stock
+        const lines = (cooisBySo.get(so) || []).sort((a, b) => a.sourceOrder - b.sourceOrder);
+        const motherOpenBySeg = new Map();
+        for (const line of lines) {
+          if (!line.seg || !mothersInBom.has(line.material)) continue;
+          const key = `${line.seg}\u0000${line.material}`;
+          motherOpenBySeg.set(key, (motherOpenBySeg.get(key) || 0) + Math.max(0, line.qty));
+        }
+        const expansionByChild = new Map();
+        const expandedMothers = new Set();
+        const motherContexts = [];
 
-        for (const row of lines) {
-          const material = normalize(row[cc.material]);
-          if (!material) continue;
-          const qty = parseNumber(row[cc.qty]);
-          const seg = cc.segment >= 0 ? normalizeSegment(row[cc.segment]) : "";
-          const unit = cc.unit >= 0 ? normalize(row[cc.unit]).toUpperCase() : "";
+        for (const line of lines) {
+          const { material, qty, seg, unit, sourceOrder } = line;
+          if (!seg || !mothersInBom.has(material)) continue;
+          const childMap = childrenForMotherSeg(material, seg);
+          if (!childMap.size) continue;
 
-          // Mother expansion when material is a mother for this batch/seg
-          if (mothersInBom.has(material) && seg) {
-            const childMap = childrenForMotherSeg(material, seg);
-            if (childMap.size) {
-              expandedMothers.add(`${seg}\u0000${material}`);
-              const sizeSuffix = motherSuffix.get(material) || "";
-              const motherUnit = unit || motherUnitH.get(material) || "";
-              for (const [child, meta] of [...childMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-                const childUnit = meta.bun || "";
-                const conv = conversionRatio(
-                  motherUnit,
-                  childUnit,
-                  conversionRules,
-                  sizeConversionRules,
-                  sizeSuffix
-                );
-                if (!conv.ok) {
-                  if (conv.reason === "missing-suffix") {
-                    missingRules.push(`Mother ${material} (SHT): missing size suffix in ZRMM description`);
-                  } else if (conv.reason === "missing-size-rule") {
-                    missingRules.push(
-                      `Mother ${material} (SHT / ${sizeSuffix || "?"}) → Child ${child} (${childUnit || "?"})`
-                    );
-                  } else {
-                    missingRules.push(
-                      `Mother ${material} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`
-                    );
-                  }
-                  continue;
-                }
-                const item = ensureDemand(so, seg, material, child, {
-                  motherUnit,
-                  childUnit
-                });
-                item.demandFromMother += qty * conv.ratio;
-                expansionChildren.add(`${seg}\u0000${child}`);
-              }
+          expandedMothers.add(`${seg}\u0000${material}`);
+          const motherKey = poolKey(material, seg);
+          if (!remainingCoverMother.has(motherKey)) {
+            remainingCoverMother.set(
+              motherKey,
+              (stockMb52.get(motherKey) || 0) + (outsideByMother.get(motherKey) || 0)
+            );
+          }
+          const motherAvailableBefore = Math.max(0, remainingCoverMother.get(motherKey) || 0);
+          const coverUsed = Math.min(Math.max(0, qty), motherAvailableBefore);
+          const motherPoolAfterMother = Math.max(0, motherAvailableBefore - coverUsed);
+          remainingCoverMother.set(motherKey, motherPoolAfterMother);
+          const qtyExpand = Math.max(0, qty - coverUsed);
+          const sizeSuffix = motherSuffix.get(material) || "";
+          const motherUnit = unit || motherUnitH.get(material) || "";
+          motherContexts.push({ mother: material, seg, childMap });
+
+          for (const [child, meta] of childMap.entries()) {
+            const childUnit = meta.bun || "";
+            const conv = conversionRatio(
+              motherUnit,
+              childUnit,
+              conversionRules,
+              sizeConversionRules,
+              sizeSuffix
+            );
+            if (!conv.ok) {
+              missingRules.push(
+                `Mother ${material} (${motherUnit || "?"}) → Child ${child} (${childUnit || "?"})`
+              );
+              continue;
             }
+            const item = ensureDemand(so, seg, material, child, {
+              motherUnit,
+              childUnit,
+              motherOrder: sourceOrder,
+              childOrder: meta.sourceOrder,
+              conversionRatio: conv.ratio
+            });
+            item.demandFromMother += qtyExpand * conv.ratio;
+            const childKey = `${seg}\u0000${child}`;
+            if (!expansionByChild.has(childKey)) expansionByChild.set(childKey, []);
+            expansionByChild.get(childKey).push(item);
           }
         }
 
-        // Direct demand: only materials that exist as ZRMM0028 Article (child).
-        // HC/HU/etc. not in 0028.F are skipped; mothers already expanded above are skipped.
-        for (const row of lines) {
-          const material = normalize(row[cc.material]);
-          if (!material) continue;
-          const qty = parseNumber(row[cc.qty]);
-          const seg = cc.segment >= 0 ? normalizeSegment(row[cc.segment]) : "";
-          const unit = cc.unit >= 0 ? normalize(row[cc.unit]).toUpperCase() : "";
-          const motherExpKey = `${seg}\u0000${material}`;
-          if (expandedMothers.has(motherExpKey)) continue;
+        for (const line of lines) {
+          const { material, qty, seg, unit, sourceOrder } = line;
+          if (expandedMothers.has(`${seg}\u0000${material}`)) continue;
           if (!validChildren.has(material)) continue;
-          const expKey = motherExpKey;
-          if (expansionChildren.has(expKey)) {
-            // Merge direct onto first expansion row for this child on this SO+seg
-            const candidates = [...demandRows.values()].filter(
-              d => d.so === so && d.segment === seg && d.child === material && d.mother
+          const candidates = expansionByChild.get(`${seg}\u0000${material}`) || [];
+          if (candidates.length > 1 && qty > 1e-9) {
+            const motherOpenQtys = candidates.map(
+              item => motherOpenBySeg.get(`${seg}\u0000${item.mother}`) || 0
             );
-            candidates.sort((a, b) => a.mother.localeCompare(b.mother));
-            if (candidates.length) {
-              candidates[0].demandDirect += qty;
-              if (!candidates[0].childUnit && unit) candidates[0].childUnit = unit;
+            ambiguities.push({
+              so,
+              seg,
+              child: material,
+              childOpenQty: qty,
+              childUnit: unit || "",
+              mothers: candidates.map((item, index) => ({
+                mother: item.mother,
+                openQty: motherOpenQtys[index]
+              }))
+            });
+            if (confirmAmbiguousSplit) {
+              splitDirectDemandByMotherOpen(qty, candidates, motherOpenQtys);
+              for (const item of candidates) {
+                if (!item.childUnit && unit) item.childUnit = unit;
+              }
             }
+            continue;
+          }
+          if (candidates.length === 1) {
+            candidates[0].demandDirect += qty;
+            if (!candidates[0].childUnit && unit) candidates[0].childUnit = unit;
           } else {
             const item = ensureDemand(so, seg, "", material, {
-              motherUnit: "",
-              childUnit: unit
+              childUnit: unit,
+              directOrder: sourceOrder
             });
             item.demandDirect += qty;
           }
         }
-      }
 
+        // Rule D: within each mother, consume remaining mother stock by the
+        // original ZRMM0028 child order. H is the mother-unit balance before
+        // the current child row, after mother demand and prior child rows.
+        for (const context of motherContexts) {
+          const motherKey = poolKey(context.mother, context.seg);
+          let motherPool = Math.max(0, remainingCoverMother.get(motherKey) || 0);
+          for (const child of context.childMap.keys()) {
+            const item = demandRows.get(rowKey(so, context.seg, context.mother, child));
+            if (!item) continue;
+            const ratio = Number(item.conversionRatio) || 0;
+            if (!(ratio > 0)) {
+              missingRules.push(`Rule D conversion: ${context.mother} → ${child}`);
+              continue;
+            }
+            item.motherStockAvailable = motherPool;
+            const demandTotal = Math.max(0, item.demandFromMother + item.demandDirect);
+            const motherCoverChild = Math.min(demandTotal, motherPool * ratio);
+            item.motherCoverChild = motherCoverChild;
+            motherPool = Math.max(0, motherPool - motherCoverChild / ratio);
+          }
+          remainingCoverMother.set(motherKey, motherPool);
+        }
+      }
+      if (ambiguities.length && !confirmAmbiguousSplit) {
+        return {
+          ok: false,
+          needsAmbiguousConfirm: true,
+          ambiguities,
+          errorTitle: t("errorAmbiguousDirectTitle"),
+          errorBody: `${t("errorAmbiguousDirectIntro")}\n\n${formatAmbiguityList(ambiguities)}`
+        };
+      }
       if (missingRules.length) {
         const unique = [...new Set(missingRules)];
         return {
@@ -3979,85 +4130,82 @@
       }
 
       const expanded = [...demandRows.values()];
-      // Keep demand=0 rows in the full result so Step 3 hide checkboxes can show/hide them.
-      // Default UI: both hide checkboxes checked → same net effect as previously dropping zeros here.
-
-      // cutting → SO → rows with mother (C) first → mother → child → segment
       expanded.sort((a, b) => {
         if (a.sortCutting !== b.sortCutting) return a.sortCutting < b.sortCutting ? -1 : 1;
-        if (a.so !== b.so) return a.so < b.so ? -1 : 1;
+        if (a.scheduleOrder !== b.scheduleOrder) return a.scheduleOrder - b.scheduleOrder;
+        if (a.so !== b.so) return a.so.localeCompare(b.so);
         const aHasMother = a.mother ? 0 : 1;
         const bHasMother = b.mother ? 0 : 1;
         if (aHasMother !== bHasMother) return aHasMother - bHasMother;
-        if (a.mother !== b.mother) return a.mother < b.mother ? -1 : 1;
-        if (a.child !== b.child) return a.child < b.child ? -1 : 1;
-        if (a.segment !== b.segment) return a.segment < b.segment ? -1 : 1;
-        return 0;
+        if (a.motherOrder !== b.motherOrder) return a.motherOrder - b.motherOrder;
+        if (a.childOrder !== b.childOrder) return a.childOrder - b.childOrder;
+        if (a.directOrder !== b.directOrder) return a.directOrder - b.directOrder;
+        if (a.child !== b.child) return a.child.localeCompare(b.child);
+        return a.segment.localeCompare(b.segment);
       });
 
-      // Running balances (same child+segment): decrease as earlier cutting/SO rows consume stock.
-      // Allocatable pool = MB52 only. Mother plant/outside columns are display-only.
-      const remainingPlant = new Map();
       const remainingPool = new Map();
-      for (const [key, mb] of stockMb52.entries()) {
-        remainingPlant.set(key, mb);
-        remainingPool.set(key, Math.max(0, mb));
-      }
+      for (const [key, mb] of stockMb52.entries()) remainingPool.set(key, Math.max(0, mb));
 
       const outRows = [];
+      const fulfilledByRow = [];
       let shortage = 0;
       for (const item of expanded) {
         const demandTotal = item.demandFromMother + item.demandDirect;
+        const motherCoverChild = item.mother
+          ? Math.min(Math.max(0, demandTotal), Math.max(0, Number(item.motherCoverChild) || 0))
+          : 0;
+        const childNeedNet = Math.max(0, demandTotal - motherCoverChild);
         const key = poolKey(item.child, item.segment);
         const mb0 = stockMb52.get(key) || 0;
-        const plantBefore = remainingPlant.has(key) ? remainingPlant.get(key) : mb0;
         const poolBefore = remainingPool.has(key) ? remainingPool.get(key) : Math.max(0, mb0);
-        const provide = Math.min(demandTotal, Math.max(0, poolBefore));
-        const plantAfter = plantBefore - provide;
-        const poolAfter = poolBefore - provide;
-        remainingPlant.set(key, plantAfter);
-        remainingPool.set(key, poolAfter);
-        if (provide < demandTotal - 1e-9) shortage += 1;
         const motherKey = item.mother ? poolKey(item.mother, item.segment) : "";
-        const motherMb = item.mother ? (stockMb52.get(motherKey) || 0) : "";
-        const motherOut = item.mother ? (outsideByMother.get(motherKey) || 0) : "";
-        outRows.push([
+        const motherMbNum = item.mother ? (stockMb52.get(motherKey) || 0) : 0;
+        const motherOutNum = item.mother ? (outsideByMother.get(motherKey) || 0) : 0;
+        const provide = Math.min(childNeedNet, Math.max(0, poolBefore));
+        const poolAfter = poolBefore - provide;
+        const fulfilled = motherCoverChild + provide;
+        remainingPool.set(key, poolAfter);
+        if (fulfilled < demandTotal - 1e-9) shortage += 1;
+        fulfilledByRow.push(fulfilled);
+        const outRow = [
           item.cutting,
           item.so,
           item.mother,
           item.segment,
           item.motherUnit,
-          item.mother ? formatQty(motherMb) : "",
-          item.mother ? formatQty(motherOut) : "",
+          item.mother ? formatQty(motherMbNum) : "",
+          item.mother ? formatQty(motherOutNum) : "",
+          item.mother ? formatQty(item.motherStockAvailable || 0) : "",
           item.child,
           item.segment,
           item.childUnit,
           formatQty(item.demandFromMother),
           formatQty(item.demandDirect),
           formatQty(demandTotal),
-          formatQty(plantBefore),
+          formatQty(mb0),
           formatQty(poolBefore),
           formatQty(provide),
           formatQty(poolAfter),
           ""
-        ]);
+        ];
+        outRow.outsideFallback = Boolean(item.mother && outsideFallbackByMother.get(motherKey));
+        outRows.push(outRow);
       }
 
-      applyGroupYFlag(outRows);
-
-      const headers = [...outputHeadersForLang(state.lang)];
+      applyGroupYFlag(outRows, fulfilledByRow);
       return {
         ok: true,
-        headers,
+        headers: [...outputHeadersForLang(state.lang)],
         rows: outRows,
         stats: {
           demandKeys: demandRows.size,
           mothers: mothersInBom.size,
-          shortage
+          shortage,
+          zrmmMbExcluded: mbExcluded
         }
       };
     }
-
     function parseFilterList(text) {
 
       return new Set(
@@ -4181,14 +4329,35 @@
 
         updateProgress(t("allocating"), 60);
         await waitFrame();
-        const result = runAllocationEngine(
+        let result = runAllocationEngine(
           state.schedule,
           state.coois,
           state.zrmm,
           state.mb52,
           state.conversionRules,
-          state.sizeConversionRules
+          state.sizeConversionRules,
+          { confirmAmbiguousSplit: Boolean(options.confirmAmbiguousSplit) }
         );
+        if (!result.ok && result.needsAmbiguousConfirm) {
+          elements.progressOverlay.classList.remove("show");
+          const confirmed = await showAmbiguousConfirmModal(result.ambiguities || []);
+          if (!confirmed) {
+            setMessage(elements.resultMessage, t("ambiguousCancelled"), "error");
+            applyStepUI(2, scroll);
+            return;
+          }
+          showProgress(t("processing"), t("allocating"), 60);
+          await waitFrame();
+          result = runAllocationEngine(
+            state.schedule,
+            state.coois,
+            state.zrmm,
+            state.mb52,
+            state.conversionRules,
+            state.sizeConversionRules,
+            { confirmAmbiguousSplit: true }
+          );
+        }
         if (!result.ok) {
           elements.progressOverlay.classList.remove("show");
           showErrorModal(result.errorTitle, result.errorBody);
@@ -4223,34 +4392,6 @@
       }
     }
 
-    function refreshDualIdentityMaterials() {
-      const mothers = new Set();
-      const children = new Set();
-      const z = state.zrmm || { rows: [], cols: {} };
-      const motherIdx = z.cols?.mother ?? -1;
-      const childIdx = z.cols?.child ?? -1;
-      if (motherIdx < 0 || childIdx < 0) {
-        state.dualIdentityMaterials = new Set();
-        return;
-      }
-      for (const row of z.rows) {
-        const mother = normalize(row[motherIdx]);
-        const child = normalize(row[childIdx]);
-        if (mother) mothers.add(mother);
-        if (child) children.add(child);
-      }
-      const dual = new Set();
-      for (const code of mothers) {
-        if (children.has(code)) dual.add(code);
-      }
-      state.dualIdentityMaterials = dual;
-    }
-
-    function isDualIdentityMaterial(code) {
-      const key = normalize(code);
-      return Boolean(key && state.dualIdentityMaterials && state.dualIdentityMaterials.has(key));
-    }
-
     function renderResult(headers, rows) {
       elements.resultHead.innerHTML = headers.map((h, index) => {
         const tipKey = OUTPUT_TIP_KEYS[index];
@@ -4259,7 +4400,7 @@
         return `<th class="has-tip" tabindex="0" data-tip="${tip}">${escapeHtml(h)}</th>`;
       }).join("");
       elements.resultBody.innerHTML = "";
-      refreshDualIdentityMaterials();
+
       const preview = rows.slice(0, PREVIEW_ROW_LIMIT);
       let prevSo = null;
       let prevMother = null;
@@ -4280,24 +4421,16 @@
         row.forEach((cell, colIndex) => {
           const td = document.createElement("td");
           td.textContent = cell;
-          if (
-            (colIndex === OUT.mother || colIndex === OUT.child) &&
-            isDualIdentityMaterial(cell)
-          ) {
-            td.classList.add("mat-dual");
-            td.title = t("dualMatLegend");
-          }
+          const fallbackFlag = Boolean(row && row.outsideFallback);
+          if (fallbackFlag && colIndex === OUT.motherStockOutside) td.classList.add("outside-fallback");
+
           tr.appendChild(td);
         });
         elements.resultBody.appendChild(tr);
         prevSo = so;
         prevMother = mother;
       }
-      if (elements.dualMatLegend) {
-        const show = state.dualIdentityMaterials.size > 0 && rows.length > 0;
-        elements.dualMatLegend.hidden = !show;
-        if (show) elements.dualMatLegend.textContent = t("dualMatLegend");
-      }
+
     }
 
     function escapeHtml(value) {
@@ -4447,11 +4580,7 @@
         const cells = row.map((value, colIndex) => {
           const ref = `${colLetter(colIndex)}${rowIndex}`;
           const text = String(value ?? "");
-          const dual =
-            (colIndex === OUT.mother || colIndex === OUT.child) &&
-            isDualIdentityMaterial(text);
-          // styles 1–4 base zebra; 5–8 same fills + blue bold font for dual-identity materials
-          const cellStyle = dual ? style + 4 : style;
+          const cellStyle = style;
           if (text !== "" && Number.isFinite(Number(text)) && !/^0\d+/.test(text) && !/[eE]/.test(text) && /^-?\d+(\.\d+)?$/.test(text)) {
             return `<c r="${ref}" s="${cellStyle}"><v>${text}</v></c>`;
           }
@@ -4557,7 +4686,7 @@
     function downloadXlsx() {
       if (!state.resultRows.length) return;
       try {
-        refreshDualIdentityMaterials();
+
         const bytes = buildXlsxBytes(state.resultHeaders, state.resultRows);
         const blob = new Blob([bytes], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -4717,6 +4846,11 @@
       renderSizeConversionTable();
       markResultDirty();
     });
+    elements.exportConversionConfig.addEventListener("click", exportConversionConfig);
+    elements.importConversionConfig.addEventListener("click", () => elements.conversionConfigFile.click());
+    elements.conversionConfigFile.addEventListener("change", () => {
+      importConversionConfig(elements.conversionConfigFile.files[0]);
+    });
     [
       elements.filterCuttingFrom,
       elements.filterCuttingTo,
@@ -4734,7 +4868,7 @@
     // SO suggest + mother chips call applyViewFilters on change
 
     const savedLang = localStorage.getItem(LANG_STORAGE_KEY);
-    if (savedLang && translations[savedLang]) {
+    if ((savedLang === "en" || savedLang === "zh") && translations[savedLang]) {
       state.lang = savedLang;
       elements.languageSelect.value = savedLang;
     }

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "3.4.1",
+  "conversionRules": [
+    { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 },
+    { "motherUnit": "YD", "childUnit": "M", "ratio": 0.9144 }
+  ],
+  "sizeConversionRules": [
+    { "suffix": "110x200cm", "childUnit": "M", "ratio": 2.0 },
+    { "suffix": "110x200cm", "childUnit": "YD", "ratio": 2.187227 },
+    { "suffix": "110x200cm", "childUnit": "SHT", "ratio": 1.0 },
+    { "suffix": "220x110cm", "childUnit": "M", "ratio": 2.0 },
+    { "suffix": "220x110cm", "childUnit": "YD", "ratio": 2.187227 },
+    { "suffix": "220x110cm", "childUnit": "SHT", "ratio": 1.0 },
+    { "suffix": "200x110cm", "childUnit": "M", "ratio": 2.2 },
+    { "suffix": "200x110cm", "childUnit": "YD", "ratio": 2.405949 },
+    { "suffix": "200x110cm", "childUnit": "SHT", "ratio": 1.0 }
+  ]
+}

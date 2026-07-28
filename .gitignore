@@ -33,3 +33,11 @@ node_modules/
 coverage/
 __pycache__/
 *.pyc
+/20260723/
+/20260724/
+/20260728/
+/bk_0722/
+/rule_a_vs_d_diff_*.csv
+/raw_mat_*.xlsx
+/raw_mat_*.csv
+rule_a*_diff_*.csv

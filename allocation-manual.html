@@ -1,587 +1,141 @@
 <!doctype html>
-<html lang="en" data-theme="mill">
+<html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RAW MAT Allocation — Operation Manual</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script>
-    (function () {
-      try {
-        var theme = localStorage.getItem("rawmat.allocation.theme");
-        document.documentElement.setAttribute(
-          "data-theme",
-          theme === "soft" || theme === "mill" ? theme : "mill"
-        );
-      } catch (e) {
-        document.documentElement.setAttribute("data-theme", "mill");
-      }
-    })();
-  </script>
+  <title>RAW MAT 配發引擎 v3.4.1 操作手冊 / Operation Manual</title>
   <style>
-    :root,
-    [data-theme="mill"] {
-      --bg: #e8edf2;
-      --bg-accent: #dfe6ee;
-      --ink: #0f172a;
-      --muted: #475569;
-      --line: #cbd5e1;
-      --panel: #f8fafc;
-      --soft: #e2e8f0;
-      --accent: #334155;
-      --accent-dark: #1e293b;
-      --accent-bright: #4338ca;
-      --shadow: none;
-      --radius: 5px;
-      --radius-pill: 6px;
-      --font: "IBM Plex Sans", "Segoe UI", Arial, "Myanmar Text", "Padauk", "Microsoft JhengHei", sans-serif;
-    }
-    [data-theme="soft"] {
-      --bg: #f1f5f9;
-      --bg-accent: #e8eef6;
-      --ink: #0f172a;
-      --muted: #64748b;
-      --line: #e2e8f0;
-      --panel: #ffffff;
-      --soft: #f1f5f9;
-      --accent: #4338ca;
-      --accent-dark: #3730a3;
-      --accent-bright: #4f46e5;
-      --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-      --radius: 12px;
-      --radius-pill: 999px;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background:
-        radial-gradient(1000px 420px at 10% -8%, var(--bg-accent), transparent 55%),
-        var(--bg);
-      color: var(--ink);
-      font: 15px/1.55 var(--font);
-    }
-    header {
-      background: color-mix(in srgb, var(--panel) 92%, transparent);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--line);
-      padding: 16px clamp(16px, 4vw, 42px);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .topbar, main {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .brand-kicker {
-      margin: 0 0 2px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: -0.02em; }
-    main { padding: 24px clamp(16px, 4vw, 42px) 48px; }
-    section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 18px 20px;
-      margin-bottom: 16px;
-      box-shadow: var(--shadow);
-    }
-    h2 { margin: 0 0 10px; font-size: 18px; color: var(--accent-dark); }
-    p, li { margin: 0 0 8px; }
-    ul, ol { margin: 0 0 8px; padding-left: 1.4em; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-      margin-top: 8px;
-    }
-    th, td {
-      border: 1px solid var(--line);
-      padding: 6px 8px;
-      text-align: left;
-      vertical-align: top;
-    }
-    th { background: var(--soft); }
-    a.app-link, a.manual-link {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-pill);
-      background: var(--panel);
-      color: var(--accent-bright);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    a.app-link:hover, a.manual-link:hover {
-      background: var(--soft);
-      border-color: var(--accent-bright);
-    }
-    select {
-      min-height: 34px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 4px 8px;
-      background: #fff;
-      color: var(--ink);
-      font: inherit;
-    }
-    .note {
-      background: var(--soft);
-      border-left: 4px solid var(--accent-bright);
-      padding: 10px 12px;
-      border-radius: 0 var(--radius) var(--radius) 0;
-      margin-top: 8px;
-      font-size: 14px;
-    }
+    :root{--ink:#17212b;--muted:#5e6b76;--line:#d7e0e7;--brand:#0b6b61;--soft:#eef7f5;--warn:#fff7df;--danger:#fff0ef;--paper:#fff;--bg:#f3f6f8}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","Microsoft JhengHei",Arial,sans-serif;line-height:1.65}
+    header{background:linear-gradient(135deg,#083f3a,#0b6b61);color:#fff;padding:30px 24px} header .wrap,main{max-width:1100px;margin:auto}
+    h1{margin:0 0 8px;font-size:30px} h2{margin:0 0 18px;font-size:23px} h3{margin:22px 0 8px;font-size:18px;color:#095d55}
+    a{color:#086b61} header a{color:#fff} main{padding:26px 18px 50px}.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;margin:0 0 18px;box-shadow:0 4px 16px rgba(31,48,61,.05)}
+    .en{border-top:1px dashed var(--line);margin-top:14px;padding-top:14px;color:#34434f}.tag{display:inline-block;padding:4px 9px;border-radius:999px;background:#d9f0eb;color:#064d46;font-weight:700;font-size:13px}
+    .note,.warn,.stop{border-left:5px solid var(--brand);padding:12px 14px;margin:14px 0;background:var(--soft)}.warn{border-color:#b78100;background:var(--warn)}.stop{border-color:#b33a30;background:var(--danger)}
+    table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{background:#edf3f5}
+    code{background:#edf2f4;padding:2px 5px;border-radius:5px}pre{background:#15222b;color:#e8f2f4;padding:14px;border-radius:10px;overflow:auto}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.mini{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fbfcfd}
+    ol,ul{padding-left:23px}.muted{color:var(--muted)}
   </style>
 </head>
 <body>
-  <header>
-    <div class="topbar">
-      <div>
-        <p class="brand-kicker" data-i18n="brandKicker">Allocation workbench</p>
-        <h1 data-i18n="manualTitle">Operation Manual</h1>
-      </div>
-      <div class="top-actions">
-        <a href="allocation-web.html" class="app-link" data-i18n="backToApp">Back to app</a>
-        <select id="themeSelect" aria-label="Theme">
-          <option value="mill" data-i18n="themeMill">Mill Ops</option>
-          <option value="soft" data-i18n="themeSoft">Soft Enterprise</option>
-        </select>
-        <select id="languageSelect" aria-label="Language">
-          <option value="en">English</option>
-          <option value="zh">繁體中文</option>
-          <option value="my">မြန်မာ</option>
-        </select>
-      </div>
+<header><div class="wrap">
+  <span class="tag">v3.4.1</span>
+  <h1>RAW MAT 庫存配發引擎操作手冊</h1>
+  <p>RAW MAT Allocation Engine Operation Manual</p>
+  <a href="allocation-web.html">返回主程式 / Back to application</a>
+</div></header>
+<main>
+  <section class="card">
+    <h2>1. 工具用途 / Purpose</h2>
+    <p>本工具將 Schedule、COOIS、ZRMM0028 與 MB52 合併，先以母料 F+G 共用池覆蓋母料需求，再把不足量展開成子料需求，最後依順序扣減子料 MB52 庫存。所有處理都在本機瀏覽器完成。</p>
+    <p class="en">The tool combines Schedule, COOIS, ZRMM0028, and MB52. It first covers mother demand from the shared F+G pool, expands only the shortage to child demand, and then consumes child MB52 stock in order. All processing stays in the local browser.</p>
+    <div class="warn">真實業務檔案不得上傳到外部服務，也不得提交 Git。<br><span class="en">Do not upload real business files to external services or commit them to Git.</span></div>
+  </section>
+
+  <section class="card">
+    <h2>2. 執行前準備 / Before you start</h2>
+    <div class="grid">
+      <div class="mini"><strong>Schedule</strong><br>SO 與 cutting 日期<br><span class="muted">SO and cutting date</span></div>
+      <div class="mini"><strong>COOIS</strong><br>需求與單位<br><span class="muted">Demand and unit</span></div>
+      <div class="mini"><strong>ZRMM0028</strong><br>母子關係與廠外資料<br><span class="muted">BOM and outside stock</span></div>
+      <div class="mini"><strong>MB52</strong><br>廠內庫存<br><span class="muted">Plant stock</span></div>
     </div>
-  </header>
+    <p>請從專案資料夾開啟 <code>allocation-web.html</code>，並保留 <code>vendor/xlsx.full.min.js</code>。若要使用核准的預設換算，匯入 <code>config/conversion-rules.v1.json</code>。</p>
+    <p class="en">Open <code>allocation-web.html</code> from the project folder and keep <code>vendor/xlsx.full.min.js</code> in place. Import <code>config/conversion-rules.v1.json</code> to use the approved default conversions.</p>
+  </section>
 
-  <main>
-    <section>
-      <p data-i18n="manualIntro">This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.</p>
-      <div class="note" data-i18n="manualVersion">App version: allocation-web.html v3.1.6 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.</div>
-    </section>
+  <section class="card">
+    <h2>3. 操作流程 / Operating steps</h2>
+    <h3>步驟一：匯入四份報表 / Step 1: Import four reports</h3>
+    <ol>
+      <li>分別選取 Schedule、COOIS、ZRMM0028、MB52。/ Select each of the four inputs.</li>
+      <li>確認四個槽位都顯示匯入成功。/ Confirm all four slots show a successful import.</li>
+      <li>COOIS／0028 若是雙表頭，系統會採英文表頭列。/ For dual-header COOIS/0028 files, the English header row is used.</li>
+    </ol>
+    <div class="note">0028 在所有檢核前會排除母料或子料以 <code>MB</code> 開頭的整列。<br><span class="en">Before any validation, 0028 rows whose mother or child starts with <code>MB</code> are removed.</span></div>
 
-    <section>
-      <h2 data-i18n="step1Title">Step 1 — Import Excel files</h2>
-      <ul>
-        <li data-i18n="step1a">Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).</li>
-        <li data-i18n="step1b">Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.</li>
-        <li data-i18n="step1c">Use Sample data to try the tool without real files.</li>
-        <li data-i18n="step1d">Import validation must show OK on all four slots before you can run allocation.</li>
-        <li data-i18n="step1e">Offline Excel: open allocation-web.html from the project folder that also contains vendor/xlsx.full.min.js (do not copy the HTML alone).</li>
-      </ul>
-    </section>
+    <h3>步驟二：確認欄位與換算 / Step 2: Confirm mappings and conversions</h3>
+    <ol>
+      <li>檢查欄位是否對到正確英文表頭。/ Check each mapping against the correct English header.</li>
+      <li>檢查一般單位與 SHT 尺寸換算；<code>220x110cm SHT → YD</code> 必須是 <code>2.187227</code>。/ Check unit and SHT size conversions; <code>220x110cm SHT → YD</code> must be <code>2.187227</code>.</li>
+      <li>可用「匯入換算 JSON／匯出換算 JSON」與 Python 驗證器共用設定。/ Use conversion JSON import/export to share the same settings with the Python verifier.</li>
+    </ol>
+    <div class="stop">缺少換算、係數不合法或同一關係有衝突時，整批停止。請修正資料或設定後重新執行，不會默默略過。<br><span class="en">Missing, invalid, or conflicting conversions stop the entire run. Fix the source or configuration and rerun; rows are never silently skipped.</span></div>
 
-    <section>
-      <h2 data-i18n="step2Title">Step 2 — Mapping &amp; run allocation</h2>
-      <ul>
-        <li data-i18n="step2a">Review the mapping table and detected headers for all four files.</li>
-        <li data-i18n="step2b">Unit whitelist defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.</li>
-        <li data-i18n="step2c">SHT size-suffix defaults (editable): 110x200cm / 220x110cm / 200x110cm. Suffix comes from ZRMM Material Full Description.</li>
-        <li data-i18n="step2d">Click Run allocation. Missing rules or unit mismatches will block with an error message.</li>
-      </ul>
-    </section>
+    <h3>步驟三：執行、檢視與匯出 / Step 3: Run, review, and export</h3>
+    <ol>
+      <li>按「執行配發」。/ Click Run allocation.</li>
+      <li>先查看輸出列數、短缺列，再用 SO、日期或料號篩選。/ Review output and shortage counts, then filter by SO, date, or material.</li>
+      <li>核對 H `mother stock available before this row`、N `demand qty`、Q `provided qty` 與 R `remaining stock after this row`；G 與 H 不得相加。/ Reconcile H, N, Q, and R; do not add G and H.</li>
+      <li>匯出 CSV 或 XLSX；兩種格式皆為同一 19 欄順序。/ Export CSV or XLSX; both use the same 19-column order.</li>
+    </ol>
+    <div class="warn">任何輸入、欄位對應或換算設定改變後，舊結果立即失效，匯出會停用；必須重新執行。<br><span class="en">Any input, mapping, or conversion change immediately invalidates old results and disables export until rerun.</span></div>
+  </section>
 
-    <section>
-      <h2 data-i18n="rulesTitle">Allocation rules (important)</h2>
-      <ul>
-        <li data-i18n="rules1">Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.</li>
-        <li data-i18n="rules2">MH04* children are kept in BOM / outside / demand / export. They are ignored only when deciding pending allocation (Y) kit completeness.</li>
-        <li data-i18n="rules3">Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Mother outside column sums those pairs for mother+Batch. BOM expand keeps all non-39* children even when J/L is 0.</li>
-        <li data-i18n="rules4">Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = child MB52 only. Mother plant stock is display-only from the same MB52 rule.</li>
-        <li data-i18n="rules5">Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.</li>
-        <li data-i18n="rules6">Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.</li>
-        <li data-i18n="rules7">Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.</li>
-      </ul>
-    </section>
+  <section class="card">
+    <h2>4. 核心規則 / Core rules</h2>
+    <ul>
+      <li>COOIS 依 <code>SO + Material + Segment</code> 加總全部 Open Quantity。/ COOIS Open Quantity is aggregated by <code>SO + Material + Segment</code>.</li>
+      <li>F 是母料 MB52 原始總量；G 採同單位優先：若母料有任一子料與 OUn 同單位，只加總這些同單位子料的 J/P；若完全無同單位子料，則直接加總原 J/P 並以紅字提示。/ F is the original mother MB52 total; G uses a same-unit-first rule: if any child matches the mother OUn, sum only those same-unit children; if none match, sum raw J/P directly and show G in red.</li>
+      <li>F+G 先覆蓋母料需求；不足才展開子料。/ F+G covers mother demand first; only the shortage expands to children.</li>
+      <li>Rule A 維持取消；Rule D 已恢復。直接需求永遠保留，先用母料餘量覆蓋，未覆蓋量才扣子料 MB52。/ Rule A remains removed; Rule D is restored. Direct demand remains visible, uses the mother balance first, and only the uncovered amount consumes child MB52.</li>
+      <li>多母共用子料時，依 cutting、Schedule 列序、COOIS 母料列序逐列扣同一池。/ Shared-child stock is consumed by cutting, Schedule row order, and COOIS mother order.</li>
+      <li>直接子料若同時可歸入多個母料，先列出全部衝突關係並請確認；確認後依母料 Open Qty 比例拆分直接需求再繼續，取消則整批停止。/ Direct child demand that could belong to multiple mothers lists every conflict for confirmation; confirm splits by mother Open Qty, cancel stops the run.</li>
+    </ul>
+    <pre>mother cover child = min(demand qty, H × conversion ratio)
+Q provided qty = min(demand qty - mother cover child, stock available)
+fulfilled = mother cover child + Q
+R = stock available - Q</pre>
+  </section>
 
-    <section>
-      <h2 data-i18n="step3Title">Step 3 — Filter, preview &amp; export</h2>
-      <ul>
-        <li data-i18n="step3a">Filter by SO, cutting date range, or mother/child material. Preview updates live.</li>
-        <li data-i18n="step3b">Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.</li>
-        <li data-i18n="step3c">Export CSV or Excel (18 columns). Excel export paints dual-identity material codes in blue (mother/child columns).</li>
-        <li data-i18n="step3d">Blue codes = dual identity (same code is both mother and child in ZRMM0028).</li>
-        <li data-i18n="step3e">If inputs change after a run, re-run allocation before exporting.</li>
-      </ul>
-    </section>
+  <section class="card">
+    <h2>5. 合貼備料齊套 / Lamination Kit Ready</h2>
+    <p>只有具有母料、至少一筆非 MH04 正需求，且所有非 MH04 正需求都足量時，整個母料群組標 <code>Y</code>。零需求、純直接需求與僅 MH04 群組保持空白。MH04 仍會輸出與配發，但不參與判定。</p>
+    <p class="en">A mother group is marked <code>Y</code> only when it has at least one positive non-MH04 demand and every positive non-MH04 demand is fully supplied. Zero-demand, direct-only, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the decision.</p>
+  </section>
 
-    <section>
-      <h2 data-i18n="yTitle">Column Y (pending allocation)</h2>
-      <p data-i18n="yBody">For each sales order + mother + segment group: Y when every non-MH04 demand&gt;0 child is fully provided. MH04 children do not affect the kit flag. Direct-only rows (blank mother) form their own group per child.</p>
-    </section>
+  <section class="card">
+    <h2>6. 輸出 19 欄 / 19 output columns</h2>
+    <table>
+      <thead><tr><th>#</th><th>欄位 / Column</th><th>說明 / Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>cutting</td><td>生產日 / production date</td></tr>
+        <tr><td>2</td><td>so</td><td>銷售訂單 / sales order</td></tr>
+        <tr><td>3–5</td><td>mother material · mother batch · mother unit</td><td>母料識別 / mother identity</td></tr>
+        <tr><td>6</td><td>mother plant stock</td><td>母料 MB52 原始總量 F / original mother MB52 total F</td></tr>
+        <tr><td>7</td><td>mother stock outside</td><td>同單位優先的母料廠外量 G；無同單位 fallback 以紅字顯示 / same-unit-first mother outside G; fallback rows show red text</td></tr>
+        <tr><td>8</td><td>mother stock available before this row</td><td>母料需求與先前子料列扣除後、本列前母料餘量 / mother balance before this row</td></tr>
+        <tr><td>9–11</td><td>child material · child batch · child unit</td><td>子料識別 / child identity</td></tr>
+        <tr><td>12</td><td>child demand</td><td>母料不足展開 / expanded mother shortage</td></tr>
+        <tr><td>13</td><td>demand direct</td><td>COOIS 直接子料需求 / direct COOIS child demand</td></tr>
+        <tr><td>14</td><td>demand qty</td><td>展開 + 直接 / expanded + direct</td></tr>
+        <tr><td>15</td><td>child stock</td><td>子料 MB52 原始總量 / original child MB52 total</td></tr>
+        <tr><td>16</td><td>stock available</td><td>本列配發前餘量 / balance before this row</td></tr>
+        <tr><td>17</td><td>provided qty</td><td>實際從子料 MB52 領用 / actual child-MB52 usage</td></tr>
+        <tr><td>18</td><td>remaining stock after this row</td><td>本列後餘量 / balance after this row</td></tr>
+        <tr><td>19</td><td>lamination kit ready (Y)</td><td>合貼備料齊套 / kit-ready flag</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-    <section>
-      <h2 data-i18n="outTitle">Output columns (18)</h2>
-      <p data-i18n="outIntro">Preview and Excel use the same column order.</p>
-      <ol>
-        <li data-i18n="out1">cutting · so</li>
-        <li data-i18n="out2">mother material · mother batch · mother unit</li>
-        <li data-i18n="out2b">mother plant stock · mother stock outside (display only)</li>
-        <li data-i18n="out3">child material · child batch · child unit</li>
-        <li data-i18n="out4">child demand · demand direct · demand qty</li>
-        <li data-i18n="out5">child stock (running) · stock available (=MB52 pool)</li>
-        <li data-i18n="out6">provided qty · remaining stock after this row · pending allocation (Y)</li>
-      </ol>
-    </section>
+  <section class="card">
+    <h2>7. 常見問題 / Troubleshooting</h2>
+    <ul>
+      <li><strong>結果無法匯出：</strong>輸入或設定已變更，請重跑。/ <strong>Export disabled:</strong> inputs or settings changed; rerun.</li>
+      <li><strong>G 欄紅字：</strong>此母料在有效 0028 中找不到任何同單位子料，系統改用不換算的 J/P fallback。/ <strong>Red G column:</strong> this mother has no same-unit child in effective 0028, so the system used the no-conversion J/P fallback.</li>
+      <li><strong>直接需求歸屬不明：</strong>同一 SO + Segment 的子料連到多個母料；畫面列出 SO／母／子與開量，確認後按母料 Open Qty 比例拆分，取消則停止。/ <strong>Ambiguous direct demand:</strong> the child links to multiple mothers in the same SO + Segment; the UI lists SO / mother / child and Open Qty; confirm splits by mother Open Qty, cancel stops.</li>
+      <li><strong>child stock 沒遞減：</strong>這是正確行為；它顯示原始總量，請看 stock available 與 remaining。/ <strong>child stock does not decrease:</strong> expected; it is the original total. Use stock available and remaining for the running balance.</li>
+      <li><strong>沒有 Y：</strong>零需求、純直接或 MH04-only 群組本來就不標 Y。/ <strong>No Y flag:</strong> zero-demand, direct-only, and MH04-only groups intentionally remain blank.</li>
+    </ul>
+  </section>
 
-    <section>
-      <h2 data-i18n="colsTitle">Column mapping (by English header name)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="colSource">Source</th>
-            <th data-i18n="colLetter">Header (EN)</th>
-            <th data-i18n="colMeaning">Meaning</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Schedule</td><td>Order / so</td><td data-i18n="colSo">Sales order (so)</td></tr>
-          <tr><td>Schedule</td><td>cutting</td><td data-i18n="colCutting">Cutting / production date</td></tr>
-          <tr><td>COOIS</td><td>SD Document</td><td data-i18n="colSd">SD Document (SO)</td></tr>
-          <tr><td>COOIS</td><td>Material</td><td data-i18n="colMaterial">Demand material</td></tr>
-          <tr><td>COOIS</td><td>Open Quantity</td><td data-i18n="colQty">Open Quantity (demand)</td></tr>
-          <tr><td>COOIS</td><td>Requirement Segment</td><td data-i18n="colSeg">Requirement Segment (FLT/MTF)</td></tr>
-          <tr><td>COOIS</td><td>Base Unit of Measure</td><td data-i18n="colUnitR">Demand unit</td></tr>
-          <tr><td>ZRMM0028</td><td>Material</td><td data-i18n="colMother3">Mother material</td></tr>
-          <tr><td>ZRMM0028</td><td>Article(Com.)</td><td data-i18n="colChild">Child material (MH04 kept; ignored for Y kit)</td></tr>
-          <tr><td>ZRMM0028</td><td>GI SC(541/542)</td><td data-i18n="colGiJ">GI (outside issue J)</td></tr>
-          <tr><td>ZRMM0028</td><td>Stock of Vendor</td><td data-i18n="colVendorL">Stock of Vendor (L)</td></tr>
-          <tr><td>ZRMM0028</td><td>GR SC(543/544)</td><td data-i18n="colGrP">GR (outside receipt P)</td></tr>
-          <tr><td>ZRMM0028</td><td>Storage Location</td><td data-i18n="colStorage">Storage (drop 39*)</td></tr>
-          <tr><td>ZRMM0028</td><td>Batch</td><td data-i18n="colBatch">Batch (= segment FLT/MTF)</td></tr>
-          <tr><td>ZRMM0028</td><td>OUn / BUn</td><td data-i18n="colOunBun">Mother / child unit</td></tr>
-          <tr><td>ZRMM0028</td><td>Material Full Description</td><td data-i18n="colDescF">Description (SHT size suffix)</td></tr>
-          <tr><td>MB52</td><td>Material</td><td data-i18n="colMb52Mat">Stock material</td></tr>
-          <tr><td>MB52</td><td>Stock Segment</td><td data-i18n="colStockSeg">Stock Segment (FLT/MTF; never mix)</td></tr>
-          <tr><td>MB52</td><td>Unrestricted</td><td data-i18n="colStock">Unrestricted (SUM by material+segment)</td></tr>
-        </tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2 data-i18n="troubleTitle">Troubleshooting</h2>
-      <ul>
-        <li data-i18n="trouble1">Unit pre-check failed: same mother must have matching COOIS Base Unit and ZRMM OUn.</li>
-        <li data-i18n="trouble2">Missing conversion: add unit or SHT size-suffix rule in Step 2 (or Reset defaults), then re-run.</li>
-        <li data-i18n="trouble3">SHT mother missing suffix: ensure ZRMM description ends with size like 110x200cm.</li>
-        <li data-i18n="trouble4">Results stale: inputs changed — run allocation again before export.</li>
-        <li data-i18n="trouble5">HC/HU rows missing: only materials present as ZRMM Article (after J/L and 39* filters) are calculated — by design.</li>
-        <li data-i18n="trouble6">If available stock looks wrong: re-check Segment lock (FLT/MTF) and that MB52 Unrestricted rows are not on storage 39*.</li>
-      </ul>
-      <div class="note" data-i18n="troubleNote">Data stays on your computer. Do not upload real business files to external services.</div>
-    </section>
-  </main>
-
-  <script>
-    const LANG_STORAGE_KEY = "rawmat.allocation.lang";
-    const THEME_STORAGE_KEY = "rawmat.allocation.theme";
-
-    const translations = {
-      en: {
-        brandKicker: "Allocation workbench",
-        manualTitle: "Operation Manual",
-        backToApp: "Back to app",
-        themeMill: "Mill Ops",
-        themeSoft: "Soft Enterprise",
-        manualIntro: "This manual explains RAW MAT Allocation Engine v3 (offline browser tool). Choose your language above.",
-        manualVersion: "App version: allocation-web.html v3.1.6 — four inputs, 18-column export (mother plant/outside display), Segment FLT/MTF lock; MH04 kept, ignored for Y kit. Keep vendor/xlsx.full.min.js beside the HTML for offline Excel import.",
-        step1Title: "Step 1 — Import Excel files",
-        step1a: "Upload or paste four files: Schedule, COOIS (demand), ZRMM0028 (BOM/outside), MB52 (stock).",
-        step1b: "Columns are resolved by English header names (aliases allowed). Dual-header sheets (Chinese then English) use the English row.",
-        step1c: "Use Sample data to try the tool without real files.",
-        step1d: "Import validation must show OK on all four slots before you can run allocation.",
-        step1e: "Offline Excel: open allocation-web.html from the project folder that also contains vendor/xlsx.full.min.js (do not copy the HTML alone).",
-        step2Title: "Step 2 — Mapping & run allocation",
-        step2a: "Review the mapping table and detected headers for all four files.",
-        step2b: "Unit whitelist defaults (editable): M→YD=1.0936, YD→M=0.9144. Same units always 1:1. Use Reset defaults if the table is empty.",
-        step2c: "SHT size-suffix defaults (editable): 110x200cm / 220x110cm / 200x110cm. Suffix comes from ZRMM Material Full Description.",
-        step2d: "Click Run allocation. Missing rules or unit mismatches will block with an error message.",
-        rulesTitle: "Allocation rules (important)",
-        rules1: "Demand path: only materials that exist as ZRMM0028 Article (child) are allocated. COOIS lines for HC/HU/etc. not in 0028.F are skipped.",
-        rules2: "MH04* children are kept in BOM / outside / demand / export. They are ignored only when deciding pending allocation (Y) kit completeness.",
-        rules3: "Outside stock = max(0, Σ GI J − Σ GR P) per mother–child–Batch (rows with J=0 or L=0 skipped for outside only). Mother outside column sums those pairs for mother+Batch. BOM expand keeps all non-39* children even when J/L is 0.",
-        rules4: "Plant stock = SUM(MB52 Unrestricted) by Material + Stock Segment (exclude storage 39*). Allocatable pool = child MB52 only. Mother plant stock is display-only from the same MB52 rule.",
-        rules5: "Segment lock: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch. FLT and MTF never mix.",
-        rules6: "Mother COOIS lines expand to all valid children (× conversion); child COOIS Open Quantity adds as demand direct when the child is in 0028.F.",
-        rules7: "Allocate greedily by earliest cutting, then SO; mother rows sort above blank-mother direct rows within the same SO.",
-        step3Title: "Step 3 — Filter, preview & export",
-        step3a: "Filter by SO, cutting date range, or mother/child material. Preview updates live.",
-        step3b: "Hide zero-demand SO / row checkboxes are ON by default. Uncheck to include demand=0 rows in preview and export.",
-        step3c: "Export CSV or Excel (18 columns). Excel export paints dual-identity material codes in blue (mother/child columns).",
-        step3d: "Blue codes = dual identity (same code is both mother and child in ZRMM0028).",
-        step3e: "If inputs change after a run, re-run allocation before exporting.",
-        yTitle: "Column Y (pending allocation)",
-        yBody: "For each sales order + mother + segment group: Y when every non-MH04 demand>0 child is fully provided. MH04 children do not affect the kit flag. Direct-only rows (blank mother) form their own group per child.",
-        outTitle: "Output columns (18)",
-        outIntro: "Preview and Excel use the same column order.",
-        out1: "cutting · so",
-        out2: "mother material · mother batch · mother unit",
-        out2b: "mother plant stock · mother stock outside (display only)",
-        out3: "child material · child batch · child unit",
-        out4: "child demand · demand direct · demand qty",
-        out5: "child stock (running) · stock available (=MB52 pool)",
-        out6: "provided qty · remaining stock after this row · pending allocation (Y)",
-        colsTitle: "Column mapping (by English header name)",
-        colSource: "Source",
-        colLetter: "Header (EN)",
-        colMeaning: "Meaning",
-        colSo: "Sales order (so)",
-        colCutting: "Cutting / production date",
-        colSd: "SD Document (SO)",
-        colMaterial: "Demand material",
-        colQty: "Open Quantity (demand)",
-        colSeg: "Requirement Segment (FLT/MTF)",
-        colUnitR: "Demand unit",
-        colMother3: "Mother material",
-        colDescF: "Description (SHT size suffix)",
-        colChild: "Child material (MH04 kept; ignored for Y kit)",
-        colGiJ: "GI (outside issue J)",
-        colVendorL: "Stock of Vendor (L)",
-        colGrP: "GR (outside receipt P)",
-        colStorage: "Storage (drop 39*)",
-        colBatch: "Batch (= segment FLT/MTF)",
-        colOunBun: "Mother / child unit",
-        colMb52Mat: "Stock material",
-        colStockSeg: "Stock Segment (FLT/MTF; never mix)",
-        colStock: "Unrestricted (SUM by material+segment)",
-        troubleTitle: "Troubleshooting",
-        trouble1: "Unit pre-check failed: same mother must have matching COOIS Base Unit and ZRMM OUn.",
-        trouble2: "Missing conversion: add unit or SHT size-suffix rule in Step 2 (or Reset defaults), then re-run.",
-        trouble3: "SHT mother missing suffix: ensure ZRMM description ends with size like 110x200cm.",
-        trouble4: "Results stale: inputs changed — run allocation again before export.",
-        trouble5: "HC/HU rows missing: only materials present as ZRMM Article (after J/L and 39* filters) are calculated — by design.",
-        trouble6: "If available stock looks wrong: re-check Segment lock (FLT/MTF) and that MB52 Unrestricted rows are not on storage 39*.",
-        troubleNote: "Data stays on your computer. Do not upload real business files to external services."
-      },
-      zh: {
-        brandKicker: "配發工作台",
-        manualTitle: "操作手冊",
-        backToApp: "返回程式",
-        themeMill: "Mill Ops 廠務",
-        themeSoft: "Soft 企業風",
-        manualIntro: "本手冊說明 RAW MAT 庫存配發引擎 v3（離線瀏覽器工具）。請在上方選擇語系。",
-        manualVersion: "程式版本：allocation-web.html v3.1.6 — 四輸入、18 欄匯出（含廠內／廠外母材料庫存顯示）、Segment FLT/MTF 鎖定；MH04 保留、Y 配套略過。離線 Excel 請保留 vendor/xlsx.full.min.js 與 HTML 同資料夾。",
-        step1Title: "第 1 步 — 匯入 Excel",
-        step1a: "上傳或貼上四個檔案：Schedule 排程、COOIS 需求、ZRMM0028 BOM／廠外、MB52 庫存。",
-        step1b: "欄位以英文表頭名稱解析（可用 alias）。雙表頭（中文＋英文）時以英文列為 header。",
-        step1c: "可使用「範例資料」在不使用真實檔的情況下試用。",
-        step1d: "四個上傳槽的匯入驗證皆須顯示 OK，才能執行配發。",
-        step1e: "離線 Excel：請從含 vendor/xlsx.full.min.js 的專案資料夾開啟 allocation-web.html（勿只複製單一 HTML）。",
-        step2Title: "第 2 步 — 對應與執行配發",
-        step2a: "檢視四個檔案的對應表與偵測到的表頭。",
-        step2b: "單位白名單預設（可改）：M→YD=1.0936、YD→M=0.9144；同單位永遠 1:1。表空白時可按「重設預設」。",
-        step2c: "SHT 末碼預設（可改）：110x200cm／220x110cm／200x110cm；末碼來自 ZRMM Material Full Description。",
-        step2d: "按「執行配發」。缺規則或單位不一致會以錯誤訊息阻擋。",
-        rulesTitle: "配發規則（重要）",
-        rules1: "需求路徑：僅計算存在於 ZRMM0028 Article（子料）的料號；COOIS 的 HC／HU 等不在 0028.F 者不計算。",
-        rules2: "MH04* 子料仍進 BOM／廠外／需求／匯出；僅在「待配發（Y）」配套判定時略過，不論其是否有庫存。",
-        rules3: "廠外庫存 = max(0, Σ GI J − Σ GR P)，依母–子–Batch（J=0 或 L=0 的列只不計廠外，仍做合貼展開）。廠外母材料庫存 = 該母+Batch 下各子料 pair 加總。",
-        rules4: "廠內庫存 = SUM(MB52 Unrestricted)，依 Material + Stock Segment（排除儲位 39*）。可配發池 = 子料 MB52；廠內母材料庫存僅顯示。",
-        rules5: "Segment 鎖定：COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch。FLT 與 MTF 永不混倉。",
-        rules6: "母料 COOIS 列展開至所有有效子料（× 換算）；子料若在 0028.F，其 Open Quantity 加為 demand direct。",
-        rules7: "依最早 cutting、再 SO 貪婪配發；同 SO 內有母料列排在母料空白的直接需求列之前。",
-        step3Title: "第 3 步 — 篩選、預覽與匯出",
-        step3a: "可依 SO、cutting 日期、母／子材料篩選；預覽即時更新。",
-        step3b: "隱藏零需求 SO／列預設勾選。取消勾選才會在預覽與匯出顯示 demand=0 列。",
-        step3c: "匯出 CSV 或 Excel（18 欄）。Excel 會將雙重身分料號以藍色標示（母／子欄）。",
-        step3d: "藍色料號 = 雙重身分（同一碼在 ZRMM0028 同時為母與子）。",
-        step3e: "若執行後又修改輸入，請重新配發再匯出。",
-        yTitle: "Y 欄（待配發標記）",
-        yBody: "同一訂單 + 母料 + Segment：僅當所有非 MH04 且 demand>0 的子料列皆 fully provided 時標 Y；MH04 子料不影響配套。僅直接需求（母料空白）時依子料各自成組。",
-        outTitle: "輸出欄位（18）",
-        outIntro: "預覽與 Excel 欄序相同。",
-        out1: "cutting · so",
-        out2: "母料 · 母 Batch · 母單位",
-        out2b: "廠內母材料庫存 · 廠外母材料庫存（僅顯示）",
-        out3: "子料 · 子 Batch · 子單位",
-        out4: "子材料需求 · 子料直接需求 · 需求合計",
-        out5: "子材料庫存（遞減）· 可配發庫存（=MB52 池）",
-        out6: "配發量 · 本列後剩餘庫存 · 待配發（Y）",
-        colsTitle: "欄位對應（依英文表頭名稱）",
-        colSource: "來源",
-        colLetter: "表頭（EN）",
-        colMeaning: "語意",
-        colSo: "訂單（so）",
-        colCutting: "排程生產日 cutting",
-        colSd: "訂單（SD Document）",
-        colMaterial: "需求物料",
-        colQty: "Open Quantity（需求）",
-        colSeg: "需求區段（FLT/MTF）",
-        colUnitR: "需求單位",
-        colMother3: "母材料",
-        colDescF: "完整說明（SHT 末碼）",
-        colChild: "子材料（MH04 保留；Y 配套略過）",
-        colGiJ: "GI（廠外發料 J）",
-        colVendorL: "Stock of Vendor（L）",
-        colGrP: "GR（廠外領料 P）",
-        colStorage: "儲位（排除 39*）",
-        colBatch: "Batch（= Segment FLT/MTF）",
-        colOunBun: "母／子單位",
-        colMb52Mat: "庫存物料",
-        colStockSeg: "Stock Segment（FLT/MTF；不可混）",
-        colStock: "Unrestricted（依料號+Segment SUM）",
-        troubleTitle: "常見問題",
-        trouble1: "單位事前檢查失敗：同母料 COOIS 單位與 ZRMM OUn 必須一致。",
-        trouble2: "缺少換算：在 Step 2 補單位或 SHT 末碼規則（或重設預設）後重跑。",
-        trouble3: "SHT 母料無末碼：請確認 ZRMM 說明末尾含 110x200cm 等尺寸。",
-        trouble4: "結果已過期：輸入已變更 — 請重新執行配發再匯出。",
-        trouble5: "看不到 HC／HU 列：僅計算 ZRMM Article（經 J/L、39* 過濾後）有出現的料 — 屬設計行為。",
-        trouble6: "可配發庫存異常時：請檢查 Segment 鎖定（FLT/MTF）與 MB52 是否落在儲位 39*。",
-        troubleNote: "資料僅留在本機電腦，請勿將真實業務檔上傳至外部服務。"
-      },
-      my: {
-        brandKicker: "ခွဲဝေမှု လုပ်ငန်းခုံ",
-        manualTitle: "လုပ်ဆောင်ချက် လက်စွဲ",
-        backToApp: "အက်ပ်သို့ ပြန်သွားရန်",
-        themeMill: "Mill Ops",
-        themeSoft: "Soft Enterprise",
-        manualIntro: "ဤလက်စွဲသည် RAW MAT Allocation Engine v3 (offline ဘရောက်ဆာ ကိရိယာ) ကို ရှင်းပြသည်။ အပေါ်တွင် ဘာသာစကား ရွေးချယ်ပါ။",
-        manualVersion: "အက်ပ်ဗားရှင်း: allocation-web.html v3.1.6 — input ၄ ခု၊ ကော်လံ ၁၈ ခု (မိခင် သိုလှောင် ပြသရန်)၊ Segment FLT/MTF သော့ခတ်၊ MH04 ထားပြီး Y တွင် ကျော်။ Offline Excel အတွက် vendor/xlsx.full.min.js ကို HTML နှင့် တစ်ဖိုင်တွဲတွင် ထားပါ။",
-        step1Title: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
-        step1a: "ဖိုင် ၄ ခု တင်ပါ/ကူးထည့်ပါ — Schedule၊ COOIS (လိုအပ်ချက်)၊ ZRMM0028 (BOM/ပြင်ပ)၊ MB52 (သိုလှောင်)။",
-        step1b: "ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ဖြေရှင်းသည် (alias ခွင့်ပြု)။ နှစ်ထပ်ခေါင်းစဉ် (တရုတ်ပြီး အင်္ဂလိပ်) တွင် အင်္ဂလိပ်အတန်းကို သုံးသည်။",
-        step1c: "အစစ်ဖိုင် မလိုဘဲ စမ်းရန် Sample data သုံးနိုင်သည်။",
-        step1d: "slot လေးခုလုံး Import validation OK မြင်မှ Run allocation လုပ်နိုင်သည်။",
-        step1e: "Offline Excel: vendor/xlsx.full.min.js ပါသော ဖိုလ်ဒါမှ allocation-web.html ကို ဖွင့်ပါ (HTML တစ်ဖိုင်တည်း မကူးပါနှင့်)။",
-        step2Title: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု လုပ်ဆောင်ရန်",
-        step2a: "ဖိုင်လေးခု၏ mapping ဇယားနှင့် တွေ့ရှိသော ခေါင်းစဉ်များကို စစ်ဆေးပါ။",
-        step2b: "ယူနစ် whitelist ပုံမှန် (ပြင်နိုင်): M→YD=1.0936၊ YD→M=0.9144။ တူညီယူနစ်သည် အမြဲ 1:1။ ဇယားဗလာဖြစ်ပါက Reset defaults သုံးပါ။",
-        step2c: "SHT အရွယ်အစား ပုံမှန် (ပြင်နိုင်): 110x200cm / 220x110cm / 200x110cm။ နောက်ဆက် ZRMM Material Full Description မှ ရသည်။",
-        step2d: "Run allocation ကို နှိပ်ပါ။ စည်းမျဉ်း မပြည့်မီ သို့မဟုတ် ယူနစ် မကိုက်ညီပါက အမှားဖြင့် ပိတ်မည်။",
-        rulesTitle: "ခွဲဝေမှု စည်းမျဉ်း (အရေးကြီး)",
-        rules1: "လိုအပ်ချက်လမ်းကြောင်း: ZRMM0028 Article (သား) တွင် ရှိသော ပစ္စည်းများသာ။ 0028.F တွင် မရှိသော HC/HU စသည်များကို ကျော်သည်။",
-        rules2: "MH04* သားများကို BOM / ပြင်ပ / လိုအပ်ချက် / ထုတ်ယူတွင် ထားသည်။ ခွဲဝေရန် (Y) တွဲစုံ စစ်ဆေးရာတွင်သာ ကျော်သည်။",
-        rules3: "ပြင်ပသိုလှောင် = max(0, Σ GI J − Σ GR P) မိခင်–သား–Batch (J=0 သို့မဟုတ် L=0 ကို ပြင်ပတွင်သာ ကျော်၊ BOM ချဲ့ရာတွင် ထား)။ မိခင် ပြင်ပကော်လံ = မိခင်+Batch အတွက် သား pair ပေါင်း။",
-        rules4: "စက်ရုံသိုလှောင် = SUM(MB52 Unrestricted) Material + Stock Segment (storage 39* ဖယ်)။ ခွဲဝေကန် = သား MB52 သာ; မိခင် စက်ရုံသိုလှောင်သည် ပြသရန်သာ။",
-        rules5: "Segment သော့: COOIS Requirement Segment = MB52 Stock Segment = ZRMM Batch။ FLT နှင့် MTF ဘယ်တော့မှ မရော။",
-        rules6: "မိခင် COOIS အတန်းများကို သားတရားဝင်အားလုံးသို့ ချဲ့သည် (× conversion)၊ သား 0028.F တွင်ရှိလျှင် Open Quantity ကို demand direct ထည့်သည်။",
-        rules7: "အမြန်ဆုံး cutting၊ ပြီး SO အလိုက် greedy ခွဲဝေ၊ တူညီ SO အတွင်း မိခင်ရှိအတန်းများကို မိခင်ဗလာ direct အတန်းများအပေါ်တွင် စဉ်သည်။",
-        step3Title: "အဆင့် ၃ — စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
-        step3a: "SO၊ cutting ရက်စွဲ၊ မိခင်/သား ပစ္စည်းဖြင့် စစ်ထုတ်နိုင်သည်။ အစမ်းကြည့်မှု ချက်ချင်း မွမ်းမံသည်။",
-        step3b: "သုညလိုအပ်ချက် SO/အတန်း ဖျောက် checkbox များ ပုံမှန် ON။ ဖျက်မှ demand=0 အတန်းများကို အစမ်း/ထုတ်ယူတွင် မြင်ရမည်။",
-        step3c: "CSV သို့မဟုတ် Excel (ကော်လံ ၁၈) ထုတ်ယူပါ။ Excel တွင် dual-identity ပစ္စည်းကုဒ်များကို အပြာရောင်ခြယ်သည်။",
-        step3d: "အပြာကုဒ် = dual identity (ZRMM0028 တွင် မိခင်နှင့်သား တပြိုင်နက်)။",
-        step3e: "လုပ်ဆောင်ပြီးနောက် input ပြောင်းပါက ထုတ်ယူမီ ထပ်မံ ခွဲဝေပါ။",
-        yTitle: "ကော်လံ Y (ခွဲဝေရန်)",
-        yBody: "မှာယူမှု + မိခင် + segment အုပ်စုတွင် MH04 မဟုတ်သော demand>0 သားများ အပြည့် ပေးပြီးမှ Y။ MH04 သည် တွဲစုံအလံကို မထိခိုက်။ မိခင်ဗလာ direct အတန်းများသည် သားအလိုက် သီးခြားအုပ်စု။",
-        outTitle: "ထုတ်ကုန် ကော်လံများ (၁၈)",
-        outIntro: "အစမ်းကြည့်နှင့် Excel ကော်လံအစဉ် တူညီသည်။",
-        out1: "cutting · so",
-        out2: "မိခင်ပစ္စည်း · မိခင် batch · မိခင်ယူနစ်",
-        out2b: "မိခင် စက်ရုံသိုလှောင် · မိခင် ပြင်ပသိုလှောင် (ပြသရန်သာ)",
-        out3: "သားပစ္စည်း · သား batch · သားယူနစ်",
-        out4: "သားပစ္စည်း လိုအပ်ချက် · တိုက်ရိုက်လိုအပ်ချက် · လိုအပ်ချက်စုစုပေါင်း",
-        out5: "သား သိုလှောင် (လျော့) · ခွဲဝေနိုင် (=MB52)",
-        out6: "ပေးထားသော ပမာဏ · ဤအတန်းပြီး ကျန်သိုလှောင် · ခွဲဝေရန် (Y)",
-        colsTitle: "ကော်လံ အမှတ်အသား (အင်္ဂလိပ် ခေါင်းစဉ်အမည်)",
-        colSource: "ရင်းမြစ်",
-        colLetter: "ခေါင်းစဉ် (EN)",
-        colMeaning: "အဓိပ္ပာယ်",
-        colSo: "မှာယူမှု (so)",
-        colCutting: "Cutting / ထုတ်လုပ်ရက်",
-        colSd: "SD Document (SO)",
-        colMaterial: "လိုအပ်ချက် ပစ္စည်း",
-        colQty: "Open Quantity (လိုအပ်ချက်)",
-        colSeg: "Requirement Segment (FLT/MTF)",
-        colUnitR: "လိုအပ်ချက် ယူနစ်",
-        colMother3: "မိခင်ပစ္စည်း",
-        colDescF: "ဖော်ပြချက် (SHT အရွယ်အစား)",
-        colChild: "သားပစ္စည်း (MH04 ထား; Y တွင် ကျော်)",
-        colGiJ: "GI (ပြင်ပ ထုတ်ယူ J)",
-        colVendorL: "Stock of Vendor (L)",
-        colGrP: "GR (ပြင်ပ လက်ခံ P)",
-        colStorage: "Storage (39* ဖယ်)",
-        colBatch: "Batch (= segment FLT/MTF)",
-        colOunBun: "မိခင် / သား ယူနစ်",
-        colMb52Mat: "သိုလှောင် ပစ္စည်း",
-        colStockSeg: "Stock Segment (FLT/MTF; မရော)",
-        colStock: "Unrestricted (material+segment SUM)",
-        troubleTitle: "ပြဿနာ ဖြေရှင်းနည်း",
-        trouble1: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် — တူညီမိခင်တွင် COOIS Base Unit နှင့် ZRMM OUn တူညီရမည်။",
-        trouble2: "conversion မရှိ — အဆင့် ၂ တွင် ယူနစ် သို့မဟုတ် SHT စည်းမျဉ်း ထည့် (သို့ Reset defaults) ပြီး ပြန်လုပ်ပါ။",
-        trouble3: "SHT မိခင်တွင် နောက်ဆက် မရှိ — ZRMM ဖော်ပြချက်အဆုံးတွင် 110x200cm ကဲ့သို့ အရွယ်အစား ရှိရမည်။",
-        trouble4: "ရလဒ် ဟောင်းနေပြီ — input ပြောင်းပြီး — ထပ်မံ ခွဲဝေပြီးမှ ထုတ်ယူပါ။",
-        trouble5: "HC/HU အတန်း မမြင်ရ — J/L နှင့် 39* စစ်ထုတ်ပြီးနောက် ZRMM Article တွင်ရှိသော ပစ္စည်းများသာ တွက်သည် (ဒီဇိုင်းအရ)။",
-        trouble6: "available မမှန်ပါက Segment (FLT/MTF) နှင့် MB52 storage 39* ကို စစ်ပါ။",
-        troubleNote: "ဒေတာသည် သင့်ကွန်ပျူတာတွင်သာ ရှိသည်။ လုပ်ငန်း ဖိုင်များကို ပြင်ပ ဝန်ဆောင်မှုသို့ မတင်ပါနှင့်။"
-      }
-    };
-
-    let lang = "en";
-    const languageSelect = document.getElementById("languageSelect");
-    const themeSelect = document.getElementById("themeSelect");
-
-    function t(key) {
-      const table = translations[lang] || translations.en;
-      return table[key] || translations.en[key] || key;
-    }
-
-    function htmlLangFor(code) {
-      if (code === "zh") return "zh-Hant";
-      if (code === "my") return "my";
-      return "en";
-    }
-
-    function applyTheme(theme) {
-      const next = theme === "soft" ? "soft" : "mill";
-      document.documentElement.setAttribute("data-theme", next);
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-      themeSelect.value = next;
-    }
-
-    function applyLanguage() {
-      document.documentElement.lang = htmlLangFor(lang);
-      document.querySelectorAll("[data-i18n]").forEach(node => {
-        node.textContent = t(node.dataset.i18n);
-      });
-      themeSelect.value = document.documentElement.getAttribute("data-theme") || "mill";
-      document.title = `${t("manualTitle")} — RAW MAT`;
-      localStorage.setItem(LANG_STORAGE_KEY, lang);
-    }
-
-    const saved = localStorage.getItem(LANG_STORAGE_KEY);
-    if (saved && translations[saved]) {
-      lang = saved;
-      languageSelect.value = saved;
-    }
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    applyTheme(savedTheme === "soft" ? "soft" : "mill");
-
-    languageSelect.addEventListener("change", () => {
-      lang = languageSelect.value;
-      applyLanguage();
-    });
-    themeSelect.addEventListener("change", () => {
-      applyTheme(themeSelect.value);
-    });
-
-    applyLanguage();
-  </script>
+  <section class="card">
+    <h2>8. 驗證基準 / Acceptance reference</h2>
+    <p>20260723 全量基準：3,505 筆輸出、短缺 71 筆；0028 排除 389 列、45 組關係；雙重身分 0；錨點 <code>10189518 / MN090134761 / MA020147549</code> 為 H=0.496708、N=0.02、Q=0、R=43.046，且不短缺。</p>
+    <p class="en">20260723 baseline: 3,505 output rows and 71 shortages; 389 0028 rows and 45 relationships removed; zero dual identities; anchor <code>10189518 / MN090134761 / MA020147549</code> has H=0.496708, N=0.02, Q=0, R=43.046, and no shortage.</p>
+    <p><a href="docs/07-allocation-v3-spec.md">完整規格 / Full specification</a></p>
+  </section>
+</main>
 </body>
 </html>
