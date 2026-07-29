@@ -23,7 +23,7 @@ When opening offline, keep `vendor/xlsx.full.min.js` in its current relative loc
 - 同一 SO＋Segment 直接子料可歸多母時，先列出衝突並確認；確認後依母料 Open Qty 比例拆分，取消則停止。/ When direct child demand could belong to multiple mothers in the same SO + Segment, list conflicts and confirm; confirm splits by mother Open Qty, cancel stops.
 - 排序為 cutting → Schedule 原始 SO 列序 → COOIS 母料首次列序。/ Ordering is cutting → original Schedule SO row → first COOIS mother row.
 - 輸出維持 19 欄；H 是本列前母料餘量，Q 是實際子料 MB52 領用量，N 維持完整需求。/ Output remains at 19 columns; H is the mother balance before the row, Q is actual child-MB52 usage, and N remains the full demand.
-- `合貼備料齊套 / Lamination Kit Ready` 只適用於有母料且有正數非 MH04 需求、並全部足量的群組。/ Lamination Kit Ready applies only to mother groups with positive non-MH04 demand that is fully supplied.
+- `合貼備料齊套 / Lamination Kit Ready` 只適用於有母料且有正數非 MH04 需求、並全部足量的群組；Y 判定使用內部原始數值以避免格式化小數四捨五入的邊界誤差。/ Lamination Kit Ready applies only to mother groups with positive non-MH04 demand that is fully supplied; Y decision uses internal raw numbers to avoid boundary errors from formatted-decimal rounding.
 - 缺少或衝突的換算規則會停止整批。/ Missing or conflicting conversion rules stop the entire run.
 
 ## 快速使用 / Quick use

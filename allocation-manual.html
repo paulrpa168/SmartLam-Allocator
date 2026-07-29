@@ -91,8 +91,8 @@ R = stock available - Q</pre>
 
   <section class="card">
     <h2>5. 合貼備料齊套 / Lamination Kit Ready</h2>
-    <p>只有具有母料、至少一筆非 MH04 正需求，且所有非 MH04 正需求都足量時，整個母料群組標 <code>Y</code>。零需求、純直接需求與僅 MH04 群組保持空白。MH04 仍會輸出與配發，但不參與判定。</p>
-    <p class="en">A mother group is marked <code>Y</code> only when it has at least one positive non-MH04 demand and every positive non-MH04 demand is fully supplied. Zero-demand, direct-only, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the decision.</p>
+    <p>只有具有母料、至少一筆非 MH04 正需求，且所有非 MH04 正需求都足量時，整個母料群組標 <code>Y</code>。零需求、純直接需求與僅 MH04 群組保持空白。MH04 仍會輸出與配發，但不參與判定。<br>Y 判定使用內部原始數值（同一輪計算的 fulfilled 與 demand_total），避免格式化小數造成的邊界誤差。</p>
+    <p class="en">A mother group is marked <code>Y</code> only when it has at least one positive non-MH04 demand and every positive non-MH04 demand is fully supplied. Zero-demand, direct-only, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the decision. <br>Y decision uses internal raw numbers from the same allocation pass (`fulfilled` vs `demand_total`) to avoid boundary errors from formatted decimals.</p>
   </section>
 
   <section class="card">

@@ -3702,7 +3702,7 @@
      * MH04* children are kept in output but ignored for kit completeness (配套).
      * Satisfied when mother coverage + child MB52 provided quantity meets demand.
      */
-    function applyGroupYFlag(rows, fulfilledByRow) {
+    function applyGroupYFlag(rows, fulfilledByRow, demandByRow) {
       const groups = new Map();
       rows.forEach((row, idx) => {
         const so = normalize(row[OUT.so]);
@@ -3715,10 +3715,11 @@
       });
       for (const indices of groups.values()) {
         const positiveNonMh04 = indices.filter(i =>
-          !isMh04Child(rows[i][OUT.child]) && parseNumber(rows[i][OUT.demand]) > 1e-9
+          !isMh04Child(rows[i][OUT.child]) &&
+          (Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demand])) > 1e-9
         );
         const qualifies = positiveNonMh04.length > 0 && positiveNonMh04.every(i => {
-          const demand = parseNumber(rows[i][OUT.demand]);
+          const demand = Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demand]);
           const fulfilled = Number(fulfilledByRow?.[i] || 0);
           return fulfilled >= demand - 1e-9;
         });
@@ -4149,6 +4150,7 @@
 
       const outRows = [];
       const fulfilledByRow = [];
+      const demandByRow = [];
       let shortage = 0;
       for (const item of expanded) {
         const demandTotal = item.demandFromMother + item.demandDirect;
@@ -4168,6 +4170,7 @@
         remainingPool.set(key, poolAfter);
         if (fulfilled < demandTotal - 1e-9) shortage += 1;
         fulfilledByRow.push(fulfilled);
+        demandByRow.push(demandTotal);
         const outRow = [
           item.cutting,
           item.so,
@@ -4193,7 +4196,7 @@
         outRows.push(outRow);
       }
 
-      applyGroupYFlag(outRows, fulfilledByRow);
+      applyGroupYFlag(outRows, fulfilledByRow, demandByRow);
       return {
         ok: true,
         headers: [...outputHeadersForLang(state.lang)],

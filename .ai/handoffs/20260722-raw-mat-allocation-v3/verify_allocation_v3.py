@@ -564,6 +564,7 @@ def run_engine(
     remaining_pool = {key: max(0.0, value) for key, value in stock_mb52.items()}
     out_rows: list[list] = []
     fulfilled_by_row: list[float] = []
+    demand_total_by_row: list[float] = []
     shortage = 0
     for item in expanded:
         demand_total = item["demand_from_mother"] + item["demand_direct"]
@@ -581,6 +582,7 @@ def run_engine(
         fulfilled = mother_cover_child + provide
         remaining_pool[child_key] = pool_after
         fulfilled_by_row.append(fulfilled)
+        demand_total_by_row.append(demand_total)
         if fulfilled < demand_total - 1e-9:
             shortage += 1
         mother_key = (item["mother"], item["segment"])
@@ -618,10 +620,10 @@ def run_engine(
         positive_non_mh04 = [
             index
             for index in indices
-            if not is_mh04_child(out_rows[index][8]) and _num(out_rows[index][13]) > 1e-9
+            if not is_mh04_child(out_rows[index][8]) and demand_total_by_row[index] > 1e-9
         ]
         qualifies = bool(positive_non_mh04) and all(
-            fulfilled_by_row[index] >= _num(out_rows[index][13]) - 1e-9
+            fulfilled_by_row[index] >= demand_total_by_row[index] - 1e-9
             for index in positive_non_mh04
         )
         for index in indices:
@@ -959,6 +961,37 @@ def test_y_semantics() -> None:
     _assert(by_child["C_ZERO"][18] == "", "zero-demand group must not be Y")
     _assert(by_child["MH04002"][18] == "", "MH04-only group must not be Y")
     _assert(by_child["DIRECT"][2] == "" and by_child["DIRECT"][18] == "", "direct-only row must not be Y")
+
+
+def test_y_rounding_precision() -> None:
+    # Regression: previously, Y compared `fulfilled` against a *formatted* (6-decimal) demand string.
+    # This can fail when internal `fulfilled == demand_total` but formatting rounds the demand up.
+    demand = 1.2345666  # rounds to 1.234567 at 6 decimals; internal fulfilled must still mark Y
+    result = run_engine(
+        schedule=[{"so": "SO1", "cutting": "2026-07-01"}],
+        coois=[{"so": "SO1", "material": "M_READY", "qty": demand, "segment": "FLT", "unit": "M"}],
+        zrmm=[
+            {
+                "mother": "M_READY",
+                "child": "C_READY",
+                "gi_j": 0,
+                "vendor_l": 1,
+                "gr_p": 0,
+                "storage": "1001",
+                "batch": "FLT",
+                "oun": "M",
+                "bun": "M",
+                "desc": "",
+            },
+        ],
+        mb52=[
+            # Only child stock is required for Rule D fulfillment here.
+            {"material": "C_READY", "segment": "FLT", "storage": "1001", "stock": 10},
+        ],
+    )
+    _assert(result["ok"], str(result))
+    by_child = {row[8]: row for row in result["rows"]}
+    _assert(by_child["C_READY"][18] == "Y", "rounding precision should keep Y as true")
 
 
 def test_sht_220x110_to_yd() -> None:

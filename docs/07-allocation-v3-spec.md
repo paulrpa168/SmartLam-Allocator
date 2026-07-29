@@ -178,6 +178,9 @@ A `(SO + mother + Segment)` group is marked `Y` only when all conditions are met
 - 至少一筆非 MH04 且需求大於 0。/ At least one non-MH04 row has positive demand.
 - 所有正需求的非 MH04 列皆 `motherCoverChild + provided qty >= demand qty`。/ Every positive non-MH04 row is fulfilled by `motherCoverChild + provided qty`.
 
+Y 判定使用內部原始數值（同一輪計算的 `fulfilled` 與 `demand_total`），不以格式化後的小數字串做比較；因此可避免 6 位小數四捨五入造成的邊界誤判。<br>
+Y decision compares internal raw numbers from the same allocation pass (`fulfilled` vs `demand_total`), not formatted decimal strings, to avoid boundary misclassification caused by rounding to 6 decimals.
+
 零需求群組、純直接需求、僅 MH04 群組不標 Y。MH04 列仍輸出與配發，但不參與 Y 判定。<br>
 Zero-demand groups, direct-only rows, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the Y decision.
 
