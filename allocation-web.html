@@ -1183,7 +1183,7 @@
         <select id="languageSelect" aria-label="Language">
           <option value="en">English</option>
           <option value="zh">繁體中文</option>
-
+          <option value="my">မြန်မာ</option>
         </select>
         <div class="status" id="statusText">Ready</div>
       </div>
@@ -1458,7 +1458,7 @@
   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
 
   <script>
-    const APP_VERSION = "3.4.1";
+    const APP_VERSION = "3.4.2";
     const CONVERSION_SCHEMA_VERSION = 1;
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
@@ -1653,6 +1653,27 @@
       "合貼備料齊套（Y）"
     ];
 
+    const OUTPUT_HEADERS_MY = [
+      "cutting",
+      "so",
+      "မိခင်ပစ္စည်း",
+      "မိခင် BATCH",
+      "မိခင်ယူနစ်",
+      "မိခင် စက်ရုံသိုလှောင်",
+      "မိခင် ပြင်ပသိုလှောင်",
+      "ဤအတန်းမတိုင်မီ မိခင်ရနိုင်သော သိုလှောင်",
+      "သားပစ္စည်း",
+      "သား BATCH",
+      "သားယူနစ်",
+      "သားပစ္စည်း လိုအပ်ချက်",
+      "တိုက်ရိုက် လိုအပ်ချက်",
+      "လိုအပ်ချက် စုစုပေါင်း",
+      "သားပစ္စည်း သိုလှောင်",
+      "ခွဲဝေနိုင်သော စတော့",
+      "ပေးနိုင်သော ပမာဏ",
+      "ကျန်ရှိ သိုလှောင်ရုံ",
+      "ပေါင်းကပ် ပစ္စည်းပြည့်စုံမှု (Y)"
+    ];
 
     const OUTPUT_TIP_KEYS = [
       "tipColCutting",
@@ -1678,13 +1699,13 @@
 
     function htmlLangFor(code) {
       if (code === "zh") return "zh-Hant";
-
+      if (code === "my") return "my";
       return "en";
     }
 
     function outputHeadersForLang(lang) {
       if (lang === "zh") return OUTPUT_HEADERS_ZH;
-
+      if (lang === "my") return OUTPUT_HEADERS_MY;
       return OUTPUT_HEADERS_EN;
     }
 
@@ -2154,6 +2175,192 @@
         ambiguousCancel: "取消",
         ambiguousConfirm: "確認並繼續",
         ambiguousCancelled: "已取消：歸屬不明未確認，配發未執行。"
+      },
+      my: {
+        appTitle: "RAW MAT သိုလှောင်ရုံ ခွဲဝေမှု အင်ဂျင်",
+        brandKicker: "ခွဲဝေမှု လုပ်ငန်းခုံ",
+        manualLink: "လုပ်ဆောင်ချက် လက်စွဲ",
+        themeMill: "Mill Ops",
+        themeSoft: "Soft Enterprise",
+        ready: "အဆင်သင့်",
+        step1: "ဖိုင်များ တင်သွင်းရန်",
+        step2: "အမှတ်အသား နှင့် လုပ်ဆောင်ရန်",
+        step3: "စစ်ထုတ် နှင့် အစမ်းကြည့်ရန်",
+        importTitle: "အဆင့် ၁ — Excel ဖိုင်များ တင်သွင်းရန်",
+        importHelp: "Schedule၊ COOIS၊ ZRMM0028 နှင့် MB52 ကို တင်ပါ။ ကော်လံများကို အင်္ဂလိပ် ခေါင်းစဉ်အမည်ဖြင့် ရှာသည်။",
+        sideSchedule: "Schedule",
+        sideCoois: "COOIS — Demand",
+        sideZrmm: "ZRMM0028 — BOM / Outside",
+        sideMb52: "MB52 — Stock",
+        excel1: "Schedule",
+        excel2: "COOIS",
+        excel3: "ZRMM0028",
+        uploadFile: "ဖိုင် တင်ရန်",
+        pasteExcel: "သို့မဟုတ် Excel မှ ကူးထည့်ရန်",
+        sampleData: "နမူန်ဒေတာ",
+        clearSchedule: "Schedule ရှင်းရန်",
+        clearCoois: "COOIS ရှင်းရန်",
+        clearZrmm: "ZRMM0028 ရှင်းရန်",
+        clearMb52: "MB52 ရှင်းရန်",
+        clearExcel1: "Schedule ရှင်းရန်",
+        clearExcel2: "COOIS ရှင်းရန်",
+        clearExcel3: "ZRMM0028 ရှင်းရန်",
+        nextMapping: "နောက်တစ်ဆင့် — အမှတ်အသား",
+        backToTop: "↑ အပေါ်သို့",
+        mappingTitle: "အဆင့် ၂ — အမှတ်အသား နှင့် ခွဲဝေမှု",
+        fixedMapping: "သတ်မှတ် အမှတ်အသား",
+        mapSource: "ရင်းမြစ်",
+        mapColumn: "ကော်လံ",
+        mapMeaning: "အဓိပ္ပာယ်",
+        mapDetected: "တွေ့ရှိသော ခေါင်းစဉ်",
+        mappingHelp: "စစ်ဆေးမှု — COOIS ယူနစ်နှင့် ZRMM OUn တူညီရမည်။ ယူနစ်တူ 1:1။ SHT ဆိုပါက ZRMM ဖော်ပြချက် နောက်ဆုံးစာလုံး။",
+        back: "နောက်သို့",
+        runAllocate: "ခွဲဝေမှု လုပ်ဆောင်ရန်",
+        resultTitle: "စစ်ထုတ်၊ အစမ်းကြည့် နှင့် ထုတ်ယူရန်",
+        previewLimit: "ဇယား အစမ်းကြည့် အများဆုံး ၃၀၀ · ထုတ်ယူမှုသည် စစ်ထုတ်ပြီး အားလုံး",
+        filterLiveHelp: "စစ်ထုတ်မှုသည် ဤစာမျက်နှာတွင်သာ ရှိသည်။ ပြောင်းလဲမှုသည် အစမ်းကြည့်နှင့် ထုတ်ယူမှုကို ချက်ချင်း ပြန်လည်မွမ်းမံပါသည်။",
+        rowsExported: "ထုတ်ယူသော အတန်းများ",
+        demandKeys: "ထိန်းသိမ်းထားသော လိုအပ်ချက်",
+        mothersMatched: "ကိုက်ညီသော မိခင်ပစ္စည်း",
+        shortageRows: "မလုံလောက် (အပြည့်)",
+        resultEmpty: "အစမ်းကြည့်နှင့် ထုတ်ယူရန် ခွဲဝေမှု လုပ်ဆောင်ပါ။",
+        exportCsv: "CSV ထုတ်ယူရန်",
+        exportExcel: "Excel ထုတ်ယူရန်",
+        copyTable: "ဇယား ကူးယူရန်",
+        loading: "ဖွင့်နေသည်",
+        importing: "ဖိုင် တင်သွင်းနေသည်",
+        readingFile: "ဖိုင် ဖတ်နေသည်...",
+        parsingFile: "ဇယား ခွဲခြမ်းနေသည်...",
+        parsingLargeFile: "ကြီးမားသော workbook ခွဲခြမ်းနေသည် (အချိန်ယူနိုင်သည်)...",
+        processing: "ခွဲဝေမှု လုပ်ဆောင်နေသည်",
+        expanding: "လိုအပ်ချက် အတန်းများ ဖန်တီးနေသည်...",
+        allocating: "သိုလှောင်ရုံ ခွဲဝေနေသည်...",
+        rendering: "အစမ်းကြည့် ပြင်ဆင်နေသည်...",
+        loaded: "အတန်း {rows} ခု၊ ကော်လံ {cols} ခု တင်ပြီးပါပြီ။",
+        importError: "ဖိုင် မဖတ်နိုင်ပါ — {message}",
+        importTooLarge: "Workbook ကြီးလွန်းခြင်း သို့မဟုတ် memory မလုံလောက် ({message})။ တဘ်များ ပိတ်ပြီး ထပ်ကြိုးစားပါ၊ သို့မဟုတ် CSV သိမ်း / ကူးထည့်ပါ။",
+        sheetjsMissing: "Excel parser မရှိပါ — vendor/xlsx.full.min.js ကို allocation-web.html နှင့် တစ်ဖိုင်တွဲတွင် ထားပြီး ထိုဖိုလ်ဒါမှ ဖွင့်ပါ (offline)။",
+        importValidateTitle: "{file} ဖိုင်ပုံစံ စစ်ဆေးမှု မအောင်မြင်ပါ",
+        importValidateRunTitle: "ခွဲဝေမှု မလုပ်မီ တင်သွင်းမှု အမှားများကို ပြင်ပါ",
+        importValidateBlocked: "အဆင့် ၁ တင်သွင်းမှု အမှားများကို အရင်ပြင်ပြီးမှ ခွဲဝေမှု လုပ်ပါ။",
+        importValidateEmpty: "{file}: အသုံးပြုနိုင်သော ခေါင်းစဉ်/ဒေတာ အတန်း မတွေ့ပါ。",
+        importValidateMinCols: "{file}: အနည်းဆုံး ကော်လံ {need} လိုအပ်သော်လည်း ယခု {got} ကော်လံသာ ရှိသည်။",
+        importValidateHeader: "{file}: ကော်လံ {col} ခေါင်းစဉ် မမှန်ကန်သလို ဖြစ်နေသည် ({header})။",
+        importValidateBlankColumn: "{file}: နမူနာဒေတာတွင် ကော်လံ {col} အလွတ်ဖြစ်နေသည်။",
+        importValidateUnitLikeWrong: "{file}: ကော်လံ {col} သည် ယူနစ် ဖြစ်သင့်သော်လည်း နမူနာတန်ဖိုး မမှန်ကန်သလို ဖြစ်နေသည် ({sample})။",
+        importValidateColumnType: "{file}: ကော်လံ {col} သည် {type} မဟုတ်သလို ဖြစ်နေသည်။",
+        importTypeUnit: "ယူနစ်",
+        importTypeSo: "SO နံပါတ်",
+        importTypeDate: "ရက်စွဲ",
+        importTypeNumber: "ကိန်းဂဏန်း ပမာဏ",
+        needBoth: "Schedule၊ COOIS၊ ZRMM0028 နှင့် MB52 ကို အရင် တင်ပါ။",
+        built: "အတန်း {rows} · စစ်ထုတ်/ထုတ်ယူ {shown} · ဇယား အစမ်းကြည့် {preview}/{limit}{capNote} · မလုံလောက် (အပြည့်) {shortage}",
+        builtCapNote: " (ထုတ်ယူမှုတွင် စစ်ထုတ်ပြီး အားလုံး ပါဝင်ဆဲ)",
+        exported: "CSV ထုတ်ယူပြီး",
+        exportedExcel: "Excel ထုတ်ယူပြီး",
+        excelExportFailed: "Excel ထုတ်ယူမှု မအောင်မြင် — {message}",
+        copied: "ဇယား ကူးယူပြီး",
+        copyUnavailable: "ကူးယူ၍ မရပါ",
+        resultStale: "ထည့်သွင်းမှု ပြောင်းလဲပြီး။ ထုတ်ယူမီ ခွဲဝေမှု ပြန်လုပ်ပါ။",
+        workbookUnsupported: "ဤဘရောက်ဆာသည် .xlsx မဖတ်နိုင်ပါ။ CSV သို့မဟုတ် ကူးထည့်မှု သုံးပါ။",
+        missingHeader: "(အညွှန်း {index}၊ ခေါင်းစဉ် မရှိ)",
+        mapSo: "မှာယူမှု",
+        mapCutting: "ထုတ်လုပ်ရက် cutting",
+        mapSd: "မှာယူမှု (SD Document)",
+        mapMaterial: "Material (COOIS)",
+        mapQty: "Open Quantity (လိုအပ်ချက်)",
+        mapUnitCoois: "Base Unit (COOIS)",
+        mapSegment: "Requirement Segment",
+        mapMother: "Mother (ZRMM)",
+        mapChild: "သားပစ္စည်း Article(Com.)",
+        mapGiJ: "GI SC",
+        mapVendorL: "Stock of Vendor",
+        mapGrP: "GR SC",
+        mapStorage: "Storage Location",
+        mapBatch: "Batch",
+        mapOun: "OUn",
+        mapBun: "BUn",
+        mapDesc: "Description",
+        mapMb52Material: "Material (MB52)",
+        mapStockSegment: "Stock Segment",
+        mapMb52Storage: "Storage (MB52)",
+        mapStock: "Unrestricted (သားပစ္စည်းတစ်ခုလျှင် MAX)",
+        mapMb52Unit: "Base Unit (MB52)",
+        mapMother2: "မိခင်ပစ္စည်း",
+        mapUnitR: "မိခင်ယူနစ် (2.R)",
+        mapMother3: "မိခင်ပစ္စည်း",
+        mapDescF: "မိခင်အမည် အပြည့်အစုံ (အရွယ်အစား နောက်ဆုံးစာလုံး)",
+        mapUnitH: "မိခင်ယူနစ် စစ်ဆေးမှု (3.H)",
+        mapUnitM: "သားယူနစ် (3.M)",
+        convTitle: "ယူနစ် ပြောင်းလဲမှု whitelist",
+        convHelp: "မိခင်ယူနစ် × အချိုး = သားပစ္စည်း လိုအပ်ချက်။ ပုံမှန် (ပြင်နိုင်) M→YD=1.0936၊ YD→M=0.9144။ ယူနစ် တူညီပါက 1:1။",
+        convMotherUnit: "မိခင်ယူနစ် (2.R)",
+        convChildUnit: "သားယူနစ် (3.M)",
+        convRatio: "ပြောင်းလဲမှု အချိုး",
+        convAdd: "ပြောင်းလဲမှု ထည့်ရန်",
+        convReset: "ပုံမှန် ပြန်ထားရန်",
+        convRemove: "ဖျက်ရန်",
+        sizeConvTitle: "SHT အရွယ်အစား နောက်ဆုံးစာလုံး ပြောင်းလဲမှု",
+        sizeConvHelp: "မိခင်ယူနစ် (2.R) သည် SHT ဖြစ်ပြီး သားယူနစ် မတူညီပါက — လိုအပ်ချက် = Q × ဤဇယားအချိုး (Excel3.F မိခင်အမည် မှ နောက်ဆုံးစာလုံး)။ SHT→SHT သည် 1:1။ စာရင်းထည့်/ပြင်/ဖျက်နိုင်သည်။",
+        sizeSuffix: "နောက်ဆုံးစာလုံး (3.F မှ)",
+        sizeChildUnit: "သားယူနစ် (3.M)",
+        sizeConvAdd: "အရွယ်အစား စည်းမျဉ်း ထည့်ရန်",
+        sizeConvReset: "အရွယ်အစား ပုံမှန် ပြန်ထားရန်",
+        convExportConfig: "ပြောင်းလဲမှု စနစ် ထုတ်ယူရန်",
+        convImportConfig: "ပြောင်းလဲမှု စနစ် တင်သွင်းရန်",
+        convConfigExported: "ပြောင်းလဲမှု စနစ် ထုတ်ယူပြီး",
+        convConfigImported: "ပြောင်းလဲမှု စနစ် တင်သွင်းပြီး။ ခွဲဝေမှု ပြန်လုပ်ပါ။",
+        convConfigInvalid: "ပြောင်းလဲမှု စနစ် မမှန်ကန် — {message}",
+        sizeSuffixCustom: "ကိုယ်ပိုင်...",
+        sizeSuffixPlaceholder: "ဥပမာ 110x200cm",
+        filterSo: "SO စစ်ထုတ်ရန်",
+        filterCutting: "Cutting ရက်စွဲ အစ — အဆုံး",
+        filterMother: "မိခင် / သားပစ္စည်း စစ်ထုတ်ရန်",
+        filterMotherPlaceholder: "ရှေ့စာလုံး ရိုက်ပြီး Enter — သို့မဟုတ် စာရင်းမှ ရွေးပါ",
+        filterMotherClear: "အားလုံး ရှင်းရန်",
+        filterMotherCount: "ရွေးထားသည် {count}",
+        tipFilterMother: "ရွေးထားသော မိခင်များကို အပေါ်တွင် chip အဖြစ် ပြသသည်။ ရှေ့စာလုံး ရိုက်ပြီး Enter သို့မဟုတ် အကြံပြုချက် ရွေးပါ။ × ဖြင့် ဖယ်ရှားနိုင်သည်။",
+        hideSoAllZero: "လိုအပ်ချက် သုည ဖြစ်သော SO များ ဖျောက်ရန်",
+        hideRowZero: "လိုအပ်ချက် သုည အတန်းများ ဖျောက်ရန်",
+        tipRowsExported: "လက်ရှိ စစ်ထုတ်ပြီး အစမ်းကြည့် အတန်းအရေအတွက်။ CSV/Excel ထုတ်ယူမှုနှင့် တူညီသည်။",
+        tipDemandKeys: "Excel2 မှ ထိန်းသိမ်းထားသော (SO + မိခင်ပစ္စည်း) ပေါင်းစပ်အရေအတွက် (Excel3 BOM တွင် ရှိရမည်)။",
+        tipMothersMatched: "Excel3 တွင် သားပစ္စည်း အနည်းဆုံး တစ်ခု ရှိသော မိခင်ပစ္စည်း အရေအတွက်။",
+        tipShortageRows: "ခွဲဝေမှု အပြည့်အစုံတွင် provided < demand ဖြစ်သော အတန်းအရေအတွက်။ အပေါ် SO/မိခင်/ရက်စွဲ စစ်ထုတ်မှုကြောင့် ဤဂဏန်း မပြောင်းပါ။",
+        tipHelpAria: "ဤစာရင်းဇယားကို ရှင်းပြရန်",
+        tipFilterSo: "SO ရှေ့စာလုံး သို့မဟုတ် ကော်မာဖြင့် ခွဲထားသော စာရင်း ရိုက်ပါ။",
+        tipFilterCutting: "cutting ရက်စွဲ ဤအကွာအဝေးအတွင်းရှိ အတန်းများကိုသာ ထားပါ။",
+        tipHideSoAllZero: "SO တစ်ခုလုံး၏ လိုအပ်ချက် ပေါင်းလဒ် သုည ဖြစ်ပါက ထို SO အတန်းအားလုံး ဖျောက်ပါ။",
+        tipHideRowZero: "လိုအပ်ချက် သုည ဖြစ်သော တစ်တန်းချင်း ဖျောက်ပါ။",
+        tipColCutting: "Schedule မှ cutting ရက်စွဲ။",
+        tipColSo: "မှာယူမှု နံပါတ်။",
+        tipColMother: "မိခင်ပစ္စည်း (တိုက်ရိုက်သာ ဆိုပါက အလွတ်)။",
+        tipColMotherBatch: "Segment FLT/MTF။",
+        tipColMotherUnit: "မိခင်ယူနစ် (OUn)။",
+        tipColMotherStockMb52: "ပြသရန်သာ: မိခင် + Segment MB52 SUM (storage 39* ဖယ်)။ ခွဲဝေမှု မသုံး။",
+        tipColMotherStockOutside: "ပြသရန်သာ: မိခင် + Segment အတွက် သားအားလုံး၏ max(0, ΣJ−ΣP) ပေါင်း (J=0 သို့မဟုတ် L=0 ကျော်)။ ခွဲဝေမှု မသုံး။",
+        tipColMotherStockAvailable: "မိခင်လိုအပ်ချက်နှုတ်ပြီး ဤသားအတန်းမတိုင်မီ F+G ကျန်ရှိပမာဏ။ တွက်ပြီးသားဖြစ်သဖြင့် F သို့မဟုတ် G နှင့် ထပ်မပေါင်းရ။",
+        tipColChild: "သားပစ္စည်း။",
+        tipColChildBatch: "သား Segment။",
+        tipColChildUnit: "သားယူနစ် (BUn)။",
+        tipColDemandFromMother: "သားပစ္စည်း လိုအပ်ချက် (မိခင်မှ ချဲ့ထားသော)။",
+        tipColDemandDirect: "တိုက်ရိုက် Open Quantity။",
+        tipColDemand: "လိုအပ်ချက် စုစုပေါင်း။",
+        tipColStockMb52: "သား စက်ရုံသိုလှောင် (ဤအတန်းမီ) — ယခင် provided နှုတ်ပြီး cutting/SO အလိုက် လျော့သည်။",
+        tipColStockAvailable: "ခွဲဝေနိုင်သော ကျန် (ဤအတန်းမီ) = MB52 − ယခင် provided။",
+        tipColProvided: "ခွဲဝေပေးသော ပမာဏ။",
+        tipColRemaining: "ဤအတန်းပြီး ခွဲဝေနိုင်သော ကျန်။",
+        tipColY: "ပေါင်းကပ် ပစ္စည်းပြည့်စုံမှု: မိခင်အုပ်စုတွင် MH04 မဟုတ်သော လိုအပ်ချက် >0 အနည်းဆုံး တစ်ခုရှိပြီး အားလုံး ပြည့်စုံမှ Y။ တိုက်ရိုက်သက်သက် / သုည / MH04 သက်သက် အလွတ်။",
+        errorClose: "အိုကေ",
+        errorPrecheckTitle: "ယူနစ် စစ်ဆေးမှု မအောင်မြင် (COOIS vs ZRMM OUn)",
+        errorConvTitle: "ပြောင်းလဲမှု စည်းမျဉ်း မရှိ",
+        errorPrecheckIntro: "တူညီသော မိခင်ပစ္စည်းတွင် ယူနစ် တူညီရမည်။ ဒေတာ ပြင်ပြီး ပြန်လုပ်ပါ။",
+        errorConvIntro: "ပြောင်းလဲမှု ဇယားတွင် မိခင်→သား ယူနစ် အချိုးများ ထည့်ပြီး ပြန်လုပ်ပါ။",
+        errorAmbiguousDirectTitle: "သားပစ္စည်း တိုက်ရိုက်လိုအပ်ချက် ပိုင်ဆိုင်မှု မရှင်းလင်း",
+        errorAmbiguousDirectIntro: "ဤတိုက်ရိုက်လိုအပ်ချက်များသည် တူညီသော SO နှင့် Segment တွင် မိခင်အများနှင့် ချိတ်ဆက်နိုင်သည်။",
+        ambiguousConfirmHint: "အတည်ပြုပါက ထို SO + Segment ရှိ မိခင် Open Qty အချိုးအလိုက် တိုက်ရိုက်လိုအပ်ချက်ကို ခွဲဝေပြီး ဆက်လုပ်မည်။ ပယ်ဖျက်ပါက ရပ်မည်။",
+        ambiguousCancel: "ပယ်ဖျက်ရန်",
+        ambiguousConfirm: "အတည်ပြုပြီး ဆက်လုပ်ရန်",
+        ambiguousCancelled: "ခွဲဝေမှု ရပ်ဆိုင်းပြီး — တိုက်ရိုက်လိုအပ်ချက် ပိုင်ဆိုင်မှုကို အတည်မပြုပါ။"
       }
     };
 
@@ -4871,7 +5078,7 @@
     // SO suggest + mother chips call applyViewFilters on change
 
     const savedLang = localStorage.getItem(LANG_STORAGE_KEY);
-    if ((savedLang === "en" || savedLang === "zh") && translations[savedLang]) {
+    if ((savedLang === "en" || savedLang === "zh" || savedLang === "my") && translations[savedLang]) {
       state.lang = savedLang;
       elements.languageSelect.value = savedLang;
     }

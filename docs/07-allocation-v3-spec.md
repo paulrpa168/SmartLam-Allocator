@@ -1,12 +1,12 @@
-# 07 — RAW MAT 庫存配發引擎規格 v3.4.1 / RAW MAT Allocation Engine Specification v3.4.1
+# 07 — RAW MAT 庫存配發引擎規格 v3.4.2 / RAW MAT Allocation Engine Specification v3.4.2
 
-**版本 / Version:** 3.4.1<br>
-**狀態 / Status:** 已確認（含歸屬不明確認後比例拆分、廠外 G 同單位優先，2026-07-28）/ Confirmed (includes ambiguous confirm + Open Qty split and same-unit-first outside G, 2026-07-28)<br>
+**版本 / Version:** 3.4.2<br>
+**狀態 / Status:** 已確認（含歸屬不明確認後比例拆分、廠外 G 同單位優先、緬甸語 UI 復原，2026-07-30）/ Confirmed (includes ambiguous confirm + Open Qty split, same-unit-first outside G, and Myanmar UI restore, 2026-07-30)<br>
 **主程式 / Application:** `allocation-web.html`<br>
 **驗證器 / Verifier:** `.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py`
 
-本文件是 v3.4.1 的公開行為契約。欄位以英文表頭解析，不以 Excel 欄位字母寫死。程式完全在本機瀏覽器執行；真實業務檔案不得提交 Git 或跨 Agent 傳送。<br>
-This document is the public behavior contract for v3.4.1. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
+本文件是 v3.4.2 的公開行為契約。欄位以英文表頭解析，不以 Excel 欄位字母寫死。程式完全在本機瀏覽器執行；真實業務檔案不得提交 Git 或跨 Agent 傳送。<br>
+This document is the public behavior contract for v3.4.2. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
 
 ## 1. 輸入與欄位契約 / Inputs and column contract
 
@@ -130,7 +130,7 @@ Shared JSON format:
 ```json
 {
   "schemaVersion": 1,
-  "appVersion": "3.4.1",
+  "appVersion": "3.4.2",
   "conversionRules": [
     { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 }
   ],
@@ -256,3 +256,9 @@ python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py `
 - 若母料完全無同單位子料，`G` fallback 到原本 `J/P` 聚合，但不除換算率。/ If a mother has no same-unit child at all, `G` falls back to the original `J/P` aggregation without dividing by a conversion ratio.
 - fallback 算出的 `G` 在結果表以紅字顯示，提醒使用者這是例外算法。/ A fallback `G` is shown in red in the result table so users can spot the exception path.
 - `APP_VERSION` / conversion config `appVersion` → `3.4.1`。/ App and conversion config version → `3.4.1`.
+
+## 14. v3.4.1 → v3.4.2 差異 / Myanmar UI restore
+
+- 復原 UI 緬甸文語系（my）：語系選單、	ranslations.my、OUTPUT_HEADERS_MY（19 欄）。/ Restore Myanmar UI language (my): language select, 	ranslations.my, and 19-column OUTPUT_HEADERS_MY.
+- 補齊 v3.3／v3.4 新增文案（母料可用池 H tip、ambiguous confirm、換算設定匯出／匯入）。/ Add Myanmar strings for v3.3/v3.4 features (mother available tip H, ambiguous confirm, conversion config import/export).
+- APP_VERSION / conversion config ppVersion → 3.4.2。/ App and conversion config version → 3.4.2.

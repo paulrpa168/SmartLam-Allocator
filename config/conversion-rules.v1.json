@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "appVersion": "3.4.1",
+  "appVersion": "3.4.2",
   "conversionRules": [
     { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 },
     { "motherUnit": "YD", "childUnit": "M", "ratio": 0.9144 }

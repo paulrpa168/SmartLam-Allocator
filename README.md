@@ -5,7 +5,7 @@
 本專案是完全在本機瀏覽器執行的配發工具。它整合 Schedule、COOIS、ZRMM0028 與 MB52，依核准規則計算母料覆蓋、子料需求、可配發量及逐列剩餘庫存。<br>
 This project is a local browser-based allocation tool. It combines Schedule, COOIS, ZRMM0028, and MB52 to calculate mother coverage, child demand, provided quantity, and running stock under approved rules.
 
-**現行入口 / Current app:** `allocation-web.html` v3.4.1<br>
+**現行入口 / Current app:** `allocation-web.html` v3.4.2<br>
 **現行規格 / Current spec:** [`docs/07-allocation-v3-spec.md`](docs/07-allocation-v3-spec.md)<br>
 **操作手冊 / Manual:** [`allocation-manual.html`](allocation-manual.html)<br>
 **共用換算設定 / Shared conversion config:** [`config/conversion-rules.v1.json`](config/conversion-rules.v1.json)
@@ -13,7 +13,7 @@ This project is a local browser-based allocation tool. It combines Schedule, COO
 離線開啟時，請保留 `vendor/xlsx.full.min.js` 與主程式的相對位置。`vlookup-web.html` 是已淘汰的兩段式查找原型，只保留歷史對照。<br>
 When opening offline, keep `vendor/xlsx.full.min.js` in its current relative location. `vlookup-web.html` is a deprecated two-stage lookup prototype retained only for historical reference.
 
-## v3.4.1 核心行為 / v3.4.1 core behavior
+## v3.4.2 核心行為 / v3.4.2 core behavior
 
 - 在任何計算前，0028 的母料或子料若以 `MB` 開頭，整列排除。/ Before any calculation, exclude every 0028 row whose mother or child starts with `MB`.
 - COOIS 依 `SO + Material + Segment` 加總全部 `Open Quantity`。/ Aggregate COOIS Open Quantity by `SO + Material + Segment`.
@@ -24,6 +24,7 @@ When opening offline, keep `vendor/xlsx.full.min.js` in its current relative loc
 - 排序為 cutting → Schedule 原始 SO 列序 → COOIS 母料首次列序。/ Ordering is cutting → original Schedule SO row → first COOIS mother row.
 - 輸出維持 19 欄；H 是本列前母料餘量，Q 是實際子料 MB52 領用量，N 維持完整需求。/ Output remains at 19 columns; H is the mother balance before the row, Q is actual child-MB52 usage, and N remains the full demand.
 - `合貼備料齊套 / Lamination Kit Ready` 只適用於有母料且有正數非 MH04 需求、並全部足量的群組；Y 判定使用內部原始數值以避免格式化小數四捨五入的邊界誤差。/ Lamination Kit Ready applies only to mother groups with positive non-MH04 demand that is fully supplied; Y decision uses internal raw numbers to avoid boundary errors from formatted-decimal rounding.
+- UI 語系：English、繁體中文、မြန်မာ（緬甸文）。/ UI languages: English, Traditional Chinese, and Myanmar.
 - 缺少或衝突的換算規則會停止整批。/ Missing or conflicting conversion rules stop the entire run.
 
 ## 快速使用 / Quick use
