@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RAW MAT 配發引擎 v3.4.2 操作手冊 / Operation Manual</title>
+  <title>RAW MAT 配發引擎 v3.4.3 操作手冊 / Operation Manual</title>
   <style>
     :root{--ink:#17212b;--muted:#5e6b76;--line:#d7e0e7;--brand:#0b6b61;--soft:#eef7f5;--warn:#fff7df;--danger:#fff0ef;--paper:#fff;--bg:#f3f6f8}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","Microsoft JhengHei",Arial,sans-serif;line-height:1.65}
@@ -20,7 +20,7 @@
 </head>
 <body>
 <header><div class="wrap">
-  <span class="tag">v3.4.2</span>
+  <span class="tag">v3.4.3</span>
   <h1>RAW MAT 庫存配發引擎操作手冊</h1>
   <p>RAW MAT Allocation Engine Operation Manual</p>
   <a href="allocation-web.html">返回主程式 / Back to application</a>
@@ -77,7 +77,7 @@
     <h2>4. 核心規則 / Core rules</h2>
     <ul>
       <li>COOIS 依 <code>SO + Material + Segment</code> 加總全部 Open Quantity。/ COOIS Open Quantity is aggregated by <code>SO + Material + Segment</code>.</li>
-      <li>F 是母料 MB52 原始總量；G 採同單位優先：若母料有任一子料與 OUn 同單位，只加總這些同單位子料的 J/P；若完全無同單位子料，則直接加總原 J/P 並以紅字提示。/ F is the original mother MB52 total; G uses a same-unit-first rule: if any child matches the mother OUn, sum only those same-unit children; if none match, sum raw J/P directly and show G in red.</li>
+      <li>F 是母料 MB52 原始總量；G 採同單位優先且每母料只取一次：有同單位子料時擇一算 J/P；若完全無同單位子料，任意擇一算 J/P（不換算）並以紅字提示。/ F is the original mother MB52 total; G uses same-unit-first and pick-once: pick one same-unit child when available; otherwise pick any child without conversion and show G in red.</li>
       <li>F+G 先覆蓋母料需求；不足才展開子料。/ F+G covers mother demand first; only the shortage expands to children.</li>
       <li>Rule A 維持取消；Rule D 已恢復。直接需求永遠保留，先用母料餘量覆蓋，未覆蓋量才扣子料 MB52。/ Rule A remains removed; Rule D is restored. Direct demand remains visible, uses the mother balance first, and only the uncovered amount consumes child MB52.</li>
       <li>多母共用子料時，依 cutting、Schedule 列序、COOIS 母料列序逐列扣同一池。/ Shared-child stock is consumed by cutting, Schedule row order, and COOIS mother order.</li>
@@ -104,7 +104,7 @@ R = stock available - Q</pre>
         <tr><td>2</td><td>so</td><td>銷售訂單 / sales order</td></tr>
         <tr><td>3–5</td><td>mother material · mother batch · mother unit</td><td>母料識別 / mother identity</td></tr>
         <tr><td>6</td><td>mother plant stock</td><td>母料 MB52 原始總量 F / original mother MB52 total F</td></tr>
-        <tr><td>7</td><td>mother stock outside</td><td>同單位優先的母料廠外量 G；無同單位 fallback 以紅字顯示 / same-unit-first mother outside G; fallback rows show red text</td></tr>
+        <tr><td>7</td><td>mother stock outside</td><td>同單位優先且每母料只取一次的廠外量 G；無同單位 fallback 以紅字顯示 / same-unit-first pick-once mother outside G; fallback rows show red text</td></tr>
         <tr><td>8</td><td>mother stock available before this row</td><td>母料需求與先前子料列扣除後、本列前母料餘量 / mother balance before this row</td></tr>
         <tr><td>9–11</td><td>child material · child batch · child unit</td><td>子料識別 / child identity</td></tr>
         <tr><td>12</td><td>child demand</td><td>母料不足展開 / expanded mother shortage</td></tr>
@@ -123,7 +123,7 @@ R = stock available - Q</pre>
     <h2>7. 常見問題 / Troubleshooting</h2>
     <ul>
       <li><strong>結果無法匯出：</strong>輸入或設定已變更，請重跑。/ <strong>Export disabled:</strong> inputs or settings changed; rerun.</li>
-      <li><strong>G 欄紅字：</strong>此母料在有效 0028 中找不到任何同單位子料，系統改用不換算的 J/P fallback。/ <strong>Red G column:</strong> this mother has no same-unit child in effective 0028, so the system used the no-conversion J/P fallback.</li>
+      <li><strong>G 欄紅字：</strong>此母料在有效 0028 中找不到任何同單位子料，系統改從任一子料擇一計算 J/P（不換算）。/ <strong>Red G column:</strong> this mother has no same-unit child in effective 0028, so the system picked any one child for raw J/P.</li>
       <li><strong>直接需求歸屬不明：</strong>同一 SO + Segment 的子料連到多個母料；畫面列出 SO／母／子與開量，確認後按母料 Open Qty 比例拆分，取消則停止。/ <strong>Ambiguous direct demand:</strong> the child links to multiple mothers in the same SO + Segment; the UI lists SO / mother / child and Open Qty; confirm splits by mother Open Qty, cancel stops.</li>
       <li><strong>child stock 沒遞減：</strong>這是正確行為；它顯示原始總量，請看 stock available 與 remaining。/ <strong>child stock does not decrease:</strong> expected; it is the original total. Use stock available and remaining for the running balance.</li>
       <li><strong>沒有 Y：</strong>零需求、純直接或 MH04-only 群組本來就不標 Y。/ <strong>No Y flag:</strong> zero-demand, direct-only, and MH04-only groups intentionally remain blank.</li>

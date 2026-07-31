@@ -302,6 +302,7 @@ def run_engine(
                 "oun": oun,
                 "bun": bun,
                 "suffix": suffix,
+                "source_order": source_order,
             }
         outside_pair[pair_key]["j"] += j
         outside_pair[pair_key]["p"] += gr_p
@@ -309,14 +310,26 @@ def run_engine(
     missing_rules: list[str] = []
     outside_by_mother: dict[tuple[str, str], float] = defaultdict(float)
     outside_fallback_by_mother: dict[tuple[str, str], bool] = {}
+    # Same-unit preferred; if none, any child. For each (mother, segment) pick ONE child only.
+    candidates_by_ms: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for (mother, child, seg), agg in outside_pair.items():
-        if mother_same_unit_children.get(mother) and agg["oun"] != agg["bun"]:
+        has_same_unit = bool(mother_same_unit_children.get(mother))
+        is_same_unit = bool(agg["oun"] and agg["bun"] and agg["oun"] == agg["bun"])
+        if has_same_unit and not is_same_unit:
             continue
-        outside_child = max(0.0, agg["j"] - agg["p"])
-        if mother_same_unit_children.get(mother):
-            outside_by_mother[(mother, seg)] += outside_child
-        else:
-            outside_by_mother[(mother, seg)] += outside_child
+        candidates_by_ms[(mother, seg)].append(
+            {
+                "child": child,
+                "jp": max(0.0, agg["j"] - agg["p"]),
+                "source_order": int(agg.get("source_order", 0) or 0),
+                "fallback": not has_same_unit,
+            }
+        )
+    for (mother, seg), candidates in candidates_by_ms.items():
+        candidates.sort(key=lambda item: (item["source_order"], item["child"]))
+        chosen = candidates[0]
+        outside_by_mother[(mother, seg)] = float(chosen["jp"])
+        if chosen["fallback"]:
             outside_fallback_by_mother[(mother, seg)] = True
 
     stock_mb52: dict[tuple[str, str], float] = defaultdict(float)
@@ -818,6 +831,25 @@ def test_outside_same_unit_priority() -> None:
     _assert(abs(_num(yd_row[11]) - 1.0936) < 1e-6, "remaining 1 M still expands to YD child demand")
 
 
+def test_outside_pick_once_same_unit() -> None:
+    """Two same-unit children each contribute jp=200; G must pick one => 200, not 400."""
+    result = run_engine(
+        schedule=[{"so": "SO1", "cutting": "2026-07-01"}],
+        coois=[{"so": "SO1", "material": "M1", "qty": 1, "segment": "FLT", "unit": "YD"}],
+        zrmm=[
+            {"mother": "M1", "child": "C_A", "gi_j": 260, "vendor_l": 200, "gr_p": 60, "storage": "1001", "batch": "FLT", "oun": "YD", "bun": "YD", "desc": ""},
+            {"mother": "M1", "child": "C_B", "gi_j": 260, "vendor_l": 252, "gr_p": 60, "storage": "1001", "batch": "FLT", "oun": "YD", "bun": "YD", "desc": ""},
+        ],
+        mb52=[
+            {"material": "C_A", "segment": "FLT", "storage": "1001", "stock": 10},
+            {"material": "C_B", "segment": "FLT", "storage": "1001", "stock": 10},
+        ],
+    )
+    _assert(result["ok"], str(result))
+    rows = result["rows"]
+    _assert(all(abs(_num(row[6]) - 200) < 1e-9 for row in rows), f"pick-once G expected 200, got {[row[6] for row in rows]}")
+
+
 def test_outside_fallback_without_conversion() -> None:
     result = run_engine(
         schedule=[{"so": "SO1", "cutting": "2026-07-01"}],
@@ -831,6 +863,27 @@ def test_outside_fallback_without_conversion() -> None:
     row = result["rows"][0]
     _assert(abs(_num(row[6]) - 1.0936) < 1e-6, f"fallback should not convert G, got {row[6]}")
     _assert(result["stats"].get("outside_fallback_mothers") == 1, "fallback mother count should be flagged")
+
+
+def test_outside_fallback_pick_once() -> None:
+    """No same-unit child: pick any one child once (no sum, no conversion), mark fallback."""
+    result = run_engine(
+        schedule=[{"so": "SO1", "cutting": "2026-07-01"}],
+        coois=[{"so": "SO1", "material": "M1", "qty": 1, "segment": "FLT", "unit": "M"}],
+        zrmm=[
+            {"mother": "M1", "child": "C_YD1", "gi_j": 100, "vendor_l": 1, "gr_p": 0, "storage": "1001", "batch": "FLT", "oun": "M", "bun": "YD", "desc": ""},
+            {"mother": "M1", "child": "C_YD2", "gi_j": 50, "vendor_l": 1, "gr_p": 0, "storage": "1001", "batch": "FLT", "oun": "M", "bun": "YD", "desc": ""},
+        ],
+        mb52=[
+            {"material": "C_YD1", "segment": "FLT", "storage": "1001", "stock": 10},
+            {"material": "C_YD2", "segment": "FLT", "storage": "1001", "stock": 10},
+        ],
+    )
+    _assert(result["ok"], str(result))
+    rows = result["rows"]
+    # First ZRMM source order is C_YD1 => G=100, not 150
+    _assert(all(abs(_num(row[6]) - 100) < 1e-9 for row in rows), f"fallback pick-once expected 100, got {[row[6] for row in rows]}")
+    _assert(result["stats"].get("outside_fallback_mothers") == 1, "fallback should be flagged")
 
 
 def test_coois_aggregation_and_source_order() -> None:
@@ -1425,13 +1478,16 @@ def main() -> int:
         test_rule_d_child_order_and_cross_so_pool,
         test_rule_d_unit_conversion,
         test_outside_same_unit_priority,
+        test_outside_pick_once_same_unit,
         test_outside_fallback_without_conversion,
+        test_outside_fallback_pick_once,
         test_coois_aggregation_and_source_order,
         test_same_so_mother_coois_order,
         test_ambiguous_direct_demand_stops,
         test_ambiguous_direct_demand_split_on_confirm,
         test_missing_conversion_stops,
         test_y_semantics,
+        test_y_rounding_precision,
         test_sht_220x110_to_yd,
     ]
     failed = 0

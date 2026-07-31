@@ -1,12 +1,12 @@
-# 07 — RAW MAT 庫存配發引擎規格 v3.4.2 / RAW MAT Allocation Engine Specification v3.4.2
+# 07 — RAW MAT 庫存配發引擎規格 v3.4.3 / RAW MAT Allocation Engine Specification v3.4.3
 
-**版本 / Version:** 3.4.2<br>
+**版本 / Version:** 3.4.3<br>
 **狀態 / Status:** 已確認（含歸屬不明確認後比例拆分、廠外 G 同單位優先、緬甸語 UI 復原，2026-07-30）/ Confirmed (includes ambiguous confirm + Open Qty split, same-unit-first outside G, and Myanmar UI restore, 2026-07-30)<br>
 **主程式 / Application:** `allocation-web.html`<br>
 **驗證器 / Verifier:** `.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py`
 
-本文件是 v3.4.2 的公開行為契約。欄位以英文表頭解析，不以 Excel 欄位字母寫死。程式完全在本機瀏覽器執行；真實業務檔案不得提交 Git 或跨 Agent 傳送。<br>
-This document is the public behavior contract for v3.4.2. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
+本文件是 v3.4.3 的公開行為契約。欄位以英文表頭解析，不以 Excel 欄位字母寫死。程式完全在本機瀏覽器執行；真實業務檔案不得提交 Git 或跨 Agent 傳送。<br>
+This document is the public behavior contract for v3.4.3. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
 
 ## 1. 輸入與欄位契約 / Inputs and column contract
 
@@ -74,14 +74,16 @@ For each effective mother-child pair, calculate raw outside stock from the child
 outsideChild(pair) = max(0, SUM(J) - SUM(P))
 ```
 
-只有同列 `J != 0` 且 `Stock of Vendor != 0` 的資料納入該 pair。G 採**同單位優先**：若某母料在有效 0028 中存在任何 `OUn == BUn` 的子料，G 只加總這些同單位子料的 `max(0, ΣJ − ΣP)`；**不使用換算率**。若整個母料完全找不到同單位子料，則 fallback 到原本的 J/P 聚合，但仍**不除換算率**；該母料在輸出欄 G 需標紅提示。<br>
-Only rows where `J != 0` and `Stock of Vendor != 0` contribute to the pair. G uses a **same-unit-first** rule: if a mother has any child with `OUn == BUn` anywhere in effective 0028, G sums only those same-unit children using `max(0, ΣJ − ΣP)` and applies **no conversion ratio**. If the mother has no same-unit child at all, fall back to the original J/P aggregation, still **without dividing by a conversion ratio**; the mother’s G output must be highlighted red.
+只有同列 `J != 0` 且 `Stock of Vendor != 0` 的資料納入該 pair。G 採**同單位優先 + 每母料只取一次**：若某母料在有效 0028 中存在任何 `OUn == BUn` 的子料，只從這些同單位 pair 中**擇一**（依 0028 首次出現列序），取其 `max(0, ΣJ − ΣP)`；**不使用換算率、不加總多個子料**。若整個母料完全找不到同單位子料，則從全部 outside pair **擇一**做同樣計算（仍不換算），並將該母料輸出欄 G 標紅。<br>
+Only rows where `J != 0` and `Stock of Vendor != 0` contribute to the pair. G uses **same-unit-first + pick-once**: if a mother has any child with `OUn == BUn` anywhere in effective 0028, pick **one** same-unit pair (first 0028 source order) and use its `max(0, ΣJ − ΣP)` with **no conversion and no multi-child sum**. If the mother has no same-unit child at all, pick **one** outside pair the same way (still no conversion) and highlight G in red.
 
 ```text
 if existsSameUnitChild(mother):
-  G(mother, segment) = SUM(max(0, ΣJ - ΣP) for same-unit pairs only)
+  candidates = same-unit outside pairs for (mother, segment)
 else:
-  G(mother, segment) = SUM(max(0, ΣJ - ΣP) for all outside pairs)
+  candidates = all outside pairs for (mother, segment)   # fallback / red
+G(mother, segment) = max(0, ΣJ - ΣP) of ONE chosen candidate
+  (choice = earliest ZRMM source order, then child id)
 
 poolMother = F + G
 ```
@@ -130,7 +132,7 @@ Shared JSON format:
 ```json
 {
   "schemaVersion": 1,
-  "appVersion": "3.4.2",
+  "appVersion": "3.4.3",
   "conversionRules": [
     { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 }
   ],
@@ -259,6 +261,12 @@ python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py `
 
 ## 14. v3.4.1 → v3.4.2 差異 / Myanmar UI restore
 
-- 復原 UI 緬甸文語系（my）：語系選單、	ranslations.my、OUTPUT_HEADERS_MY（19 欄）。/ Restore Myanmar UI language (my): language select, 	ranslations.my, and 19-column OUTPUT_HEADERS_MY.
+- 復原 UI 緬甸文語系（`my`）：語系選單、`translations.my`、`OUTPUT_HEADERS_MY`（19 欄）。/ Restore Myanmar UI language (`my`): language select, `translations.my`, and 19-column `OUTPUT_HEADERS_MY`.
 - 補齊 v3.3／v3.4 新增文案（母料可用池 H tip、ambiguous confirm、換算設定匯出／匯入）。/ Add Myanmar strings for v3.3/v3.4 features (mother available tip H, ambiguous confirm, conversion config import/export).
-- APP_VERSION / conversion config ppVersion → 3.4.2。/ App and conversion config version → 3.4.2.
+- `APP_VERSION` / conversion config `appVersion` → `3.4.2`。/ App and conversion config version → `3.4.2`.
+
+## 15. v3.4.2 → v3.4.3 差異 / Outside G pick-once
+
+- 廠外 G 改為每個 `(母料, Segment)` 只取一筆子料：有同單位則從同單位候選擇一；無同單位則從全部候選擇一並標紅。/ Outside G now picks one child per `(mother, Segment)`: prefer one same-unit candidate; if none, pick any candidate and mark red.
+- 擇一順序：0028 首次出現列序，其次 child id。不加總多個子料、不換算。/ Selection order: first ZRMM source order, then child id. Do not sum multiple children; do not convert.
+- `APP_VERSION` / conversion config `appVersion` → `3.4.3`。/ App and conversion config version → `3.4.3`.

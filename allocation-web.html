@@ -1458,7 +1458,7 @@
   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
 
   <script>
-    const APP_VERSION = "3.4.2";
+    const APP_VERSION = "3.4.3";
     const CONVERSION_SCHEMA_VERSION = 1;
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
@@ -4074,25 +4074,33 @@
         };
       }
 
-      // Same-unit children define the normal mother-outside calculation. If a
-      // mother has no same-unit child anywhere in effective 0028, fall back to
-      // the legacy J/P aggregation without applying a conversion ratio.
+      // Outside G: prefer same-unit children; if none exist, any child (fallback/red).
+      // For each (mother, segment), pick ONE child only — never sum multiple children.
       const outsideByMother = new Map();
       const outsideFallbackByMother = new Map();
+      const outsideCandidatesByMotherSeg = new Map();
       for (const [key, agg] of outsidePair.entries()) {
         const [mother, child, seg] = key.split("\u0000");
-        const outsideChildUnit = Math.max(0, agg.j - agg.p);
         const hasSameUnitChild = (motherSameUnitChildren.get(mother) || new Set()).size > 0;
-        const useSameUnitOnly = hasSameUnitChild;
-        if (useSameUnitOnly && !(agg.oun && agg.bun && agg.oun === agg.bun)) {
-          continue;
-        }
-        let outsideMotherUnit = outsideChildUnit;
-        if (!useSameUnitOnly) {
-          outsideFallbackByMother.set(poolKey(mother, seg), true);
-        }
+        const isSameUnit = Boolean(agg.oun && agg.bun && agg.oun === agg.bun);
+        if (hasSameUnitChild && !isSameUnit) continue;
         const motherKey = poolKey(mother, seg);
-        outsideByMother.set(motherKey, (outsideByMother.get(motherKey) || 0) + outsideMotherUnit);
+        if (!outsideCandidatesByMotherSeg.has(motherKey)) outsideCandidatesByMotherSeg.set(motherKey, []);
+        outsideCandidatesByMotherSeg.get(motherKey).push({
+          child,
+          jp: Math.max(0, agg.j - agg.p),
+          sourceOrder: Number(agg.sourceOrder) || 0,
+          fallback: !hasSameUnitChild
+        });
+      }
+      for (const [motherKey, candidates] of outsideCandidatesByMotherSeg.entries()) {
+        candidates.sort((a, b) => {
+          if (a.sourceOrder !== b.sourceOrder) return a.sourceOrder - b.sourceOrder;
+          return String(a.child).localeCompare(String(b.child));
+        });
+        const chosen = candidates[0];
+        outsideByMother.set(motherKey, chosen.jp);
+        if (chosen.fallback) outsideFallbackByMother.set(motherKey, true);
       }
 
       const stockMb52 = new Map();

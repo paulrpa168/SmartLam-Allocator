@@ -5,7 +5,7 @@
 本專案是完全在本機瀏覽器執行的配發工具。它整合 Schedule、COOIS、ZRMM0028 與 MB52，依核准規則計算母料覆蓋、子料需求、可配發量及逐列剩餘庫存。<br>
 This project is a local browser-based allocation tool. It combines Schedule, COOIS, ZRMM0028, and MB52 to calculate mother coverage, child demand, provided quantity, and running stock under approved rules.
 
-**現行入口 / Current app:** `allocation-web.html` v3.4.2<br>
+**現行入口 / Current app:** `allocation-web.html` v3.4.3<br>
 **現行規格 / Current spec:** [`docs/07-allocation-v3-spec.md`](docs/07-allocation-v3-spec.md)<br>
 **操作手冊 / Manual:** [`allocation-manual.html`](allocation-manual.html)<br>
 **共用換算設定 / Shared conversion config:** [`config/conversion-rules.v1.json`](config/conversion-rules.v1.json)
@@ -13,12 +13,12 @@ This project is a local browser-based allocation tool. It combines Schedule, COO
 離線開啟時，請保留 `vendor/xlsx.full.min.js` 與主程式的相對位置。`vlookup-web.html` 是已淘汰的兩段式查找原型，只保留歷史對照。<br>
 When opening offline, keep `vendor/xlsx.full.min.js` in its current relative location. `vlookup-web.html` is a deprecated two-stage lookup prototype retained only for historical reference.
 
-## v3.4.2 核心行為 / v3.4.2 core behavior
+## v3.4.3 核心行為 / v3.4.3 core behavior
 
 - 在任何計算前，0028 的母料或子料若以 `MB` 開頭，整列排除。/ Before any calculation, exclude every 0028 row whose mother or child starts with `MB`.
 - COOIS 依 `SO + Material + Segment` 加總全部 `Open Quantity`。/ Aggregate COOIS Open Quantity by `SO + Material + Segment`.
 - 母料需求先由共用 F+G 池覆蓋；不足量才展開子料。/ Cover mother demand from the shared F+G pool; expand only the shortage to children.
-- 廠外 G 採同單位優先：若母料有任一同單位子料，只加總這些同單位子料的 J/P；若完全無同單位子料，改用原 J/P 聚合且不換算，並將 G 標紅。/ Outside G uses a same-unit-first rule: if a mother has any same-unit child, sum only those same-unit children; if none exist, use raw J/P aggregation without conversion and mark G in red.
+- 廠外 G 採同單位優先且每母料只取一次：有同單位子料時擇一算 J/P；若完全無同單位子料，任意擇一算 J/P（不換算）並將 G 標紅。/ Outside G uses same-unit-first and pick-once: if same-unit children exist, pick one for J/P; if none exist, pick any one without conversion and mark G in red.
 - Rule D 已恢復：直接子料需求永遠保留，先由母料需求扣除後的母料餘量覆蓋，未覆蓋量才由子料 MB52 配發。/ Rule D is restored: direct child demand remains visible, is first covered by the mother balance after mother demand, and only the uncovered amount uses child MB52.
 - 同一 SO＋Segment 直接子料可歸多母時，先列出衝突並確認；確認後依母料 Open Qty 比例拆分，取消則停止。/ When direct child demand could belong to multiple mothers in the same SO + Segment, list conflicts and confirm; confirm splits by mother Open Qty, cancel stops.
 - 排序為 cutting → Schedule 原始 SO 列序 → COOIS 母料首次列序。/ Ordering is cutting → original Schedule SO row → first COOIS mother row.
