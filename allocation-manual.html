@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RAW MAT 配發引擎 v3.4.3 操作手冊 / Operation Manual</title>
+  <title>RAW MAT 配發引擎 v3.4.4 操作手冊 / Operation Manual</title>
   <style>
     :root{--ink:#17212b;--muted:#5e6b76;--line:#d7e0e7;--brand:#0b6b61;--soft:#eef7f5;--warn:#fff7df;--danger:#fff0ef;--paper:#fff;--bg:#f3f6f8}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","Microsoft JhengHei",Arial,sans-serif;line-height:1.65}
@@ -20,7 +20,7 @@
 </head>
 <body>
 <header><div class="wrap">
-  <span class="tag">v3.4.3</span>
+  <span class="tag">v3.4.4</span>
   <h1>RAW MAT 庫存配發引擎操作手冊</h1>
   <p>RAW MAT Allocation Engine Operation Manual</p>
   <a href="allocation-web.html">返回主程式 / Back to application</a>
@@ -79,7 +79,7 @@
       <li>COOIS 依 <code>SO + Material + Segment</code> 加總全部 Open Quantity。/ COOIS Open Quantity is aggregated by <code>SO + Material + Segment</code>.</li>
       <li>F 是母料 MB52 原始總量；G 採同單位優先且每母料只取一次：有同單位子料時擇一算 J/P；若完全無同單位子料，任意擇一算 J/P（不換算）並以紅字提示。/ F is the original mother MB52 total; G uses same-unit-first and pick-once: pick one same-unit child when available; otherwise pick any child without conversion and show G in red.</li>
       <li>F+G 先覆蓋母料需求；不足才展開子料。/ F+G covers mother demand first; only the shortage expands to children.</li>
-      <li>Rule A 維持取消；Rule D 已恢復。直接需求永遠保留，先用母料餘量覆蓋，未覆蓋量才扣子料 MB52。/ Rule A remains removed; Rule D is restored. Direct demand remains visible, uses the mother balance first, and only the uncovered amount consumes child MB52.</li>
+      <li>Rule A 維持取消；直接需求採混合規則：L=0 且 M>0 時 Q=0、R=P−M、母池不抵 M；L>0 時 Rule D 仍蓋 N=L+M。/ Rule A remains removed; hybrid direct demand: when L=0 and M>0, Q=0, R=P−M, mother pool ignores M; when L>0 Rule D still covers N=L+M.</li>
       <li>多母共用子料時，依 cutting、Schedule 列序、COOIS 母料列序逐列扣同一池。/ Shared-child stock is consumed by cutting, Schedule row order, and COOIS mother order.</li>
       <li>直接子料若同時可歸入多個母料，先列出全部衝突關係並請確認；確認後依母料 Open Qty 比例拆分直接需求再繼續，取消則整批停止。/ Direct child demand that could belong to multiple mothers lists every conflict for confirmation; confirm splits by mother Open Qty, cancel stops the run.</li>
     </ul>
@@ -91,8 +91,8 @@ R = stock available - Q</pre>
 
   <section class="card">
     <h2>5. 合貼備料齊套 / Lamination Kit Ready</h2>
-    <p>只有具有母料、至少一筆非 MH04 正需求，且所有非 MH04 正需求都足量時，整個母料群組標 <code>Y</code>。零需求、純直接需求與僅 MH04 群組保持空白。MH04 仍會輸出與配發，但不參與判定。<br>Y 判定使用內部原始數值（同一輪計算的 fulfilled 與 demand_total），避免格式化小數造成的邊界誤差。</p>
-    <p class="en">A mother group is marked <code>Y</code> only when it has at least one positive non-MH04 demand and every positive non-MH04 demand is fully supplied. Zero-demand, direct-only, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the decision. <br>Y decision uses internal raw numbers from the same allocation pass (`fulfilled` vs `demand_total`) to avoid boundary errors from formatted decimals.</p>
+    <p>只有具有母料、至少一筆非 MH04 且 <code>L&gt;0</code>，且所有此類列皆 <code>母蓋L+Q ≥ L</code> 時，整個母料群組標 <code>Y</code>。零 L、純直接需求與僅 MH04 群組保持空白。MH04 仍會輸出，但不參與判定。<br>Y 判定使用內部原始數值（fulfilled_L 與 demand_L）。</p>
+    <p class="en">A mother group is marked <code>Y</code> only when it has at least one non-MH04 row with <code>L&gt;0</code> and every such row satisfies <code>motherCoverL+Q ≥ L</code>. Zero-L, direct-only, and MH04-only groups remain blank. MH04 rows are still exported but do not participate in the decision. <br>Y uses internal raw numbers (`fulfilled_L` vs `demand_L`).</p>
   </section>
 
   <section class="card">

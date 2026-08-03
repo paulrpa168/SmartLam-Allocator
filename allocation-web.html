@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   RAW MAT Allocation Engine
-  Version: 3.4.1
+  Version: 3.4.4
   Product direction: inventory allocation (supersedes two-stage VLOOKUP)
   Spec: docs/07-allocation-v3-spec.md
   UI: Mill Ops (default) / Soft Enterprise theme toggle + L2 one-step screens
@@ -245,13 +245,21 @@
       outline: none;
     }
 
-    #appVersionBadge {
+    #appVersionBadge,
+    #headerVersionBadge {
       font-family: var(--font-mono);
       font-size: 12px;
       font-weight: 600;
       color: var(--accent-dark);
       background: var(--brand-muted);
-      border-color: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--radius-pill);
+      padding: 4px 10px;
+      white-space: nowrap;
+    }
+
+    #headerVersionBadge {
+      align-self: center;
     }
 
     main {
@@ -601,6 +609,76 @@
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
+    }
+
+    .result-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 0 8px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 2px);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .result-toolbar .toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .result-toolbar .toolbar-meta {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .formula-panel {
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border: 1px solid #e6d59a;
+      border-radius: calc(var(--radius) + 2px);
+      background: #fff8dc;
+      box-shadow: var(--shadow);
+    }
+
+    .formula-panel[hidden] {
+      display: none !important;
+    }
+
+    .formula-panel h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .formula-panel .formula-hybrid {
+      margin: 0 0 10px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .formula-panel table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .formula-panel th,
+    .formula-panel td {
+      border: 1px solid #e0d2a0;
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .formula-panel th {
+      background: #f5e7b0;
+      white-space: nowrap;
     }
 
     .stat {
@@ -1173,6 +1251,7 @@
           <p class="brand-kicker" data-i18n="brandKicker">Allocation workbench</p>
           <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
         </div>
+        <span class="sample" id="headerVersionBadge" title="App version">v3.4.4</span>
       </div>
       <div class="top-actions">
         <a href="allocation-manual.html" class="manual-link" data-i18n="manualLink">Operation manual</a>
@@ -1368,7 +1447,7 @@
           </div>
           <div class="check-row">
             <label class="has-tip" data-i18n-tip="tipHideSoAllZero"><input id="hideSoAllZero" type="checkbox" checked> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
-            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox" checked> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
+            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox"> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
           </div>
         </div>
         <div class="result-band">
@@ -1403,6 +1482,31 @@
             </div>
             <b id="statShortage">0</b>
             <div class="tip-panel" id="tipPanelShortage" hidden></div>
+          </div>
+        </div>
+        <div class="result-toolbar" id="resultToolbar">
+          <div class="toolbar-actions">
+            <button type="button" id="exportXlsxTop" disabled data-i18n="exportExcel">Export Excel</button>
+            <button type="button" id="exportCsvTop" class="secondary" disabled data-i18n="exportCsv">Export CSV</button>
+            <button type="button" id="copyTableTop" class="secondary" disabled data-i18n="copyTable">Copy table</button>
+            <button type="button" id="toggleFormulaPanel" class="secondary" data-i18n="formulaToggle">Formula notes</button>
+          </div>
+          <div class="toolbar-meta" id="resultToolbarMeta" data-i18n="formulaToolbarHint">Formulas + export sit above the table</div>
+        </div>
+        <div class="formula-panel" id="formulaPanel">
+          <h3 data-i18n="formulaPanelTitle">Column formula notes (current rules)</h3>
+          <p class="formula-hybrid" id="formulaHybridSummary"></p>
+          <div class="thin-scroll" style="max-height:220px;overflow:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="formulaColLetter">Col</th>
+                  <th data-i18n="formulaColName">Name</th>
+                  <th data-i18n="formulaColRule">Formula</th>
+                </tr>
+              </thead>
+              <tbody id="formulaPanelBody"></tbody>
+            </table>
           </div>
         </div>
         <div class="message" id="resultMessage" data-i18n="resultEmpty">Run allocation to preview and export.</div>
@@ -1458,7 +1562,7 @@
   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">↑ Top</button>
 
   <script>
-    const APP_VERSION = "3.4.3";
+    const APP_VERSION = "3.4.4";
     const CONVERSION_SCHEMA_VERSION = 1;
     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
@@ -1854,6 +1958,34 @@
         exportCsv: "Export CSV",
         exportExcel: "Export Excel",
         copyTable: "Copy table",
+        formulaToggle: "Formula notes",
+        formulaToolbarHint: "Formulas + export above the table",
+        formulaPanelTitle: "Column formula notes (current rules)",
+        formulaColLetter: "Col",
+        formulaColName: "Name",
+        formulaColRule: "Formula",
+        formulaHybridSummary: "Hybrid M rule: when L=0 and M>0, mother pool does not cover M, Q=0, R=P−M. When L>0, keep current Rule D on N=L+M. Y checks L only.",
+        formulaNotes: {
+          A: "Schedule cutting date",
+          B: "Sales order",
+          C: "Mother material (ZRMM)",
+          D: "Mother segment/batch",
+          E: "Mother unit",
+          F: "Mother plant MB52 total (fixed)",
+          G: "Mother outside pick-once (fixed)",
+          H: "Mother pool before this child row; M does not reduce H when L=0",
+          I: "Child material",
+          J: "Child segment/batch",
+          K: "Child unit",
+          L: "Demand from mother expansion (qtyExpand × ratio)",
+          M: "Direct COOIS child open qty (always shown)",
+          N: "L + M",
+          O: "Child MB52 original total (fixed)",
+          P: "Child pool before this row",
+          Q: "Provided from child MB52; 0 when L=0 and M>0",
+          R: "P − Q; when L=0 also − M",
+          S: "Kit ready Y: non-MH04 rows with L>0 all have motherCoverL+Q ≥ L"
+        },
         loading: "Loading",
         importing: "Importing file",
         readingFile: "Reading file...",
@@ -1958,7 +2090,7 @@
         tipFilterCutting: "Keep rows whose cutting date is within this range (inclusive).",
         tipFilterMother: "Selected mothers appear as chips above (wrap to the right). Type a prefix and press Enter or pick a suggestion; click × to remove one.",
         tipHideSoAllZero: "Hide every row of an SO when that SO’s total demand is zero. Default on. Uncheck to include those SOs in preview/export.",
-        tipHideRowZero: "Hide individual rows whose demand qty is zero. Default on. Uncheck to include zero-demand rows in preview/export.",
+        tipHideRowZero: "Hide individual rows whose demand qty is zero. Default off. Check to hide zero-demand rows in preview/export.",
         tipColCutting: "Earliest cutting date from Schedule for this SO.",
         tipColSo: "Sales order number.",
         tipColMother: "Mother material (blank for direct-only demand).",
@@ -1966,18 +2098,18 @@
         tipColMotherUnit: "Mother unit (ZRMM OUn or COOIS unit).",
         tipColMotherStockMb52: "Mother plant stock (MB52 SUM, excl. 39*). With outside stock, covers COOIS mother Open Qty (R) before BOM expand; depleting by schedule order.",
         tipColMotherStockOutside: "Mother outside stock after each child pair is converted to the mother OUn, then summed. With plant stock, it covers mother R first.",
-        tipColMotherStockAvailable: "Mother F+G pool remaining after mother demand and immediately before this child row. It is already a calculated balance; do not add it to F or G.",
+        tipColMotherStockAvailable: "Mother F+G pool remaining after mother demand and immediately before this child row. When L=0 and only M remains, M does not consume this pool.",
         tipColChild: "Child material allocated against stock.",
         tipColChildBatch: "Child stock segment (FLT/MTF).",
         tipColChildUnit: "Child unit (ZRMM BUn or COOIS/MB52 unit).",
         tipColDemandFromMother: "Child demand from remaining mother R after F+G cover (qtyExpand × conversion).",
-        tipColDemandDirect: "Direct COOIS Open Quantity on this child. Always retained; Rule D first uses the remaining mother pool, and only the uncovered amount uses child MB52.",
+        tipColDemandDirect: "Direct COOIS Open Quantity on this child. Always shown. If L=0, M does not use mother pool or Q; it only reduces remaining stock R. If L>0, Rule D still covers N=L+M first.",
         tipColDemand: "child demand + demand direct.",
         tipColStockMb52: "Original child MB52 total for this material and segment. This display value does not decrease.",
-        tipColStockAvailable: "Child MB52 pool remaining before this row. Debited only by provided qty (Q).",
-        tipColProvided: "Actual quantity issued from child MB52 after Rule D uses the remaining mother pool. Fulfillment and kit readiness use mother coverage plus this quantity.",
-        tipColRemaining: "Allocatable pool remaining after this row.",
-        tipColY: "Lamination Kit Ready: a mother group has at least one positive non-MH04 demand and every positive non-MH04 demand is fully provided. Direct-only, zero-demand and MH04-only groups remain blank.",
+        tipColStockAvailable: "Child MB52 pool remaining before this row. Debited by Q, and also by M when L=0 (pure direct).",
+        tipColProvided: "Qty issued from child MB52 for outside supply. When L=0 and M>0, Q stays 0 (direct not issued to outside). When L>0, Q covers uncovered N after Rule D.",
+        tipColRemaining: "Pool after this row: P − Q, and when L=0 also minus M (R = P − Q − M).",
+        tipColY: "Lamination Kit Ready: same SO+mother+segment; at least one non-MH04 row with L>0, and every such row has motherCoverL+Q ≥ L. Pure-M / zero-L / MH04-only groups stay blank.",
         errorClose: "OK",
         errorPrecheckTitle: "Unit pre-check failed (COOIS unit vs ZRMM OUn)",
         errorConvTitle: "Missing conversion rules (mother unit vs child unit)",
@@ -2041,6 +2173,34 @@
         exportCsv: "匯出 CSV",
         exportExcel: "匯出 Excel",
         copyTable: "複製表格",
+        formulaToggle: "公式說明",
+        formulaToolbarHint: "公式說明與匯出在表格上方",
+        formulaPanelTitle: "欄位公式說明（現行規則）",
+        formulaColLetter: "代號",
+        formulaColName: "名稱",
+        formulaColRule: "公式",
+        formulaHybridSummary: "混合規則：L=0 且 M>0 時，母池不抵 M、Q=0、R=P−M；L>0 時維持現行 Rule D（蓋 N=L+M）。Y 只檢查 L。",
+        formulaNotes: {
+          A: "排程 cutting 生產日",
+          B: "銷售訂單 SO",
+          C: "母材料（ZRMM）",
+          D: "母材料 BATCH／Segment",
+          E: "母單位",
+          F: "廠內母材料庫存 MB52（固定）",
+          G: "廠外母材料庫存 pick-once（固定）",
+          H: "本列配發前母料可用池；L=0 時 M 不扣此池",
+          I: "子材料",
+          J: "子材料 BATCH／Segment",
+          K: "子單位",
+          L: "子材料需求＝母料不足展開（qtyExpand×換算）",
+          M: "子料直接需求（COOIS 直接 Open，永遠顯示）",
+          N: "需求合計＝L+M",
+          O: "子材料庫存 MB52 原始總量（固定）",
+          P: "可配發庫存（本列前）",
+          Q: "能提供數量；L=0 且 M>0 時為 0",
+          R: "扣減後剩餘＝P−Q；L=0 時再扣 M",
+          S: "合貼備料齊套 Y：非 MH04 且 L>0 的列皆 母蓋L+Q≥L"
+        },
         loading: "載入中",
         importing: "正在匯入檔案",
         readingFile: "正在讀取檔案…",
@@ -2144,7 +2304,7 @@
         tipFilterCutting: "只保留 cutting 日期在此區間（含起迄）的列。",
         tipFilterMother: "已選母料以標籤顯示在輸入框上方（往右換行）。輸入前綴後按 Enter 或點選建議；點 × 可移除單筆。",
         tipHideSoAllZero: "若某張 SO 的需求加總為 0，隱藏該 SO 的所有列（預設勾選）。取消勾選後，這些 SO 會出現在預覽／匯出。",
-        tipHideRowZero: "隱藏需求數量為 0 的單列（預設勾選）。取消勾選後，需求=0 的列會出現在預覽／匯出。",
+        tipHideRowZero: "隱藏需求數量為 0 的單列（預設不勾選）。勾選後，需求=0 的列會從預覽／匯出隱藏。",
         tipColCutting: "此 SO 在 Schedule 的最早 cutting 日期。",
         tipColSo: "銷售訂單號碼。",
         tipColMother: "母材料（僅直接需求時可空白）。",
@@ -2152,18 +2312,18 @@
         tipColMotherUnit: "母單位（ZRMM OUn 或 COOIS）。",
         tipColMotherStockMb52: "廠內母材料庫存（MB52 SUM，排除 39*）。與廠外先蓋 COOIS 母料 Open Qty（R），剩餘再 BOM 展開；依排程可耗盡。",
         tipColMotherStockOutside: "每個母子 pair 的廠外量先換算成母料 OUn，再加總；與廠內庫存合併後先覆蓋母料 R。",
-        tipColMotherStockAvailable: "母料需求扣除後、本列子料處理前的 F+G 共用池餘量；此欄已是運算後餘量，不得再與 F 或 G 相加。",
+        tipColMotherStockAvailable: "母料需求扣除後、本列子料處理前的 F+G 共用池餘量。當 L=0 僅剩 M 時，M 不消耗此母池。",
         tipColChild: "對庫存配發的子材料。",
         tipColChildBatch: "子料庫存區段（FLT/MTF）。",
         tipColChildUnit: "子單位（ZRMM BUn 或 COOIS/MB52）。",
         tipColDemandFromMother: "F+G 蓋完母料 R 後的剩餘展開需求（qtyExpand × 換算）。",
-        tipColDemandDirect: "此子料在 COOIS 的直接 Open Quantity；永遠保留；Rule D 先用母料餘量覆蓋，未覆蓋量才使用子料 MB52。",
+        tipColDemandDirect: "此子料在 COOIS 的直接 Open Quantity；永遠顯示。L=0 時 M 不進母池／Q，只扣 R；L>0 時 Rule D 仍先蓋 N=L+M。",
         tipColDemand: "子材料需求 + 直接需求合計。",
         tipColStockMb52: "此子料＋Segment 的原始 MB52 總量；顯示值固定，不隨配發遞減。",
-        tipColStockAvailable: "子料 MB52 剩餘池（本列前）。只被 Q「能提供數量」扣減。",
-        tipColProvided: "Rule D 先用母料餘量覆蓋後，實際從子料 MB52 領用的數量；短缺與齊套以「母料覆蓋量＋本欄」判斷。",
-        tipColRemaining: "本列扣減後可配發剩餘。",
-        tipColY: "合貼備料齊套：具有母料、至少一筆非 MH04 正需求，且所有非 MH04 正需求皆足量時標 Y；純直接、零需求及僅 MH04 群組留白。",
+        tipColStockAvailable: "子料 MB52 剩餘池（本列前）。被 Q 扣減；L=0 純直接時也會被 M 扣減。",
+        tipColProvided: "托外從子料 MB52 實領量。L=0 且 M>0 時 Q=0（直接需求不發外）；L>0 時為 Rule D 未蓋完的 N。",
+        tipColRemaining: "本列後剩餘：P−Q；L=0 時再扣 M（R=P−Q−M）。",
+        tipColY: "合貼備料齊套：同 SO+母材料+Segment；至少一筆非 MH04 且 L>0，且此類列皆 母蓋L+Q≥L 才標 Y。純 M／無 L／僅 MH04 留白。",
         errorClose: "確定",
         errorPrecheckTitle: "單位事前檢查失敗（COOIS 單位 vs ZRMM OUn）",
         errorConvTitle: "缺少換算規則（母單位 vs 子單位）",
@@ -2227,6 +2387,34 @@
         exportCsv: "CSV ထုတ်ယူရန်",
         exportExcel: "Excel ထုတ်ယူရန်",
         copyTable: "ဇယား ကူးယူရန်",
+        formulaToggle: "ဖော်မြူလာ မှတ်ချက်",
+        formulaToolbarHint: "ဖော်မြူလာနှင့် ထုတ်ယူမှုသည် ဇယားအပေါ်တွင်",
+        formulaPanelTitle: "ကော်လံ ဖော်မြူလာ မှတ်ချက်",
+        formulaColLetter: "ကော်လံ",
+        formulaColName: "အမည်",
+        formulaColRule: "ဖော်မြူလာ",
+        formulaHybridSummary: "Hybrid M: L=0 & M>0 → Q=0, R=P−M, mother pool ignores M. L>0 → current Rule D. Y checks L only.",
+        formulaNotes: {
+          A: "Cutting date",
+          B: "SO",
+          C: "Mother",
+          D: "Mother batch",
+          E: "Mother unit",
+          F: "Mother plant stock (fixed)",
+          G: "Mother outside (fixed)",
+          H: "Mother pool before row",
+          I: "Child",
+          J: "Child batch",
+          K: "Child unit",
+          L: "Demand from mother",
+          M: "Demand direct",
+          N: "L + M",
+          O: "Child stock (fixed)",
+          P: "Stock available",
+          Q: "Provided (0 if L=0 & M>0)",
+          R: "Remaining after row",
+          S: "Kit ready Y (L only)"
+        },
         loading: "ဖွင့်နေသည်",
         importing: "ဖိုင် တင်သွင်းနေသည်",
         readingFile: "ဖိုင် ဖတ်နေသည်...",
@@ -2567,6 +2755,14 @@
       exportCsv: document.getElementById("exportCsv"),
       exportXlsx: document.getElementById("exportXlsx"),
       copyTable: document.getElementById("copyTable"),
+      exportCsvTop: document.getElementById("exportCsvTop"),
+      exportXlsxTop: document.getElementById("exportXlsxTop"),
+      copyTableTop: document.getElementById("copyTableTop"),
+      toggleFormulaPanel: document.getElementById("toggleFormulaPanel"),
+      formulaPanel: document.getElementById("formulaPanel"),
+      formulaPanelBody: document.getElementById("formulaPanelBody"),
+      formulaHybridSummary: document.getElementById("formulaHybridSummary"),
+      resultToolbarMeta: document.getElementById("resultToolbarMeta"),
       filterSo: document.getElementById("filterSo"),
       soSuggest: document.getElementById("soSuggest"),
       filterCuttingFrom: document.getElementById("filterCuttingFrom"),
@@ -2683,6 +2879,7 @@
       refreshMappingTable();
       renderConversionTable();
       renderSizeConversionTable();
+      renderFormulaPanel();
       if (state.allResultRows.length) {
         state.resultHeaders = [...outputHeadersForLang(state.lang)];
         applyViewFilters();
@@ -3798,6 +3995,7 @@
       elements.exportCsv.disabled = true;
       elements.exportXlsx.disabled = true;
       elements.copyTable.disabled = true;
+      setExportButtonsEnabled(false);
       elements.resultMessage.textContent = t("resultEmpty");
       elements.resultMessage.className = "message";
 
@@ -3907,7 +4105,8 @@
     /**
      * Y flag: group by so+mother+segment; mother="" groups per child alone.
      * MH04* children are kept in output but ignored for kit completeness (配套).
-     * Satisfied when mother coverage + child MB52 provided quantity meets demand.
+     * v3.4.4: only L (demand from mother) participates — pure-M rows do not block or qualify Y.
+     * Satisfied when motherCoverL + provided qty meets L on every positive non-MH04 L row.
      */
     function applyGroupYFlag(rows, fulfilledByRow, demandByRow) {
       const groups = new Map();
@@ -3923,12 +4122,12 @@
       for (const indices of groups.values()) {
         const positiveNonMh04 = indices.filter(i =>
           !isMh04Child(rows[i][OUT.child]) &&
-          (Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demand])) > 1e-9
+          (Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demandFromMother])) > 1e-9
         );
         const qualifies = positiveNonMh04.length > 0 && positiveNonMh04.every(i => {
-          const demand = Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demand]);
+          const demandL = Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demandFromMother]);
           const fulfilled = Number(fulfilledByRow?.[i] || 0);
-          return fulfilled >= demand - 1e-9;
+          return fulfilled >= demandL - 1e-9;
         });
         for (const i of indices) rows[i][OUT.flagY] = qualifies ? "Y" : "";
       }
@@ -4307,6 +4506,7 @@
         // Rule D: within each mother, consume remaining mother stock by the
         // original ZRMM0028 child order. H is the mother-unit balance before
         // the current child row, after mother demand and prior child rows.
+        // v3.4.4 hybrid: when L==0 and M>0, do not cover M from mother pool.
         for (const context of motherContexts) {
           const motherKey = poolKey(context.mother, context.seg);
           let motherPool = Math.max(0, remainingCoverMother.get(motherKey) || 0);
@@ -4319,10 +4519,17 @@
               continue;
             }
             item.motherStockAvailable = motherPool;
-            const demandTotal = Math.max(0, item.demandFromMother + item.demandDirect);
-            const motherCoverChild = Math.min(demandTotal, motherPool * ratio);
+            const demandL = Math.max(0, item.demandFromMother);
+            const demandM = Math.max(0, item.demandDirect);
+            const demandTotal = demandL + demandM;
+            let motherCoverChild = 0;
+            if (demandL > 1e-9) {
+              // Still has outside expansion: cover N=L+M from mother residual (current Rule D).
+              motherCoverChild = Math.min(demandTotal, motherPool * ratio);
+              motherPool = Math.max(0, motherPool - motherCoverChild / ratio);
+            }
+            // L==0 && M>0: leave motherPool unchanged (M does not consume H).
             item.motherCoverChild = motherCoverChild;
-            motherPool = Math.max(0, motherPool - motherCoverChild / ratio);
           }
           remainingCoverMother.set(motherKey, motherPool);
         }
@@ -4368,11 +4575,14 @@
       const demandByRow = [];
       let shortage = 0;
       for (const item of expanded) {
-        const demandTotal = item.demandFromMother + item.demandDirect;
-        const motherCoverChild = item.mother
+        const demandL = Math.max(0, item.demandFromMother);
+        const demandM = Math.max(0, item.demandDirect);
+        const demandTotal = demandL + demandM;
+        const pureDirect = demandL <= 1e-9 && demandM > 1e-9;
+        const motherCoverChild = item.mother && !pureDirect
           ? Math.min(Math.max(0, demandTotal), Math.max(0, Number(item.motherCoverChild) || 0))
           : 0;
-        const childNeedNet = Math.max(0, demandTotal - motherCoverChild);
+        const childNeedNet = pureDirect ? 0 : Math.max(0, demandTotal - motherCoverChild);
         const key = poolKey(item.child, item.segment);
         const mb0 = stockMb52.get(key) || 0;
         const poolBefore = remainingPool.has(key) ? remainingPool.get(key) : Math.max(0, mb0);
@@ -4380,12 +4590,14 @@
         const motherMbNum = item.mother ? (stockMb52.get(motherKey) || 0) : 0;
         const motherOutNum = item.mother ? (outsideByMother.get(motherKey) || 0) : 0;
         const provide = Math.min(childNeedNet, Math.max(0, poolBefore));
-        const poolAfter = poolBefore - provide;
-        const fulfilled = motherCoverChild + provide;
-        remainingPool.set(key, poolAfter);
-        if (fulfilled < demandTotal - 1e-9) shortage += 1;
-        fulfilledByRow.push(fulfilled);
-        demandByRow.push(demandTotal);
+        const directStockDeduct = pureDirect ? demandM : 0;
+        const poolAfter = poolBefore - provide - directStockDeduct;
+        const fulfilledL = Math.min(demandL, motherCoverChild + provide);
+        remainingPool.set(key, Math.max(0, poolAfter));
+        if (!pureDirect && fulfilledL < demandL - 1e-9) shortage += 1;
+        // Y compares fulfilled against L only (demandByRow stores L).
+        fulfilledByRow.push(fulfilledL);
+        demandByRow.push(demandL);
         const outRow = [
           item.cutting,
           item.so,
@@ -4514,6 +4726,7 @@
       elements.exportCsv.disabled = state.resultRows.length === 0;
       elements.exportXlsx.disabled = state.resultRows.length === 0;
       elements.copyTable.disabled = state.resultRows.length === 0;
+      setExportButtonsEnabled(state.resultRows.length > 0);
       setMessage(elements.resultMessage, formatBuiltMessage(
         state.allResultRows.length,
         state.resultRows.length,
@@ -4598,6 +4811,7 @@
         elements.exportCsv.disabled = state.resultRows.length === 0;
         elements.exportXlsx.disabled = state.resultRows.length === 0;
         elements.copyTable.disabled = state.resultRows.length === 0;
+        setExportButtonsEnabled(state.resultRows.length > 0);
         setMessage(elements.resultMessage, formatBuiltMessage(
           result.rows.length,
           state.resultRows.length,
@@ -4659,6 +4873,50 @@
         .replace(/"/g, "&quot;");
     }
 
+    function setExportButtonsEnabled(enabled) {
+      const on = Boolean(enabled);
+      for (const key of ["exportCsv", "exportXlsx", "copyTable", "exportCsvTop", "exportXlsxTop", "copyTableTop"]) {
+        if (elements[key]) elements[key].disabled = !on;
+      }
+    }
+
+    function columnLetters19() {
+      return Array.from({ length: 19 }, (_, i) => String.fromCharCode(65 + i));
+    }
+
+    function formulaNoteRows() {
+      const letters = columnLetters19();
+      const headers = outputHeadersForLang(state.lang);
+      const notes = t("formulaNotes") || {};
+      return letters.map((letter, i) => ({
+        letter,
+        name: headers[i] || "",
+        rule: notes[letter] || ""
+      }));
+    }
+
+    function renderFormulaPanel() {
+      if (elements.formulaHybridSummary) {
+        elements.formulaHybridSummary.textContent = t("formulaHybridSummary");
+      }
+      if (!elements.formulaPanelBody) return;
+      const rows = formulaNoteRows();
+      elements.formulaPanelBody.innerHTML = rows.map(row =>
+        `<tr><td>${escapeHtml(row.letter)}</td><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.rule)}</td></tr>`
+      ).join("");
+    }
+
+    function exportPreambleMatrix() {
+      const letters = columnLetters19();
+      const headers = state.resultHeaders.length
+        ? state.resultHeaders
+        : outputHeadersForLang(state.lang);
+      const notes = t("formulaNotes") || {};
+      const formulaRow = letters.map(letter => notes[letter] || "");
+      const summaryRow = letters.map((_, i) => (i === 0 ? t("formulaHybridSummary") : ""));
+      return [summaryRow, letters, headers, formulaRow];
+    }
+
     function csvEscape(value) {
       let text = String(value ?? "");
       if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
@@ -4666,7 +4924,8 @@
     }
 
     function resultToCsv() {
-      return [state.resultHeaders, ...state.resultRows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+      const preamble = exportPreambleMatrix();
+      return [...preamble, ...state.resultRows].map(row => row.map(csvEscape).join(",")).join("\r\n");
     }
 
     function downloadCsv() {
@@ -4905,7 +5164,8 @@
       if (!state.resultRows.length) return;
       try {
 
-        const bytes = buildXlsxBytes(state.resultHeaders, state.resultRows);
+        const sheetRows = [...exportPreambleMatrix(), ...state.resultRows];
+        const bytes = buildXlsxBytes(sheetRows[0], sheetRows.slice(1));
         const blob = new Blob([bytes], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         });
@@ -4925,7 +5185,7 @@
 
     async function copyTable() {
       if (!state.resultRows.length) return;
-      const lines = [state.resultHeaders.join("\t")];
+      const lines = exportPreambleMatrix().map(row => row.join("\t"));
       for (const row of state.resultRows) lines.push(row.join("\t"));
       const text = lines.join("\n");
       try {
@@ -5021,6 +5281,18 @@
     elements.exportCsv.addEventListener("click", downloadCsv);
     elements.exportXlsx.addEventListener("click", downloadXlsx);
     elements.copyTable.addEventListener("click", copyTable);
+    if (elements.exportCsvTop) elements.exportCsvTop.addEventListener("click", downloadCsv);
+    if (elements.exportXlsxTop) elements.exportXlsxTop.addEventListener("click", downloadXlsx);
+    if (elements.copyTableTop) elements.copyTableTop.addEventListener("click", copyTable);
+    if (elements.toggleFormulaPanel && elements.formulaPanel) {
+      elements.toggleFormulaPanel.addEventListener("click", () => {
+        const open = elements.formulaPanel.hasAttribute("hidden");
+        if (open) elements.formulaPanel.removeAttribute("hidden");
+        else elements.formulaPanel.setAttribute("hidden", "");
+        elements.toggleFormulaPanel.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      elements.toggleFormulaPanel.setAttribute("aria-expanded", "true");
+    }
     elements.errorModalClose.addEventListener("click", hideErrorModal);
     if (elements.errorModalX) elements.errorModalX.addEventListener("click", hideErrorModal);
     bindPrefixSuggest(elements.filterSo, elements.soSuggest, "so");
@@ -5092,8 +5364,11 @@
     }
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
     applyTheme(savedTheme === "soft" ? "soft" : "mill");
+    const versionLabel = `v${APP_VERSION}`;
     const versionBadge = document.getElementById("appVersionBadge");
-    if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
+    if (versionBadge) versionBadge.textContent = versionLabel;
+    const headerVersionBadge = document.getElementById("headerVersionBadge");
+    if (headerVersionBadge) headerVersionBadge.textContent = versionLabel;
 
     elements.scheduleData.value = sampleSchedule;
     elements.cooisData.value = sampleCoois;

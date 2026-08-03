@@ -5,7 +5,7 @@
 本專案是完全在本機瀏覽器執行的配發工具。它整合 Schedule、COOIS、ZRMM0028 與 MB52，依核准規則計算母料覆蓋、子料需求、可配發量及逐列剩餘庫存。<br>
 This project is a local browser-based allocation tool. It combines Schedule, COOIS, ZRMM0028, and MB52 to calculate mother coverage, child demand, provided quantity, and running stock under approved rules.
 
-**現行入口 / Current app:** `allocation-web.html` v3.4.3<br>
+**現行入口 / Current app:** `allocation-web.html` v3.4.4<br>
 **現行規格 / Current spec:** [`docs/07-allocation-v3-spec.md`](docs/07-allocation-v3-spec.md)<br>
 **操作手冊 / Manual:** [`allocation-manual.html`](allocation-manual.html)<br>
 **共用換算設定 / Shared conversion config:** [`config/conversion-rules.v1.json`](config/conversion-rules.v1.json)
@@ -13,17 +13,17 @@ This project is a local browser-based allocation tool. It combines Schedule, COO
 離線開啟時，請保留 `vendor/xlsx.full.min.js` 與主程式的相對位置。`vlookup-web.html` 是已淘汰的兩段式查找原型，只保留歷史對照。<br>
 When opening offline, keep `vendor/xlsx.full.min.js` in its current relative location. `vlookup-web.html` is a deprecated two-stage lookup prototype retained only for historical reference.
 
-## v3.4.3 核心行為 / v3.4.3 core behavior
+## v3.4.4 核心行為 / v3.4.4 core behavior
 
 - 在任何計算前，0028 的母料或子料若以 `MB` 開頭，整列排除。/ Before any calculation, exclude every 0028 row whose mother or child starts with `MB`.
 - COOIS 依 `SO + Material + Segment` 加總全部 `Open Quantity`。/ Aggregate COOIS Open Quantity by `SO + Material + Segment`.
 - 母料需求先由共用 F+G 池覆蓋；不足量才展開子料。/ Cover mother demand from the shared F+G pool; expand only the shortage to children.
 - 廠外 G 採同單位優先且每母料只取一次：有同單位子料時擇一算 J/P；若完全無同單位子料，任意擇一算 J/P（不換算）並將 G 標紅。/ Outside G uses same-unit-first and pick-once: if same-unit children exist, pick one for J/P; if none exist, pick any one without conversion and mark G in red.
-- Rule D 已恢復：直接子料需求永遠保留，先由母料需求扣除後的母料餘量覆蓋，未覆蓋量才由子料 MB52 配發。/ Rule D is restored: direct child demand remains visible, is first covered by the mother balance after mother demand, and only the uncovered amount uses child MB52.
+- 直接需求混合規則（逐子料列）：`L=0` 且 `M>0` 時母池不抵 M、`Q=0`、`R=P−M`；`L>0` 時 Rule D 仍蓋 `N=L+M`。/ Hybrid direct demand (per child): when L=0 and M>0, mother pool ignores M, Q=0, R=P−M; when L>0 Rule D still covers N=L+M.
 - 同一 SO＋Segment 直接子料可歸多母時，先列出衝突並確認；確認後依母料 Open Qty 比例拆分，取消則停止。/ When direct child demand could belong to multiple mothers in the same SO + Segment, list conflicts and confirm; confirm splits by mother Open Qty, cancel stops.
 - 排序為 cutting → Schedule 原始 SO 列序 → COOIS 母料首次列序。/ Ordering is cutting → original Schedule SO row → first COOIS mother row.
-- 輸出維持 19 欄；H 是本列前母料餘量，Q 是實際子料 MB52 領用量，N 維持完整需求。/ Output remains at 19 columns; H is the mother balance before the row, Q is actual child-MB52 usage, and N remains the full demand.
-- `合貼備料齊套 / Lamination Kit Ready` 只適用於有母料且有正數非 MH04 需求、並全部足量的群組；Y 判定使用內部原始數值以避免格式化小數四捨五入的邊界誤差。/ Lamination Kit Ready applies only to mother groups with positive non-MH04 demand that is fully supplied; Y decision uses internal raw numbers to avoid boundary errors from formatted-decimal rounding.
+- 輸出維持 19 欄；結果區上方有公式說明與匯出按鈕；匯出檔頂部含公式列。/ Output remains at 19 columns; formula notes and export sit above the result table; exports include a formula preamble.
+- `合貼備料齊套 / Lamination Kit Ready` 只看非 MH04 且 `L>0` 是否全部足量。/ Lamination Kit Ready checks only non-MH04 rows with L>0 for full supply.
 - UI 語系：English、繁體中文、မြန်မာ（緬甸文）。/ UI languages: English, Traditional Chinese, and Myanmar.
 - 缺少或衝突的換算規則會停止整批。/ Missing or conflicting conversion rules stop the entire run.
 

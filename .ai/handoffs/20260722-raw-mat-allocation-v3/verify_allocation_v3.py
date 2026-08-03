@@ -526,6 +526,7 @@ def run_engine(
 
         # Rule D: use original ZRMM0028 child order. Store the mother-unit
         # balance before each row and consume it using the mother→child ratio.
+        # v3.4.4 hybrid: when L==0 and M>0, do not cover M from mother pool.
         if apply_rule_d:
             for mother, seg, child_map in mother_contexts:
                 mother_key = (mother, seg)
@@ -539,10 +540,14 @@ def run_engine(
                         missing_rules.append(f"Rule D conversion: {mother}->{child}")
                         continue
                     item["mother_stock_available"] = mother_pool
-                    demand_total = max(0.0, item["demand_from_mother"] + item["demand_direct"])
-                    mother_cover_child = min(demand_total, mother_pool * ratio)
+                    demand_l = max(0.0, item["demand_from_mother"])
+                    demand_m = max(0.0, item["demand_direct"])
+                    demand_total = demand_l + demand_m
+                    mother_cover_child = 0.0
+                    if demand_l > 1e-9:
+                        mother_cover_child = min(demand_total, mother_pool * ratio)
+                        mother_pool = max(0.0, mother_pool - mother_cover_child / ratio)
                     item["mother_cover_child"] = mother_cover_child
-                    mother_pool = max(0.0, mother_pool - mother_cover_child / ratio)
                 remaining_cover_mother[mother_key] = mother_pool
     if ambiguities and not confirm_ambiguous_split:
         detail = "; ".join(
@@ -577,26 +582,30 @@ def run_engine(
     remaining_pool = {key: max(0.0, value) for key, value in stock_mb52.items()}
     out_rows: list[list] = []
     fulfilled_by_row: list[float] = []
-    demand_total_by_row: list[float] = []
+    demand_l_by_row: list[float] = []
     shortage = 0
     for item in expanded:
-        demand_total = item["demand_from_mother"] + item["demand_direct"]
+        demand_l = max(0.0, item["demand_from_mother"])
+        demand_m = max(0.0, item["demand_direct"])
+        demand_total = demand_l + demand_m
+        pure_direct = demand_l <= 1e-9 and demand_m > 1e-9
         mother_cover_child = (
             min(max(0.0, demand_total), max(0.0, float(item.get("mother_cover_child", 0.0))))
-            if item["mother"]
+            if item["mother"] and not pure_direct
             else 0.0
         )
-        child_need_net = max(0.0, demand_total - mother_cover_child)
+        child_need_net = 0.0 if pure_direct else max(0.0, demand_total - mother_cover_child)
         child_key = (item["child"], item["segment"])
         child_stock = stock_mb52.get(child_key, 0.0)
         pool_before = remaining_pool.get(child_key, max(0.0, child_stock))
         provide = min(child_need_net, max(0.0, pool_before))
-        pool_after = pool_before - provide
-        fulfilled = mother_cover_child + provide
-        remaining_pool[child_key] = pool_after
-        fulfilled_by_row.append(fulfilled)
-        demand_total_by_row.append(demand_total)
-        if fulfilled < demand_total - 1e-9:
+        direct_stock_deduct = demand_m if pure_direct else 0.0
+        pool_after = pool_before - provide - direct_stock_deduct
+        fulfilled_l = min(demand_l, mother_cover_child + provide)
+        remaining_pool[child_key] = max(0.0, pool_after)
+        fulfilled_by_row.append(fulfilled_l)
+        demand_l_by_row.append(demand_l)
+        if not pure_direct and fulfilled_l < demand_l - 1e-9:
             shortage += 1
         mother_key = (item["mother"], item["segment"])
         mother_plant = stock_mb52.get(mother_key, 0.0) if item["mother"] else 0.0
@@ -633,10 +642,10 @@ def run_engine(
         positive_non_mh04 = [
             index
             for index in indices
-            if not is_mh04_child(out_rows[index][8]) and demand_total_by_row[index] > 1e-9
+            if not is_mh04_child(out_rows[index][8]) and demand_l_by_row[index] > 1e-9
         ]
         qualifies = bool(positive_non_mh04) and all(
-            fulfilled_by_row[index] >= demand_total_by_row[index] - 1e-9
+            fulfilled_by_row[index] >= demand_l_by_row[index] - 1e-9
             for index in positive_non_mh04
         )
         for index in indices:
@@ -710,13 +719,13 @@ def test_direct_demand_retained_when_mother_covered() -> None:
     _assert(result["ok"], str(result))
     row = result["rows"][0]
     _assert(abs(_num(row[7]) - 0.59) < 1e-9, "mother pool before this row")
-    _assert(_num(row[11]) == 0, "mother expansion K is zero")
-    _assert(_num(row[12]) == 0.02, "direct L must remain")
+    _assert(_num(row[11]) == 0, "mother expansion L is zero")
+    _assert(_num(row[12]) == 0.02, "direct M must remain")
     _assert(_num(row[13]) == 0.02, "total demand")
     _assert(_num(row[14]) == 43 and _num(row[15]) == 43, "child stock columns")
-    _assert(_num(row[16]) == 0, "Rule D must avoid child MB52 when mother residual covers demand")
-    _assert(_num(row[17]) == 43, "child MB52 must remain unchanged")
-    _assert(row[18] == "Y", "positive mother group fully supplied by Rule D")
+    _assert(_num(row[16]) == 0, "pure-M hybrid: Q stays 0")
+    _assert(abs(_num(row[17]) - 42.98) < 1e-9, "pure-M hybrid: R = P − M")
+    _assert(row[18] == "", "pure-M group (no L>0) does not mark Y")
 
 
 def test_rule_d_partial_and_zero_mother_balance() -> None:
@@ -735,16 +744,73 @@ def test_rule_d_partial_and_zero_mother_balance() -> None:
         _assert(result["ok"], str(result))
         return result["rows"][0]
 
+    # Mother open covered; L=0 M=2 → hybrid pure-M path
     partial = run(1.5)
-    _assert(abs(_num(partial[7]) - 0.5) < 1e-9, "partial case H")
-    _assert(abs(_num(partial[16]) - 1.5) < 1e-9, "Q is only uncovered child need")
-    _assert(abs(_num(partial[17]) - 8.5) < 1e-9, "R deducts Q only")
-    _assert(partial[18] == "Y", "mother cover plus Q fulfills the row")
+    _assert(abs(_num(partial[7]) - 0.5) < 1e-9, "partial case H (M does not consume pool)")
+    _assert(_num(partial[16]) == 0, "pure-M: Q=0")
+    _assert(abs(_num(partial[17]) - 8.0) < 1e-9, "pure-M: R=P−M=10−2")
+    _assert(partial[18] == "", "no L>0 → Y blank")
 
     empty = run(1.0)
     _assert(_num(empty[7]) == 0, "empty mother balance H")
-    _assert(_num(empty[16]) == 2, "no mother balance means full child demand from MB52")
-    _assert(_num(empty[17]) == 8, "child stock deducted by full Q")
+    _assert(_num(empty[16]) == 0, "pure-M still Q=0 when H=0")
+    _assert(_num(empty[17]) == 8, "R deducts M only")
+
+
+def test_hybrid_l_positive_keeps_rule_d_on_n() -> None:
+    """When L>0, mother pool still covers N=L+M and Q fills the rest (current Rule D)."""
+    result = run_engine(
+        schedule=[{"so": "SO1", "cutting": "2026-07-01"}],
+        coois=[
+            {"so": "SO1", "material": "M1", "qty": 5, "segment": "FLT", "unit": "M"},
+            {"so": "SO1", "material": "C1", "qty": 2, "segment": "FLT", "unit": "M"},
+        ],
+        zrmm=[
+            {"mother": "M1", "child": "C1", "gi_j": 0, "vendor_l": 1, "gr_p": 0, "storage": "1001", "batch": "FLT", "oun": "M", "bun": "M", "desc": ""},
+        ],
+        mb52=[
+            {"material": "M1", "segment": "FLT", "storage": "1001", "stock": 1},
+            {"material": "C1", "segment": "FLT", "storage": "1001", "stock": 20},
+        ],
+    )
+    _assert(result["ok"], str(result))
+    row = result["rows"][0]
+    # Mother pool 1 covers mother open 5 → L=4, M=2, N=6; H after mother=0
+    _assert(abs(_num(row[11]) - 4) < 1e-9, "L from mother shortage")
+    _assert(abs(_num(row[12]) - 2) < 1e-9, "M retained")
+    _assert(abs(_num(row[13]) - 6) < 1e-9, "N=L+M")
+    _assert(_num(row[7]) == 0, "H after mother open is 0")
+    _assert(abs(_num(row[16]) - 6) < 1e-9, "L>0: Q covers full N from child stock")
+    _assert(abs(_num(row[17]) - 14) < 1e-9, "R=P−Q only when L>0")
+    _assert(row[18] == "Y", "L fulfilled via Q marks Y")
+
+
+def test_hybrid_pure_m_does_not_burn_mother_pool_across_so() -> None:
+    result = run_engine(
+        schedule=[
+            {"so": "SO1", "cutting": "2026-07-01"},
+            {"so": "SO2", "cutting": "2026-07-02"},
+        ],
+        coois=[
+            {"so": "SO1", "material": "M1", "qty": 1, "segment": "FLT", "unit": "M"},
+            {"so": "SO1", "material": "C1", "qty": 5, "segment": "FLT", "unit": "M"},
+            {"so": "SO2", "material": "M1", "qty": 1, "segment": "FLT", "unit": "M"},
+            {"so": "SO2", "material": "C1", "qty": 1, "segment": "FLT", "unit": "M"},
+        ],
+        zrmm=[
+            {"mother": "M1", "child": "C1", "gi_j": 0, "vendor_l": 1, "gr_p": 0, "storage": "1001", "batch": "FLT", "oun": "M", "bun": "M", "desc": ""},
+        ],
+        mb52=[
+            {"material": "M1", "segment": "FLT", "storage": "1001", "stock": 10},
+            {"material": "C1", "segment": "FLT", "storage": "1001", "stock": 100},
+        ],
+    )
+    _assert(result["ok"], str(result))
+    by_so = {row[1]: row for row in result["rows"]}
+    _assert(_num(by_so["SO1"][11]) == 0 and _num(by_so["SO1"][16]) == 0, "SO1 pure-M")
+    _assert(abs(_num(by_so["SO1"][17]) - 95) < 1e-9, "SO1 R=100−5")
+    _assert(_num(by_so["SO2"][11]) == 0, "SO2 still L=0 because M did not burn mother pool")
+    _assert(_num(by_so["SO2"][16]) == 0 and abs(_num(by_so["SO2"][17]) - 94) < 1e-9, "SO2 pure-M R continues")
 
 
 def test_rule_d_child_order_and_cross_so_pool() -> None:
@@ -767,8 +833,10 @@ def test_rule_d_child_order_and_cross_so_pool() -> None:
     _assert(ordered["ok"], str(ordered))
     rows = ordered["rows"]
     _assert([row[8] for row in rows] == ["C2", "C1"], "ZRMM child source order")
-    _assert(_num(rows[0][7]) == 2 and _num(rows[1][7]) == 0, "H decreases row by row")
-    _assert(_num(rows[0][16]) == 0 and _num(rows[1][16]) == 1, "later child uses MB52")
+    # L=0 for both children; pure-M does not consume mother pool → H stays 2
+    _assert(_num(rows[0][7]) == 2 and _num(rows[1][7]) == 2, "H unchanged by pure-M rows")
+    _assert(_num(rows[0][16]) == 0 and _num(rows[1][16]) == 0, "pure-M: Q=0")
+    _assert(abs(_num(rows[0][17]) - 3) < 1e-9 and abs(_num(rows[1][17]) - 4) < 1e-9, "R=P−M per child")
 
     across = run_engine(
         schedule=[
@@ -788,8 +856,8 @@ def test_rule_d_child_order_and_cross_so_pool() -> None:
     )
     _assert(across["ok"], str(across))
     by_so = {row[1]: row for row in across["rows"]}
-    _assert(_num(by_so["SO1"][7]) == 2 and _num(by_so["SO1"][16]) == 0, "SO1 consumes mother pool")
-    _assert(_num(by_so["SO2"][7]) == 0 and _num(by_so["SO2"][16]) == 1, "SO2 sees prior Rule D deduction")
+    _assert(_num(by_so["SO1"][7]) == 2 and _num(by_so["SO1"][16]) == 0, "SO1 pure-M after mother cover")
+    _assert(_num(by_so["SO2"][7]) == 1 and _num(by_so["SO2"][16]) == 0, "SO2 mother pool only reduced by mother open")
 
 
 def test_rule_d_unit_conversion() -> None:
@@ -808,8 +876,9 @@ def test_rule_d_unit_conversion() -> None:
     row = result["rows"][0]
     _assert(abs(_num(row[6]) - 2.1872) < 1e-9, "fallback G keeps raw J/P without conversion")
     _assert(abs(_num(row[7]) - 1.1872) < 1e-9, "H uses the fallback mother pool after mother demand")
-    _assert(abs(_num(row[16]) - 0.701678) < 1e-9, "Q is uncovered child YD after mother-cover conversion")
-    _assert(abs(_num(row[17]) - 9.298322) < 1e-9, "R deducts child-unit Q")
+    _assert(_num(row[11]) == 0, "L=0 after mother cover")
+    _assert(_num(row[16]) == 0, "pure-M hybrid: Q=0")
+    _assert(abs(_num(row[17]) - 8) < 1e-9, "R=P−M=10−2")
 
 def test_outside_same_unit_priority() -> None:
     result = run_engine(
@@ -1475,6 +1544,8 @@ def main() -> int:
         test_mb_filter_and_19_columns,
         test_direct_demand_retained_when_mother_covered,
         test_rule_d_partial_and_zero_mother_balance,
+        test_hybrid_l_positive_keeps_rule_d_on_n,
+        test_hybrid_pure_m_does_not_burn_mother_pool_across_so,
         test_rule_d_child_order_and_cross_so_pool,
         test_rule_d_unit_conversion,
         test_outside_same_unit_priority,

@@ -51,7 +51,7 @@
 ## 3. 單一事實來源
 
 - `README.md`：專案入口與狀態。
-- `docs/01-current-system-spec.md`：目前公開行為契約。
+- `docs/07-allocation-v3-spec.md`：目前配發引擎公開行為契約。
 - `docs/02-code-review-and-roadmap.md`：缺陷、風險與優先順序。
 - `docs/04-test-and-acceptance.md`：驗收案例與證據要求。
 - `.ai/handoffs/<task-id>/decisions.md`：已核准與待決事項。
@@ -62,7 +62,7 @@
 ## 3. Sources of truth
 
 - `README.md`: Project entry point and status.
-- `docs/01-current-system-spec.md`: Current public behavior contract.
+- `docs/07-allocation-v3-spec.md`: Current allocation-engine public behavior contract.
 - `docs/02-code-review-and-roadmap.md`: Findings, risks, and priorities.
 - `docs/04-test-and-acceptance.md`: Acceptance cases and evidence requirements.
 - `.ai/handoffs/<task-id>/decisions.md`: Approved and unresolved decisions.

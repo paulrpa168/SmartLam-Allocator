@@ -1,0 +1,1047 @@
+﻿diff --git a/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py b/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
+index 007f418..afb9289 100644
+--- a/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
++++ b/.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py
+@@ -526,6 +526,7 @@ def run_engine(
+ 
+         # Rule D: use original ZRMM0028 child order. Store the mother-unit
+         # balance before each row and consume it using the motherΓåÆchild ratio.
++        # v3.4.4 hybrid: when L==0 and M>0, do not cover M from mother pool.
+         if apply_rule_d:
+             for mother, seg, child_map in mother_contexts:
+                 mother_key = (mother, seg)
+@@ -539,10 +540,14 @@ def run_engine(
+                         missing_rules.append(f"Rule D conversion: {mother}->{child}")
+                         continue
+                     item["mother_stock_available"] = mother_pool
+-                    demand_total = max(0.0, item["demand_from_mother"] + item["demand_direct"])
+-                    mother_cover_child = min(demand_total, mother_pool * ratio)
++                    demand_l = max(0.0, item["demand_from_mother"])
++                    demand_m = max(0.0, item["demand_direct"])
++                    demand_total = demand_l + demand_m
++                    mother_cover_child = 0.0
++                    if demand_l > 1e-9:
++                        mother_cover_child = min(demand_total, mother_pool * ratio)
++                        mother_pool = max(0.0, mother_pool - mother_cover_child / ratio)
+                     item["mother_cover_child"] = mother_cover_child
+-                    mother_pool = max(0.0, mother_pool - mother_cover_child / ratio)
+                 remaining_cover_mother[mother_key] = mother_pool
+     if ambiguities and not confirm_ambiguous_split:
+         detail = "; ".join(
+@@ -577,26 +582,30 @@ def run_engine(
+     remaining_pool = {key: max(0.0, value) for key, value in stock_mb52.items()}
+     out_rows: list[list] = []
+     fulfilled_by_row: list[float] = []
+-    demand_total_by_row: list[float] = []
++    demand_l_by_row: list[float] = []
+     shortage = 0
+     for item in expanded:
+-        demand_total = item["demand_from_mother"] + item["demand_direct"]
++        demand_l = max(0.0, item["demand_from_mother"])
++        demand_m = max(0.0, item["demand_direct"])
++        demand_total = demand_l + demand_m
++        pure_direct = demand_l <= 1e-9 and demand_m > 1e-9
+         mother_cover_child = (
+             min(max(0.0, demand_total), max(0.0, float(item.get("mother_cover_child", 0.0))))
+-            if item["mother"]
++            if item["mother"] and not pure_direct
+             else 0.0
+         )
+-        child_need_net = max(0.0, demand_total - mother_cover_child)
++        child_need_net = 0.0 if pure_direct else max(0.0, demand_total - mother_cover_child)
+         child_key = (item["child"], item["segment"])
+         child_stock = stock_mb52.get(child_key, 0.0)
+         pool_before = remaining_pool.get(child_key, max(0.0, child_stock))
+         provide = min(child_need_net, max(0.0, pool_before))
+-        pool_after = pool_before - provide
+-        fulfilled = mother_cover_child + provide
+-        remaining_pool[child_key] = pool_after
+-        fulfilled_by_row.append(fulfilled)
+-        demand_total_by_row.append(demand_total)
+-        if fulfilled < demand_total - 1e-9:
++        direct_stock_deduct = demand_m if pure_direct else 0.0
++        pool_after = pool_before - provide - direct_stock_deduct
++        fulfilled_l = min(demand_l, mother_cover_child + provide)
++        remaining_pool[child_key] = max(0.0, pool_after)
++        fulfilled_by_row.append(fulfilled_l)
++        demand_l_by_row.append(demand_l)
++        if not pure_direct and fulfilled_l < demand_l - 1e-9:
+             shortage += 1
+         mother_key = (item["mother"], item["segment"])
+         mother_plant = stock_mb52.get(mother_key, 0.0) if item["mother"] else 0.0
+@@ -633,10 +642,10 @@ def run_engine(
+         positive_non_mh04 = [
+             index
+             for index in indices
+-            if not is_mh04_child(out_rows[index][8]) and demand_total_by_row[index] > 1e-9
++            if not is_mh04_child(out_rows[index][8]) and demand_l_by_row[index] > 1e-9
+         ]
+         qualifies = bool(positive_non_mh04) and all(
+-            fulfilled_by_row[index] >= demand_total_by_row[index] - 1e-9
++            fulfilled_by_row[index] >= demand_l_by_row[index] - 1e-9
+             for index in positive_non_mh04
+         )
+         for index in indices:
+@@ -710,13 +719,13 @@ def test_direct_demand_retained_when_mother_covered() -> None:
+     _assert(result["ok"], str(result))
+     row = result["rows"][0]
+     _assert(abs(_num(row[7]) - 0.59) < 1e-9, "mother pool before this row")
+-    _assert(_num(row[11]) == 0, "mother expansion K is zero")
+-    _assert(_num(row[12]) == 0.02, "direct L must remain")
++    _assert(_num(row[11]) == 0, "mother expansion L is zero")
++    _assert(_num(row[12]) == 0.02, "direct M must remain")
+     _assert(_num(row[13]) == 0.02, "total demand")
+     _assert(_num(row[14]) == 43 and _num(row[15]) == 43, "child stock columns")
+-    _assert(_num(row[16]) == 0, "Rule D must avoid child MB52 when mother residual covers demand")
+-    _assert(_num(row[17]) == 43, "child MB52 must remain unchanged")
+-    _assert(row[18] == "Y", "positive mother group fully supplied by Rule D")
++    _assert(_num(row[16]) == 0, "pure-M hybrid: Q stays 0")
++    _assert(abs(_num(row[17]) - 42.98) < 1e-9, "pure-M hybrid: R = P ΓêÆ M")
++    _assert(row[18] == "", "pure-M group (no L>0) does not mark Y")
+ 
+ 
+ def test_rule_d_partial_and_zero_mother_balance() -> None:
+@@ -735,16 +744,73 @@ def test_rule_d_partial_and_zero_mother_balance() -> None:
+         _assert(result["ok"], str(result))
+         return result["rows"][0]
+ 
++    # Mother open covered; L=0 M=2 ΓåÆ hybrid pure-M path
+     partial = run(1.5)
+-    _assert(abs(_num(partial[7]) - 0.5) < 1e-9, "partial case H")
+-    _assert(abs(_num(partial[16]) - 1.5) < 1e-9, "Q is only uncovered child need")
+-    _assert(abs(_num(partial[17]) - 8.5) < 1e-9, "R deducts Q only")
+-    _assert(partial[18] == "Y", "mother cover plus Q fulfills the row")
++    _assert(abs(_num(partial[7]) - 0.5) < 1e-9, "partial case H (M does not consume pool)")
++    _assert(_num(partial[16]) == 0, "pure-M: Q=0")
++    _assert(abs(_num(partial[17]) - 8.0) < 1e-9, "pure-M: R=PΓêÆM=10ΓêÆ2")
++    _assert(partial[18] == "", "no L>0 ΓåÆ Y blank")
+ 
+     empty = run(1.0)
+     _assert(_num(empty[7]) == 0, "empty mother balance H")
+-    _assert(_num(empty[16]) == 2, "no mother balance means full child demand from MB52")
+-    _assert(_num(empty[17]) == 8, "child stock deducted by full Q")
++    _assert(_num(empty[16]) == 0, "pure-M still Q=0 when H=0")
++    _assert(_num(empty[17]) == 8, "R deducts M only")
++
++
++def test_hybrid_l_positive_keeps_rule_d_on_n() -> None:
++    """When L>0, mother pool still covers N=L+M and Q fills the rest (current Rule D)."""
++    result = run_engine(
++        schedule=[{"so": "SO1", "cutting": "2026-07-01"}],
++        coois=[
++            {"so": "SO1", "material": "M1", "qty": 5, "segment": "FLT", "unit": "M"},
++            {"so": "SO1", "material": "C1", "qty": 2, "segment": "FLT", "unit": "M"},
++        ],
++        zrmm=[
++            {"mother": "M1", "child": "C1", "gi_j": 0, "vendor_l": 1, "gr_p": 0, "storage": "1001", "batch": "FLT", "oun": "M", "bun": "M", "desc": ""},
++        ],
++        mb52=[
++            {"material": "M1", "segment": "FLT", "storage": "1001", "stock": 1},
++            {"material": "C1", "segment": "FLT", "storage": "1001", "stock": 20},
++        ],
++    )
++    _assert(result["ok"], str(result))
++    row = result["rows"][0]
++    # Mother pool 1 covers mother open 5 ΓåÆ L=4, M=2, N=6; H after mother=0
++    _assert(abs(_num(row[11]) - 4) < 1e-9, "L from mother shortage")
++    _assert(abs(_num(row[12]) - 2) < 1e-9, "M retained")
++    _assert(abs(_num(row[13]) - 6) < 1e-9, "N=L+M")
++    _assert(_num(row[7]) == 0, "H after mother open is 0")
++    _assert(abs(_num(row[16]) - 6) < 1e-9, "L>0: Q covers full N from child stock")
++    _assert(abs(_num(row[17]) - 14) < 1e-9, "R=PΓêÆQ only when L>0")
++    _assert(row[18] == "Y", "L fulfilled via Q marks Y")
++
++
++def test_hybrid_pure_m_does_not_burn_mother_pool_across_so() -> None:
++    result = run_engine(
++        schedule=[
++            {"so": "SO1", "cutting": "2026-07-01"},
++            {"so": "SO2", "cutting": "2026-07-02"},
++        ],
++        coois=[
++            {"so": "SO1", "material": "M1", "qty": 1, "segment": "FLT", "unit": "M"},
++            {"so": "SO1", "material": "C1", "qty": 5, "segment": "FLT", "unit": "M"},
++            {"so": "SO2", "material": "M1", "qty": 1, "segment": "FLT", "unit": "M"},
++            {"so": "SO2", "material": "C1", "qty": 1, "segment": "FLT", "unit": "M"},
++        ],
++        zrmm=[
++            {"mother": "M1", "child": "C1", "gi_j": 0, "vendor_l": 1, "gr_p": 0, "storage": "1001", "batch": "FLT", "oun": "M", "bun": "M", "desc": ""},
++        ],
++        mb52=[
++            {"material": "M1", "segment": "FLT", "storage": "1001", "stock": 10},
++            {"material": "C1", "segment": "FLT", "storage": "1001", "stock": 100},
++        ],
++    )
++    _assert(result["ok"], str(result))
++    by_so = {row[1]: row for row in result["rows"]}
++    _assert(_num(by_so["SO1"][11]) == 0 and _num(by_so["SO1"][16]) == 0, "SO1 pure-M")
++    _assert(abs(_num(by_so["SO1"][17]) - 95) < 1e-9, "SO1 R=100ΓêÆ5")
++    _assert(_num(by_so["SO2"][11]) == 0, "SO2 still L=0 because M did not burn mother pool")
++    _assert(_num(by_so["SO2"][16]) == 0 and abs(_num(by_so["SO2"][17]) - 94) < 1e-9, "SO2 pure-M R continues")
+ 
+ 
+ def test_rule_d_child_order_and_cross_so_pool() -> None:
+@@ -767,8 +833,10 @@ def test_rule_d_child_order_and_cross_so_pool() -> None:
+     _assert(ordered["ok"], str(ordered))
+     rows = ordered["rows"]
+     _assert([row[8] for row in rows] == ["C2", "C1"], "ZRMM child source order")
+-    _assert(_num(rows[0][7]) == 2 and _num(rows[1][7]) == 0, "H decreases row by row")
+-    _assert(_num(rows[0][16]) == 0 and _num(rows[1][16]) == 1, "later child uses MB52")
++    # L=0 for both children; pure-M does not consume mother pool ΓåÆ H stays 2
++    _assert(_num(rows[0][7]) == 2 and _num(rows[1][7]) == 2, "H unchanged by pure-M rows")
++    _assert(_num(rows[0][16]) == 0 and _num(rows[1][16]) == 0, "pure-M: Q=0")
++    _assert(abs(_num(rows[0][17]) - 3) < 1e-9 and abs(_num(rows[1][17]) - 4) < 1e-9, "R=PΓêÆM per child")
+ 
+     across = run_engine(
+         schedule=[
+@@ -788,8 +856,8 @@ def test_rule_d_child_order_and_cross_so_pool() -> None:
+     )
+     _assert(across["ok"], str(across))
+     by_so = {row[1]: row for row in across["rows"]}
+-    _assert(_num(by_so["SO1"][7]) == 2 and _num(by_so["SO1"][16]) == 0, "SO1 consumes mother pool")
+-    _assert(_num(by_so["SO2"][7]) == 0 and _num(by_so["SO2"][16]) == 1, "SO2 sees prior Rule D deduction")
++    _assert(_num(by_so["SO1"][7]) == 2 and _num(by_so["SO1"][16]) == 0, "SO1 pure-M after mother cover")
++    _assert(_num(by_so["SO2"][7]) == 1 and _num(by_so["SO2"][16]) == 0, "SO2 mother pool only reduced by mother open")
+ 
+ 
+ def test_rule_d_unit_conversion() -> None:
+@@ -808,8 +876,9 @@ def test_rule_d_unit_conversion() -> None:
+     row = result["rows"][0]
+     _assert(abs(_num(row[6]) - 2.1872) < 1e-9, "fallback G keeps raw J/P without conversion")
+     _assert(abs(_num(row[7]) - 1.1872) < 1e-9, "H uses the fallback mother pool after mother demand")
+-    _assert(abs(_num(row[16]) - 0.701678) < 1e-9, "Q is uncovered child YD after mother-cover conversion")
+-    _assert(abs(_num(row[17]) - 9.298322) < 1e-9, "R deducts child-unit Q")
++    _assert(_num(row[11]) == 0, "L=0 after mother cover")
++    _assert(_num(row[16]) == 0, "pure-M hybrid: Q=0")
++    _assert(abs(_num(row[17]) - 8) < 1e-9, "R=PΓêÆM=10ΓêÆ2")
+ 
+ def test_outside_same_unit_priority() -> None:
+     result = run_engine(
+@@ -1475,6 +1544,8 @@ def main() -> int:
+         test_mb_filter_and_19_columns,
+         test_direct_demand_retained_when_mother_covered,
+         test_rule_d_partial_and_zero_mother_balance,
++        test_hybrid_l_positive_keeps_rule_d_on_n,
++        test_hybrid_pure_m_does_not_burn_mother_pool_across_so,
+         test_rule_d_child_order_and_cross_so_pool,
+         test_rule_d_unit_conversion,
+         test_outside_same_unit_priority,
+diff --git a/README.md b/README.md
+index 6896c3c..0e48e74 100644
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,7 @@
+ µ£¼σ░êµíêµÿ»σ«îσà¿σ£¿µ£¼µ⌐ƒτÇÅΦª╜σÖ¿σƒ╖ΦíîτÜäΘàìτÖ╝σ╖Ñσà╖πÇéσ«âµò┤σÉê ScheduleπÇüCOOISπÇüZRMM0028 Φêç MB52∩╝îΣ╛¥µá╕σçåΦªÅσëçΦ¿êτ«ùµ»ìµûÖΦªåΦôïπÇüσ¡ÉµûÖΘ£Çµ▒éπÇüσÅ»ΘàìτÖ╝ΘçÅσÅèΘÇÉσêùσë⌐Θñÿσ║½σ¡ÿπÇé<br>
+ This project is a local browser-based allocation tool. It combines Schedule, COOIS, ZRMM0028, and MB52 to calculate mother coverage, child demand, provided quantity, and running stock under approved rules.
+ 
+-**τÅ╛ΦíîσàÑσÅú / Current app:** `allocation-web.html` v3.4.3<br>
++**τÅ╛ΦíîσàÑσÅú / Current app:** `allocation-web.html` v3.4.4<br>
+ **τÅ╛ΦíîΦªÅµá╝ / Current spec:** [`docs/07-allocation-v3-spec.md`](docs/07-allocation-v3-spec.md)<br>
+ **µôìΣ╜£µëïσåè / Manual:** [`allocation-manual.html`](allocation-manual.html)<br>
+ **σà▒τö¿µÅ¢τ«ùΦ¿¡σ«Ü / Shared conversion config:** [`config/conversion-rules.v1.json`](config/conversion-rules.v1.json)
+@@ -13,17 +13,17 @@ This project is a local browser-based allocation tool. It combines Schedule, COO
+ Θ¢óτ╖ÜΘûïσòƒµÖé∩╝îΦ½ïΣ┐¥τòÖ `vendor/xlsx.full.min.js` ΦêçΣ╕╗τ¿ïσ╝ÅτÜäτ¢╕σ░ìΣ╜ìτ╜«πÇé`vlookup-web.html` µÿ»σ╖▓µ╖ÿµ▒░τÜäσà⌐µ«╡σ╝ÅµƒÑµë╛σÄƒσ₧ï∩╝îσÅ¬Σ┐¥τòÖµ¡╖σÅ▓σ░ìτàºπÇé<br>
+ When opening offline, keep `vendor/xlsx.full.min.js` in its current relative location. `vlookup-web.html` is a deprecated two-stage lookup prototype retained only for historical reference.
+ 
+-## v3.4.3 µá╕σ┐âΦíîτé║ / v3.4.3 core behavior
++## v3.4.4 µá╕σ┐âΦíîτé║ / v3.4.4 core behavior
+ 
+ - σ£¿Σ╗╗Σ╜òΦ¿êτ«ùσëì∩╝î0028 τÜäµ»ìµûÖµêûσ¡ÉµûÖΦïÑΣ╗Ñ `MB` ΘûïΘá¡∩╝îµò┤σêùµÄÆΘÖñπÇé/ Before any calculation, exclude every 0028 row whose mother or child starts with `MB`.
+ - COOIS Σ╛¥ `SO + Material + Segment` σèáτ╕╜σà¿Θâ¿ `Open Quantity`πÇé/ Aggregate COOIS Open Quantity by `SO + Material + Segment`.
+ - µ»ìµûÖΘ£Çµ▒éσàêτö▒σà▒τö¿ F+G µ▒áΦªåΦôï∩╝¢Σ╕ìΦ╢│ΘçÅµëìσ▒òΘûïσ¡ÉµûÖπÇé/ Cover mother demand from the shared F+G pool; expand only the shortage to children.
+ - σ╗áσñû G µÄíσÉîσû«Σ╜ìσä¬σàêΣ╕öµ»Åµ»ìµûÖσÅ¬σÅûΣ╕Çµ¼í∩╝Üµ£ëσÉîσû«Σ╜ìσ¡ÉµûÖµÖéµôçΣ╕Çτ«ù J/P∩╝¢ΦïÑσ«îσà¿τäíσÉîσû«Σ╜ìσ¡ÉµûÖ∩╝îΣ╗╗µäÅµôçΣ╕Çτ«ù J/P∩╝êΣ╕ìµÅ¢τ«ù∩╝ëΣ╕ªσ░ç G µ¿Öτ┤àπÇé/ Outside G uses same-unit-first and pick-once: if same-unit children exist, pick one for J/P; if none exist, pick any one without conversion and mark G in red.
+-- Rule D σ╖▓µüóσ╛⌐∩╝Üτ¢┤µÄÑσ¡ÉµûÖΘ£Çµ▒éµ░╕ΘüáΣ┐¥τòÖ∩╝îσàêτö▒µ»ìµûÖΘ£Çµ▒éµëúΘÖñσ╛îτÜäµ»ìµûÖΘñÿΘçÅΦªåΦôï∩╝îµ£¬ΦªåΦôïΘçÅµëìτö▒σ¡ÉµûÖ MB52 ΘàìτÖ╝πÇé/ Rule D is restored: direct child demand remains visible, is first covered by the mother balance after mother demand, and only the uncovered amount uses child MB52.
++- τ¢┤µÄÑΘ£Çµ▒éµ╖╖σÉêΦªÅσëç∩╝êΘÇÉσ¡ÉµûÖσêù∩╝ë∩╝Ü`L=0` Σ╕ö `M>0` µÖéµ»ìµ▒áΣ╕ìµè╡ MπÇü`Q=0`πÇü`R=PΓêÆM`∩╝¢`L>0` µÖé Rule D Σ╗ìΦôï `N=L+M`πÇé/ Hybrid direct demand (per child): when L=0 and M>0, mother pool ignores M, Q=0, R=PΓêÆM; when L>0 Rule D still covers N=L+M.
+ - σÉîΣ╕Ç SO∩╝ïSegment τ¢┤µÄÑσ¡ÉµûÖσÅ»µ¡╕σñÜµ»ìµÖé∩╝îσàêσêùσç║Φí¥τ¬üΣ╕ªτó║Φ¬ì∩╝¢τó║Φ¬ìσ╛îΣ╛¥µ»ìµûÖ Open Qty µ»öΣ╛ïµïåσêå∩╝îσÅûµ╢êσëçσü£µ¡óπÇé/ When direct child demand could belong to multiple mothers in the same SO + Segment, list conflicts and confirm; confirm splits by mother Open Qty, cancel stops.
+ - µÄÆσ║Åτé║ cutting ΓåÆ Schedule σÄƒσºï SO σêùσ║Å ΓåÆ COOIS µ»ìµûÖΘªûµ¼íσêùσ║ÅπÇé/ Ordering is cutting ΓåÆ original Schedule SO row ΓåÆ first COOIS mother row.
+-- Φ╝╕σç║τ╢¡µîü 19 µ¼ä∩╝¢H µÿ»µ£¼σêùσëìµ»ìµûÖΘñÿΘçÅ∩╝îQ µÿ»σ»ªΘÜ¢σ¡ÉµûÖ MB52 Θáÿτö¿ΘçÅ∩╝îN τ╢¡µîüσ«îµò┤Θ£Çµ▒éπÇé/ Output remains at 19 columns; H is the mother balance before the row, Q is actual child-MB52 usage, and N remains the full demand.
+-- `σÉêΦ▓╝σéÖµûÖΘ╜èσÑù / Lamination Kit Ready` σÅ¬Θü⌐τö¿µû╝µ£ëµ»ìµûÖΣ╕öµ£ëµ¡úµò╕Θ¥₧ MH04 Θ£Çµ▒éπÇüΣ╕ªσà¿Θâ¿Φ╢│ΘçÅτÜäτ╛ñτ╡ä∩╝¢Y σêñσ«ÜΣ╜┐τö¿σàºΘâ¿σÄƒσºïµò╕σÇ╝Σ╗ÑΘü┐σàìµá╝σ╝Åσîûσ░Åµò╕σ¢¢µì¿Σ║öσàÑτÜäΘéèτòîΦ¬ñσ╖«πÇé/ Lamination Kit Ready applies only to mother groups with positive non-MH04 demand that is fully supplied; Y decision uses internal raw numbers to avoid boundary errors from formatted-decimal rounding.
++- Φ╝╕σç║τ╢¡µîü 19 µ¼ä∩╝¢τ╡Éµ₧£σìÇΣ╕èµû╣µ£ëσà¼σ╝ÅΦ¬¬µÿÄΦêçσî»σç║µîëΘêò∩╝¢σî»σç║µ¬öΘáéΘâ¿σÉ½σà¼σ╝ÅσêùπÇé/ Output remains at 19 columns; formula notes and export sit above the result table; exports include a formula preamble.
++- `σÉêΦ▓╝σéÖµûÖΘ╜èσÑù / Lamination Kit Ready` σÅ¬τ£ïΘ¥₧ MH04 Σ╕ö `L>0` µÿ»σÉªσà¿Θâ¿Φ╢│ΘçÅπÇé/ Lamination Kit Ready checks only non-MH04 rows with L>0 for full supply.
+ - UI Φ¬₧τ│╗∩╝ÜEnglishπÇüτ╣üΘ½öΣ╕¡µûçπÇüßÇÖßÇ╝ßÇößÇ║ßÇÖßÇ¼∩╝êτ╖¼τö╕µûç∩╝ëπÇé/ UI languages: English, Traditional Chinese, and Myanmar.
+ - τ╝║σ░æµêûΦí¥τ¬üτÜäµÅ¢τ«ùΦªÅσëçµ£âσü£µ¡óµò┤µë╣πÇé/ Missing or conflicting conversion rules stop the entire run.
+ 
+diff --git a/allocation-manual.html b/allocation-manual.html
+index a9a9b72..85ea282 100644
+--- a/allocation-manual.html
++++ b/allocation-manual.html
+@@ -3,7 +3,7 @@
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+-  <title>RAW MAT ΘàìτÖ╝σ╝òµôÄ v3.4.3 µôìΣ╜£µëïσåè / Operation Manual</title>
++  <title>RAW MAT ΘàìτÖ╝σ╝òµôÄ v3.4.4 µôìΣ╜£µëïσåè / Operation Manual</title>
+   <style>
+     :root{--ink:#17212b;--muted:#5e6b76;--line:#d7e0e7;--brand:#0b6b61;--soft:#eef7f5;--warn:#fff7df;--danger:#fff0ef;--paper:#fff;--bg:#f3f6f8}
+     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","Microsoft JhengHei",Arial,sans-serif;line-height:1.65}
+@@ -20,7 +20,7 @@
+ </head>
+ <body>
+ <header><div class="wrap">
+-  <span class="tag">v3.4.3</span>
++  <span class="tag">v3.4.4</span>
+   <h1>RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄµôìΣ╜£µëïσåè</h1>
+   <p>RAW MAT Allocation Engine Operation Manual</p>
+   <a href="allocation-web.html">Φ┐öσ¢₧Σ╕╗τ¿ïσ╝Å / Back to application</a>
+@@ -79,7 +79,7 @@
+       <li>COOIS Σ╛¥ <code>SO + Material + Segment</code> σèáτ╕╜σà¿Θâ¿ Open QuantityπÇé/ COOIS Open Quantity is aggregated by <code>SO + Material + Segment</code>.</li>
+       <li>F µÿ»µ»ìµûÖ MB52 σÄƒσºïτ╕╜ΘçÅ∩╝¢G µÄíσÉîσû«Σ╜ìσä¬σàêΣ╕öµ»Åµ»ìµûÖσÅ¬σÅûΣ╕Çµ¼í∩╝Üµ£ëσÉîσû«Σ╜ìσ¡ÉµûÖµÖéµôçΣ╕Çτ«ù J/P∩╝¢ΦïÑσ«îσà¿τäíσÉîσû«Σ╜ìσ¡ÉµûÖ∩╝îΣ╗╗µäÅµôçΣ╕Çτ«ù J/P∩╝êΣ╕ìµÅ¢τ«ù∩╝ëΣ╕ªΣ╗Ñτ┤àσ¡ùµÅÉτñ║πÇé/ F is the original mother MB52 total; G uses same-unit-first and pick-once: pick one same-unit child when available; otherwise pick any child without conversion and show G in red.</li>
+       <li>F+G σàêΦªåΦôïµ»ìµûÖΘ£Çµ▒é∩╝¢Σ╕ìΦ╢│µëìσ▒òΘûïσ¡ÉµûÖπÇé/ F+G covers mother demand first; only the shortage expands to children.</li>
+-      <li>Rule A τ╢¡µîüσÅûµ╢ê∩╝¢Rule D σ╖▓µüóσ╛⌐πÇéτ¢┤µÄÑΘ£Çµ▒éµ░╕ΘüáΣ┐¥τòÖ∩╝îσàêτö¿µ»ìµûÖΘñÿΘçÅΦªåΦôï∩╝îµ£¬ΦªåΦôïΘçÅµëìµëúσ¡ÉµûÖ MB52πÇé/ Rule A remains removed; Rule D is restored. Direct demand remains visible, uses the mother balance first, and only the uncovered amount consumes child MB52.</li>
++      <li>Rule A τ╢¡µîüσÅûµ╢ê∩╝¢τ¢┤µÄÑΘ£Çµ▒éµÄíµ╖╖σÉêΦªÅσëç∩╝ÜL=0 Σ╕ö M>0 µÖé Q=0πÇüR=PΓêÆMπÇüµ»ìµ▒áΣ╕ìµè╡ M∩╝¢L>0 µÖé Rule D Σ╗ìΦôï N=L+MπÇé/ Rule A remains removed; hybrid direct demand: when L=0 and M>0, Q=0, R=PΓêÆM, mother pool ignores M; when L>0 Rule D still covers N=L+M.</li>
+       <li>σñÜµ»ìσà▒τö¿σ¡ÉµûÖµÖé∩╝îΣ╛¥ cuttingπÇüSchedule σêùσ║ÅπÇüCOOIS µ»ìµûÖσêùσ║ÅΘÇÉσêùµëúσÉîΣ╕Çµ▒áπÇé/ Shared-child stock is consumed by cutting, Schedule row order, and COOIS mother order.</li>
+       <li>τ¢┤µÄÑσ¡ÉµûÖΦïÑσÉîµÖéσÅ»µ¡╕σàÑσñÜσÇïµ»ìµûÖ∩╝îσàêσêùσç║σà¿Θâ¿Φí¥τ¬üΘù£Σ┐éΣ╕ªΦ½ïτó║Φ¬ì∩╝¢τó║Φ¬ìσ╛îΣ╛¥µ»ìµûÖ Open Qty µ»öΣ╛ïµïåσêåτ¢┤µÄÑΘ£Çµ▒éσåìτ╣╝τ║î∩╝îσÅûµ╢êσëçµò┤µë╣σü£µ¡óπÇé/ Direct child demand that could belong to multiple mothers lists every conflict for confirmation; confirm splits by mother Open Qty, cancel stops the run.</li>
+     </ul>
+@@ -91,8 +91,8 @@ R = stock available - Q</pre>
+ 
+   <section class="card">
+     <h2>5. σÉêΦ▓╝σéÖµûÖΘ╜èσÑù / Lamination Kit Ready</h2>
+-    <p>σÅ¬µ£ëσà╖µ£ëµ»ìµûÖπÇüΦç│σ░æΣ╕Çτ¡åΘ¥₧ MH04 µ¡úΘ£Çµ▒é∩╝îΣ╕öµëÇµ£ëΘ¥₧ MH04 µ¡úΘ£Çµ▒éΘâ╜Φ╢│ΘçÅµÖé∩╝îµò┤σÇïµ»ìµûÖτ╛ñτ╡äµ¿Ö <code>Y</code>πÇéΘ¢╢Θ£Çµ▒éπÇüτ┤öτ¢┤µÄÑΘ£Çµ▒éΦêçσâà MH04 τ╛ñτ╡äΣ┐¥µîüτ⌐║τÖ╜πÇéMH04 Σ╗ìµ£âΦ╝╕σç║ΦêçΘàìτÖ╝∩╝îΣ╜åΣ╕ìσÅâΦêçσêñσ«ÜπÇé<br>Y σêñσ«ÜΣ╜┐τö¿σàºΘâ¿σÄƒσºïµò╕σÇ╝∩╝êσÉîΣ╕ÇΦ╝¬Φ¿êτ«ùτÜä fulfilled Φêç demand_total∩╝ë∩╝îΘü┐σàìµá╝σ╝Åσîûσ░Åµò╕ΘÇáµêÉτÜäΘéèτòîΦ¬ñσ╖«πÇé</p>
+-    <p class="en">A mother group is marked <code>Y</code> only when it has at least one positive non-MH04 demand and every positive non-MH04 demand is fully supplied. Zero-demand, direct-only, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the decision. <br>Y decision uses internal raw numbers from the same allocation pass (`fulfilled` vs `demand_total`) to avoid boundary errors from formatted decimals.</p>
++    <p>σÅ¬µ£ëσà╖µ£ëµ»ìµûÖπÇüΦç│σ░æΣ╕Çτ¡åΘ¥₧ MH04 Σ╕ö <code>L&gt;0</code>∩╝îΣ╕öµëÇµ£ëµ¡ñΘí₧σêùτÜå <code>µ»ìΦôïL+Q ΓëÑ L</code> µÖé∩╝îµò┤σÇïµ»ìµûÖτ╛ñτ╡äµ¿Ö <code>Y</code>πÇéΘ¢╢ LπÇüτ┤öτ¢┤µÄÑΘ£Çµ▒éΦêçσâà MH04 τ╛ñτ╡äΣ┐¥µîüτ⌐║τÖ╜πÇéMH04 Σ╗ìµ£âΦ╝╕σç║∩╝îΣ╜åΣ╕ìσÅâΦêçσêñσ«ÜπÇé<br>Y σêñσ«ÜΣ╜┐τö¿σàºΘâ¿σÄƒσºïµò╕σÇ╝∩╝êfulfilled_L Φêç demand_L∩╝ëπÇé</p>
++    <p class="en">A mother group is marked <code>Y</code> only when it has at least one non-MH04 row with <code>L&gt;0</code> and every such row satisfies <code>motherCoverL+Q ΓëÑ L</code>. Zero-L, direct-only, and MH04-only groups remain blank. MH04 rows are still exported but do not participate in the decision. <br>Y uses internal raw numbers (`fulfilled_L` vs `demand_L`).</p>
+   </section>
+ 
+   <section class="card">
+diff --git a/allocation-web.html b/allocation-web.html
+index 41d17fd..0b148b3 100644
+--- a/allocation-web.html
++++ b/allocation-web.html
+@@ -1,7 +1,7 @@
+ <!doctype html>
+ <!--
+   RAW MAT Allocation Engine
+-  Version: 3.4.1
++  Version: 3.4.4
+   Product direction: inventory allocation (supersedes two-stage VLOOKUP)
+   Spec: docs/07-allocation-v3-spec.md
+   UI: Mill Ops (default) / Soft Enterprise theme toggle + L2 one-step screens
+@@ -245,13 +245,21 @@
+       outline: none;
+     }
+ 
+-    #appVersionBadge {
++    #appVersionBadge,
++    #headerVersionBadge {
+       font-family: var(--font-mono);
+       font-size: 12px;
+       font-weight: 600;
+       color: var(--accent-dark);
+       background: var(--brand-muted);
+-      border-color: transparent;
++      border: 1px solid transparent;
++      border-radius: var(--radius-pill);
++      padding: 4px 10px;
++      white-space: nowrap;
++    }
++
++    #headerVersionBadge {
++      align-self: center;
+     }
+ 
+     main {
+@@ -603,6 +611,76 @@
+       gap: 10px;
+     }
+ 
++    .result-toolbar {
++      display: flex;
++      flex-wrap: wrap;
++      align-items: center;
++      gap: 10px;
++      margin: 12px 0 8px;
++      padding: 12px 14px;
++      border: 1px solid var(--line);
++      border-radius: calc(var(--radius) + 2px);
++      background: var(--panel);
++      box-shadow: var(--shadow);
++    }
++
++    .result-toolbar .toolbar-actions {
++      display: flex;
++      flex-wrap: wrap;
++      gap: 8px;
++      align-items: center;
++    }
++
++    .result-toolbar .toolbar-meta {
++      margin-left: auto;
++      color: var(--muted);
++      font-size: 12px;
++      font-weight: 600;
++    }
++
++    .formula-panel {
++      margin: 0 0 12px;
++      padding: 12px 14px;
++      border: 1px solid #e6d59a;
++      border-radius: calc(var(--radius) + 2px);
++      background: #fff8dc;
++      box-shadow: var(--shadow);
++    }
++
++    .formula-panel[hidden] {
++      display: none !important;
++    }
++
++    .formula-panel h3 {
++      margin: 0 0 8px;
++      font-size: 14px;
++    }
++
++    .formula-panel .formula-hybrid {
++      margin: 0 0 10px;
++      font-size: 13px;
++      line-height: 1.45;
++    }
++
++    .formula-panel table {
++      width: 100%;
++      border-collapse: collapse;
++      font-size: 12px;
++    }
++
++    .formula-panel th,
++    .formula-panel td {
++      border: 1px solid #e0d2a0;
++      padding: 6px 8px;
++      text-align: left;
++      vertical-align: top;
++    }
++
++    .formula-panel th {
++      background: #f5e7b0;
++      white-space: nowrap;
++    }
++
+     .stat {
+       border: 1px solid var(--line);
+       border-radius: calc(var(--radius) + 2px);
+@@ -1173,6 +1251,7 @@
+           <p class="brand-kicker" data-i18n="brandKicker">Allocation workbench</p>
+           <h1 data-i18n="appTitle">RAW MAT Allocation Engine</h1>
+         </div>
++        <span class="sample" id="headerVersionBadge" title="App version">v3.4.4</span>
+       </div>
+       <div class="top-actions">
+         <a href="allocation-manual.html" class="manual-link" data-i18n="manualLink">Operation manual</a>
+@@ -1368,7 +1447,7 @@
+           </div>
+           <div class="check-row">
+             <label class="has-tip" data-i18n-tip="tipHideSoAllZero"><input id="hideSoAllZero" type="checkbox" checked> <span data-i18n="hideSoAllZero">Hide SO when all demand qty = 0</span></label>
+-            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox" checked> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
++            <label class="has-tip" data-i18n-tip="tipHideRowZero"><input id="hideRowZero" type="checkbox"> <span data-i18n="hideRowZero">Hide rows where demand qty = 0</span></label>
+           </div>
+         </div>
+         <div class="result-band">
+@@ -1405,6 +1484,31 @@
+             <div class="tip-panel" id="tipPanelShortage" hidden></div>
+           </div>
+         </div>
++        <div class="result-toolbar" id="resultToolbar">
++          <div class="toolbar-actions">
++            <button type="button" id="exportXlsxTop" disabled data-i18n="exportExcel">Export Excel</button>
++            <button type="button" id="exportCsvTop" class="secondary" disabled data-i18n="exportCsv">Export CSV</button>
++            <button type="button" id="copyTableTop" class="secondary" disabled data-i18n="copyTable">Copy table</button>
++            <button type="button" id="toggleFormulaPanel" class="secondary" data-i18n="formulaToggle">Formula notes</button>
++          </div>
++          <div class="toolbar-meta" id="resultToolbarMeta" data-i18n="formulaToolbarHint">Formulas + export sit above the table</div>
++        </div>
++        <div class="formula-panel" id="formulaPanel">
++          <h3 data-i18n="formulaPanelTitle">Column formula notes (current rules)</h3>
++          <p class="formula-hybrid" id="formulaHybridSummary"></p>
++          <div class="thin-scroll" style="max-height:220px;overflow:auto">
++            <table>
++              <thead>
++                <tr>
++                  <th data-i18n="formulaColLetter">Col</th>
++                  <th data-i18n="formulaColName">Name</th>
++                  <th data-i18n="formulaColRule">Formula</th>
++                </tr>
++              </thead>
++              <tbody id="formulaPanelBody"></tbody>
++            </table>
++          </div>
++        </div>
+         <div class="message" id="resultMessage" data-i18n="resultEmpty">Run allocation to preview and export.</div>
+ 
+         <div class="table-wrap thin-scroll">
+@@ -1458,7 +1562,7 @@
+   <button type="button" class="back-to-top secondary" id="backToTop" data-i18n="backToTop" aria-label="Back to top">Γåæ Top</button>
+ 
+   <script>
+-    const APP_VERSION = "3.4.3";
++    const APP_VERSION = "3.4.4";
+     const CONVERSION_SCHEMA_VERSION = 1;
+     const LANG_STORAGE_KEY = "rawmat.allocation.lang";
+     const THEME_STORAGE_KEY = "rawmat.allocation.theme";
+@@ -1854,6 +1958,34 @@
+         exportCsv: "Export CSV",
+         exportExcel: "Export Excel",
+         copyTable: "Copy table",
++        formulaToggle: "Formula notes",
++        formulaToolbarHint: "Formulas + export above the table",
++        formulaPanelTitle: "Column formula notes (current rules)",
++        formulaColLetter: "Col",
++        formulaColName: "Name",
++        formulaColRule: "Formula",
++        formulaHybridSummary: "Hybrid M rule: when L=0 and M>0, mother pool does not cover M, Q=0, R=PΓêÆM. When L>0, keep current Rule D on N=L+M. Y checks L only.",
++        formulaNotes: {
++          A: "Schedule cutting date",
++          B: "Sales order",
++          C: "Mother material (ZRMM)",
++          D: "Mother segment/batch",
++          E: "Mother unit",
++          F: "Mother plant MB52 total (fixed)",
++          G: "Mother outside pick-once (fixed)",
++          H: "Mother pool before this child row; M does not reduce H when L=0",
++          I: "Child material",
++          J: "Child segment/batch",
++          K: "Child unit",
++          L: "Demand from mother expansion (qtyExpand ├ù ratio)",
++          M: "Direct COOIS child open qty (always shown)",
++          N: "L + M",
++          O: "Child MB52 original total (fixed)",
++          P: "Child pool before this row",
++          Q: "Provided from child MB52; 0 when L=0 and M>0",
++          R: "P ΓêÆ Q; when L=0 also ΓêÆ M",
++          S: "Kit ready Y: non-MH04 rows with L>0 all have motherCoverL+Q ΓëÑ L"
++        },
+         loading: "Loading",
+         importing: "Importing file",
+         readingFile: "Reading file...",
+@@ -1958,7 +2090,7 @@
+         tipFilterCutting: "Keep rows whose cutting date is within this range (inclusive).",
+         tipFilterMother: "Selected mothers appear as chips above (wrap to the right). Type a prefix and press Enter or pick a suggestion; click ├ù to remove one.",
+         tipHideSoAllZero: "Hide every row of an SO when that SOΓÇÖs total demand is zero. Default on. Uncheck to include those SOs in preview/export.",
+-        tipHideRowZero: "Hide individual rows whose demand qty is zero. Default on. Uncheck to include zero-demand rows in preview/export.",
++        tipHideRowZero: "Hide individual rows whose demand qty is zero. Default off. Check to hide zero-demand rows in preview/export.",
+         tipColCutting: "Earliest cutting date from Schedule for this SO.",
+         tipColSo: "Sales order number.",
+         tipColMother: "Mother material (blank for direct-only demand).",
+@@ -1966,18 +2098,18 @@
+         tipColMotherUnit: "Mother unit (ZRMM OUn or COOIS unit).",
+         tipColMotherStockMb52: "Mother plant stock (MB52 SUM, excl. 39*). With outside stock, covers COOIS mother Open Qty (R) before BOM expand; depleting by schedule order.",
+         tipColMotherStockOutside: "Mother outside stock after each child pair is converted to the mother OUn, then summed. With plant stock, it covers mother R first.",
+-        tipColMotherStockAvailable: "Mother F+G pool remaining after mother demand and immediately before this child row. It is already a calculated balance; do not add it to F or G.",
++        tipColMotherStockAvailable: "Mother F+G pool remaining after mother demand and immediately before this child row. When L=0 and only M remains, M does not consume this pool.",
+         tipColChild: "Child material allocated against stock.",
+         tipColChildBatch: "Child stock segment (FLT/MTF).",
+         tipColChildUnit: "Child unit (ZRMM BUn or COOIS/MB52 unit).",
+         tipColDemandFromMother: "Child demand from remaining mother R after F+G cover (qtyExpand ├ù conversion).",
+-        tipColDemandDirect: "Direct COOIS Open Quantity on this child. Always retained; Rule D first uses the remaining mother pool, and only the uncovered amount uses child MB52.",
++        tipColDemandDirect: "Direct COOIS Open Quantity on this child. Always shown. If L=0, M does not use mother pool or Q; it only reduces remaining stock R. If L>0, Rule D still covers N=L+M first.",
+         tipColDemand: "child demand + demand direct.",
+         tipColStockMb52: "Original child MB52 total for this material and segment. This display value does not decrease.",
+-        tipColStockAvailable: "Child MB52 pool remaining before this row. Debited only by provided qty (Q).",
+-        tipColProvided: "Actual quantity issued from child MB52 after Rule D uses the remaining mother pool. Fulfillment and kit readiness use mother coverage plus this quantity.",
+-        tipColRemaining: "Allocatable pool remaining after this row.",
+-        tipColY: "Lamination Kit Ready: a mother group has at least one positive non-MH04 demand and every positive non-MH04 demand is fully provided. Direct-only, zero-demand and MH04-only groups remain blank.",
++        tipColStockAvailable: "Child MB52 pool remaining before this row. Debited by Q, and also by M when L=0 (pure direct).",
++        tipColProvided: "Qty issued from child MB52 for outside supply. When L=0 and M>0, Q stays 0 (direct not issued to outside). When L>0, Q covers uncovered N after Rule D.",
++        tipColRemaining: "Pool after this row: P ΓêÆ Q, and when L=0 also minus M (R = P ΓêÆ Q ΓêÆ M).",
++        tipColY: "Lamination Kit Ready: same SO+mother+segment; at least one non-MH04 row with L>0, and every such row has motherCoverL+Q ΓëÑ L. Pure-M / zero-L / MH04-only groups stay blank.",
+         errorClose: "OK",
+         errorPrecheckTitle: "Unit pre-check failed (COOIS unit vs ZRMM OUn)",
+         errorConvTitle: "Missing conversion rules (mother unit vs child unit)",
+@@ -2041,6 +2173,34 @@
+         exportCsv: "σî»σç║ CSV",
+         exportExcel: "σî»σç║ Excel",
+         copyTable: "ΦñçΦú╜Φí¿µá╝",
++        formulaToggle: "σà¼σ╝ÅΦ¬¬µÿÄ",
++        formulaToolbarHint: "σà¼σ╝ÅΦ¬¬µÿÄΦêçσî»σç║σ£¿Φí¿µá╝Σ╕èµû╣",
++        formulaPanelTitle: "µ¼äΣ╜ìσà¼σ╝ÅΦ¬¬µÿÄ∩╝êτÅ╛ΦíîΦªÅσëç∩╝ë",
++        formulaColLetter: "Σ╗úΦÖƒ",
++        formulaColName: "σÉìτ¿▒",
++        formulaColRule: "σà¼σ╝Å",
++        formulaHybridSummary: "µ╖╖σÉêΦªÅσëç∩╝ÜL=0 Σ╕ö M>0 µÖé∩╝îµ»ìµ▒áΣ╕ìµè╡ MπÇüQ=0πÇüR=PΓêÆM∩╝¢L>0 µÖéτ╢¡µîüτÅ╛Φíî Rule D∩╝êΦôï N=L+M∩╝ëπÇéY σÅ¬µ¬óµƒÑ LπÇé",
++        formulaNotes: {
++          A: "µÄÆτ¿ï cutting τöƒτöóµùÑ",
++          B: "Θè╖σö«Φ¿éσû« SO",
++          C: "µ»ìµ¥ÉµûÖ∩╝êZRMM∩╝ë",
++          D: "µ»ìµ¥ÉµûÖ BATCH∩╝ÅSegment",
++          E: "µ»ìσû«Σ╜ì",
++          F: "σ╗áσàºµ»ìµ¥ÉµûÖσ║½σ¡ÿ MB52∩╝êσ¢║σ«Ü∩╝ë",
++          G: "σ╗áσñûµ»ìµ¥ÉµûÖσ║½σ¡ÿ pick-once∩╝êσ¢║σ«Ü∩╝ë",
++          H: "µ£¼σêùΘàìτÖ╝σëìµ»ìµûÖσÅ»τö¿µ▒á∩╝¢L=0 µÖé M Σ╕ìµëúµ¡ñµ▒á",
++          I: "σ¡Éµ¥ÉµûÖ",
++          J: "σ¡Éµ¥ÉµûÖ BATCH∩╝ÅSegment",
++          K: "σ¡Éσû«Σ╜ì",
++          L: "σ¡Éµ¥ÉµûÖΘ£Çµ▒é∩╝¥µ»ìµûÖΣ╕ìΦ╢│σ▒òΘûï∩╝êqtyExpand├ùµÅ¢τ«ù∩╝ë",
++          M: "σ¡ÉµûÖτ¢┤µÄÑΘ£Çµ▒é∩╝êCOOIS τ¢┤µÄÑ Open∩╝îµ░╕ΘüáΘí»τñ║∩╝ë",
++          N: "Θ£Çµ▒éσÉêΦ¿ê∩╝¥L+M",
++          O: "σ¡Éµ¥ÉµûÖσ║½σ¡ÿ MB52 σÄƒσºïτ╕╜ΘçÅ∩╝êσ¢║σ«Ü∩╝ë",
++          P: "σÅ»ΘàìτÖ╝σ║½σ¡ÿ∩╝êµ£¼σêùσëì∩╝ë",
++          Q: "Φâ╜µÅÉΣ╛¢µò╕ΘçÅ∩╝¢L=0 Σ╕ö M>0 µÖéτé║ 0",
++          R: "µëúµ╕¢σ╛îσë⌐Θñÿ∩╝¥PΓêÆQ∩╝¢L=0 µÖéσåìµëú M",
++          S: "σÉêΦ▓╝σéÖµûÖΘ╜èσÑù Y∩╝ÜΘ¥₧ MH04 Σ╕ö L>0 τÜäσêùτÜå µ»ìΦôïL+QΓëÑL"
++        },
+         loading: "Φ╝ëσàÑΣ╕¡",
+         importing: "µ¡úσ£¿σî»σàÑµ¬öµíê",
+         readingFile: "µ¡úσ£¿Φ«ÇσÅûµ¬öµíêΓÇª",
+@@ -2144,7 +2304,7 @@
+         tipFilterCutting: "σÅ¬Σ┐¥τòÖ cutting µùÑµ£ƒσ£¿µ¡ñσìÇΘûô∩╝êσÉ½Φ╡╖Φ┐ä∩╝ëτÜäσêùπÇé",
+         tipFilterMother: "σ╖▓Θü╕µ»ìµûÖΣ╗Ñµ¿Öτ▒ñΘí»τñ║σ£¿Φ╝╕σàÑµíåΣ╕èµû╣∩╝êσ╛ÇσÅ│µÅ¢Φíî∩╝ëπÇéΦ╝╕σàÑσëìτ╢┤σ╛îµîë Enter µêûΘ╗₧Θü╕σ╗║Φ¡░∩╝¢Θ╗₧ ├ù σÅ»τº╗ΘÖñσû«τ¡åπÇé",
+         tipHideSoAllZero: "ΦïÑµƒÉσ╝╡ SO τÜäΘ£Çµ▒éσèáτ╕╜τé║ 0∩╝îΘÜ▒ΦùÅΦ⌐▓ SO τÜäµëÇµ£ëσêù∩╝êΘáÉΦ¿¡σï╛Θü╕∩╝ëπÇéσÅûµ╢êσï╛Θü╕σ╛î∩╝îΘÇÖΣ║¢ SO µ£âσç║τÅ╛σ£¿ΘáÉΦª╜∩╝Åσî»σç║πÇé",
+-        tipHideRowZero: "ΘÜ▒ΦùÅΘ£Çµ▒éµò╕ΘçÅτé║ 0 τÜäσû«σêù∩╝êΘáÉΦ¿¡σï╛Θü╕∩╝ëπÇéσÅûµ╢êσï╛Θü╕σ╛î∩╝îΘ£Çµ▒é=0 τÜäσêùµ£âσç║τÅ╛σ£¿ΘáÉΦª╜∩╝Åσî»σç║πÇé",
++        tipHideRowZero: "ΘÜ▒ΦùÅΘ£Çµ▒éµò╕ΘçÅτé║ 0 τÜäσû«σêù∩╝êΘáÉΦ¿¡Σ╕ìσï╛Θü╕∩╝ëπÇéσï╛Θü╕σ╛î∩╝îΘ£Çµ▒é=0 τÜäσêùµ£âσ╛₧ΘáÉΦª╜∩╝Åσî»σç║ΘÜ▒ΦùÅπÇé",
+         tipColCutting: "µ¡ñ SO σ£¿ Schedule τÜäµ£Çµù⌐ cutting µùÑµ£ƒπÇé",
+         tipColSo: "Θè╖σö«Φ¿éσû«ΦÖƒτó╝πÇé",
+         tipColMother: "µ»ìµ¥ÉµûÖ∩╝êσâàτ¢┤µÄÑΘ£Çµ▒éµÖéσÅ»τ⌐║τÖ╜∩╝ëπÇé",
+@@ -2152,18 +2312,18 @@
+         tipColMotherUnit: "µ»ìσû«Σ╜ì∩╝êZRMM OUn µêû COOIS∩╝ëπÇé",
+         tipColMotherStockMb52: "σ╗áσàºµ»ìµ¥ÉµûÖσ║½σ¡ÿ∩╝êMB52 SUM∩╝îµÄÆΘÖñ 39*∩╝ëπÇéΦêçσ╗áσñûσàêΦôï COOIS µ»ìµûÖ Open Qty∩╝êR∩╝ë∩╝îσë⌐Θñÿσåì BOM σ▒òΘûï∩╝¢Σ╛¥µÄÆτ¿ïσÅ»ΦÇùτ¢íπÇé",
+         tipColMotherStockOutside: "µ»ÅσÇïµ»ìσ¡É pair τÜäσ╗áσñûΘçÅσàêµÅ¢τ«ùµêÉµ»ìµûÖ OUn∩╝îσåìσèáτ╕╜∩╝¢Φêçσ╗áσàºσ║½σ¡ÿσÉêΣ╜╡σ╛îσàêΦªåΦôïµ»ìµûÖ RπÇé",
+-        tipColMotherStockAvailable: "µ»ìµûÖΘ£Çµ▒éµëúΘÖñσ╛îπÇüµ£¼σêùσ¡ÉµûÖΦÖòτÉåσëìτÜä F+G σà▒τö¿µ▒áΘñÿΘçÅ∩╝¢µ¡ñµ¼äσ╖▓µÿ»Θüïτ«ùσ╛îΘñÿΘçÅ∩╝îΣ╕ìσ╛ùσåìΦêç F µêû G τ¢╕σèáπÇé",
++        tipColMotherStockAvailable: "µ»ìµûÖΘ£Çµ▒éµëúΘÖñσ╛îπÇüµ£¼σêùσ¡ÉµûÖΦÖòτÉåσëìτÜä F+G σà▒τö¿µ▒áΘñÿΘçÅπÇéτò╢ L=0 σâàσë⌐ M µÖé∩╝îM Σ╕ìµ╢êΦÇùµ¡ñµ»ìµ▒áπÇé",
+         tipColChild: "σ░ìσ║½σ¡ÿΘàìτÖ╝τÜäσ¡Éµ¥ÉµûÖπÇé",
+         tipColChildBatch: "σ¡ÉµûÖσ║½σ¡ÿσìÇµ«╡∩╝êFLT/MTF∩╝ëπÇé",
+         tipColChildUnit: "σ¡Éσû«Σ╜ì∩╝êZRMM BUn µêû COOIS/MB52∩╝ëπÇé",
+         tipColDemandFromMother: "F+G Φôïσ«îµ»ìµûÖ R σ╛îτÜäσë⌐Θñÿσ▒òΘûïΘ£Çµ▒é∩╝êqtyExpand ├ù µÅ¢τ«ù∩╝ëπÇé",
+-        tipColDemandDirect: "µ¡ñσ¡ÉµûÖσ£¿ COOIS τÜäτ¢┤µÄÑ Open Quantity∩╝¢µ░╕ΘüáΣ┐¥τòÖ∩╝¢Rule D σàêτö¿µ»ìµûÖΘñÿΘçÅΦªåΦôï∩╝îµ£¬ΦªåΦôïΘçÅµëìΣ╜┐τö¿σ¡ÉµûÖ MB52πÇé",
++        tipColDemandDirect: "µ¡ñσ¡ÉµûÖσ£¿ COOIS τÜäτ¢┤µÄÑ Open Quantity∩╝¢µ░╕ΘüáΘí»τñ║πÇéL=0 µÖé M Σ╕ìΘÇ▓µ»ìµ▒á∩╝ÅQ∩╝îσÅ¬µëú R∩╝¢L>0 µÖé Rule D Σ╗ìσàêΦôï N=L+MπÇé",
+         tipColDemand: "σ¡Éµ¥ÉµûÖΘ£Çµ▒é + τ¢┤µÄÑΘ£Çµ▒éσÉêΦ¿êπÇé",
+         tipColStockMb52: "µ¡ñσ¡ÉµûÖ∩╝ïSegment τÜäσÄƒσºï MB52 τ╕╜ΘçÅ∩╝¢Θí»τñ║σÇ╝σ¢║σ«Ü∩╝îΣ╕ìΘÜ¿ΘàìτÖ╝Θü₧µ╕¢πÇé",
+-        tipColStockAvailable: "σ¡ÉµûÖ MB52 σë⌐Θñÿµ▒á∩╝êµ£¼σêùσëì∩╝ëπÇéσÅ¬Φó½ QπÇîΦâ╜µÅÉΣ╛¢µò╕ΘçÅπÇìµëúµ╕¢πÇé",
+-        tipColProvided: "Rule D σàêτö¿µ»ìµûÖΘñÿΘçÅΦªåΦôïσ╛î∩╝îσ»ªΘÜ¢σ╛₧σ¡ÉµûÖ MB52 Θáÿτö¿τÜäµò╕ΘçÅ∩╝¢τƒ¡τ╝║ΦêçΘ╜èσÑùΣ╗ÑπÇîµ»ìµûÖΦªåΦôïΘçÅ∩╝ïµ£¼µ¼äπÇìσêñµû╖πÇé",
+-        tipColRemaining: "µ£¼σêùµëúµ╕¢σ╛îσÅ»ΘàìτÖ╝σë⌐ΘñÿπÇé",
+-        tipColY: "σÉêΦ▓╝σéÖµûÖΘ╜èσÑù∩╝Üσà╖µ£ëµ»ìµûÖπÇüΦç│σ░æΣ╕Çτ¡åΘ¥₧ MH04 µ¡úΘ£Çµ▒é∩╝îΣ╕öµëÇµ£ëΘ¥₧ MH04 µ¡úΘ£Çµ▒éτÜåΦ╢│ΘçÅµÖéµ¿Ö Y∩╝¢τ┤öτ¢┤µÄÑπÇüΘ¢╢Θ£Çµ▒éσÅèσâà MH04 τ╛ñτ╡äτòÖτÖ╜πÇé",
++        tipColStockAvailable: "σ¡ÉµûÖ MB52 σë⌐Θñÿµ▒á∩╝êµ£¼σêùσëì∩╝ëπÇéΦó½ Q µëúµ╕¢∩╝¢L=0 τ┤öτ¢┤µÄÑµÖéΣ╣ƒµ£âΦó½ M µëúµ╕¢πÇé",
++        tipColProvided: "µëÿσñûσ╛₧σ¡ÉµûÖ MB52 σ»ªΘáÿΘçÅπÇéL=0 Σ╕ö M>0 µÖé Q=0∩╝êτ¢┤µÄÑΘ£Çµ▒éΣ╕ìτÖ╝σñû∩╝ë∩╝¢L>0 µÖéτé║ Rule D µ£¬Φôïσ«îτÜä NπÇé",
++        tipColRemaining: "µ£¼σêùσ╛îσë⌐Θñÿ∩╝ÜPΓêÆQ∩╝¢L=0 µÖéσåìµëú M∩╝êR=PΓêÆQΓêÆM∩╝ëπÇé",
++        tipColY: "σÉêΦ▓╝σéÖµûÖΘ╜èσÑù∩╝ÜσÉî SO+µ»ìµ¥ÉµûÖ+Segment∩╝¢Φç│σ░æΣ╕Çτ¡åΘ¥₧ MH04 Σ╕ö L>0∩╝îΣ╕öµ¡ñΘí₧σêùτÜå µ»ìΦôïL+QΓëÑL µëìµ¿Ö YπÇéτ┤ö M∩╝Åτäí L∩╝Åσâà MH04 τòÖτÖ╜πÇé",
+         errorClose: "τó║σ«Ü",
+         errorPrecheckTitle: "σû«Σ╜ìΣ║ïσëìµ¬óµƒÑσñ▒µòù∩╝êCOOIS σû«Σ╜ì vs ZRMM OUn∩╝ë",
+         errorConvTitle: "τ╝║σ░æµÅ¢τ«ùΦªÅσëç∩╝êµ»ìσû«Σ╜ì vs σ¡Éσû«Σ╜ì∩╝ë",
+@@ -2227,6 +2387,34 @@
+         exportCsv: "CSV ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║",
+         exportExcel: "Excel ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇ¢ßÇößÇ║",
+         copyTable: "ßÇçßÇÜßÇ¼ßÇ╕ ßÇÇßÇ░ßÇ╕ßÇÜßÇ░ßÇ¢ßÇößÇ║",
++        formulaToggle: "ßÇûßÇ▒ßÇ¼ßÇ║ßÇÖßÇ╝ßÇ░ßÇ£ßÇ¼ ßÇÖßÇ╛ßÇÉßÇ║ßÇüßÇ╗ßÇÇßÇ║",
++        formulaToolbarHint: "ßÇûßÇ▒ßÇ¼ßÇ║ßÇÖßÇ╝ßÇ░ßÇ£ßÇ¼ßÇößÇ╛ßÇäßÇ╖ßÇ║ ßÇæßÇ»ßÇÉßÇ║ßÇÜßÇ░ßÇÖßÇ╛ßÇ»ßÇ₧ßÇèßÇ║ ßÇçßÇÜßÇ¼ßÇ╕ßÇíßÇòßÇ▒ßÇ½ßÇ║ßÇÉßÇ╜ßÇäßÇ║",
++        formulaPanelTitle: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢ ßÇûßÇ▒ßÇ¼ßÇ║ßÇÖßÇ╝ßÇ░ßÇ£ßÇ¼ ßÇÖßÇ╛ßÇÉßÇ║ßÇüßÇ╗ßÇÇßÇ║",
++        formulaColLetter: "ßÇÇßÇ▒ßÇ¼ßÇ║ßÇ£ßÇ╢",
++        formulaColName: "ßÇíßÇÖßÇèßÇ║",
++        formulaColRule: "ßÇûßÇ▒ßÇ¼ßÇ║ßÇÖßÇ╝ßÇ░ßÇ£ßÇ¼",
++        formulaHybridSummary: "Hybrid M: L=0 & M>0 ΓåÆ Q=0, R=PΓêÆM, mother pool ignores M. L>0 ΓåÆ current Rule D. Y checks L only.",
++        formulaNotes: {
++          A: "Cutting date",
++          B: "SO",
++          C: "Mother",
++          D: "Mother batch",
++          E: "Mother unit",
++          F: "Mother plant stock (fixed)",
++          G: "Mother outside (fixed)",
++          H: "Mother pool before row",
++          I: "Child",
++          J: "Child batch",
++          K: "Child unit",
++          L: "Demand from mother",
++          M: "Demand direct",
++          N: "L + M",
++          O: "Child stock (fixed)",
++          P: "Stock available",
++          Q: "Provided (0 if L=0 & M>0)",
++          R: "Remaining after row",
++          S: "Kit ready Y (L only)"
++        },
+         loading: "ßÇûßÇ╜ßÇäßÇ╖ßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║",
+         importing: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇÉßÇäßÇ║ßÇ₧ßÇ╜ßÇäßÇ║ßÇ╕ßÇößÇ▒ßÇ₧ßÇèßÇ║",
+         readingFile: "ßÇûßÇ¡ßÇ»ßÇäßÇ║ ßÇûßÇÉßÇ║ßÇößÇ▒ßÇ₧ßÇèßÇ║...",
+@@ -2567,6 +2755,14 @@
+       exportCsv: document.getElementById("exportCsv"),
+       exportXlsx: document.getElementById("exportXlsx"),
+       copyTable: document.getElementById("copyTable"),
++      exportCsvTop: document.getElementById("exportCsvTop"),
++      exportXlsxTop: document.getElementById("exportXlsxTop"),
++      copyTableTop: document.getElementById("copyTableTop"),
++      toggleFormulaPanel: document.getElementById("toggleFormulaPanel"),
++      formulaPanel: document.getElementById("formulaPanel"),
++      formulaPanelBody: document.getElementById("formulaPanelBody"),
++      formulaHybridSummary: document.getElementById("formulaHybridSummary"),
++      resultToolbarMeta: document.getElementById("resultToolbarMeta"),
+       filterSo: document.getElementById("filterSo"),
+       soSuggest: document.getElementById("soSuggest"),
+       filterCuttingFrom: document.getElementById("filterCuttingFrom"),
+@@ -2683,6 +2879,7 @@
+       refreshMappingTable();
+       renderConversionTable();
+       renderSizeConversionTable();
++      renderFormulaPanel();
+       if (state.allResultRows.length) {
+         state.resultHeaders = [...outputHeadersForLang(state.lang)];
+         applyViewFilters();
+@@ -3798,6 +3995,7 @@
+       elements.exportCsv.disabled = true;
+       elements.exportXlsx.disabled = true;
+       elements.copyTable.disabled = true;
++      setExportButtonsEnabled(false);
+       elements.resultMessage.textContent = t("resultEmpty");
+       elements.resultMessage.className = "message";
+ 
+@@ -3907,7 +4105,8 @@
+     /**
+      * Y flag: group by so+mother+segment; mother="" groups per child alone.
+      * MH04* children are kept in output but ignored for kit completeness (ΘàìσÑù).
+-     * Satisfied when mother coverage + child MB52 provided quantity meets demand.
++     * v3.4.4: only L (demand from mother) participates ΓÇö pure-M rows do not block or qualify Y.
++     * Satisfied when motherCoverL + provided qty meets L on every positive non-MH04 L row.
+      */
+     function applyGroupYFlag(rows, fulfilledByRow, demandByRow) {
+       const groups = new Map();
+@@ -3923,12 +4122,12 @@
+       for (const indices of groups.values()) {
+         const positiveNonMh04 = indices.filter(i =>
+           !isMh04Child(rows[i][OUT.child]) &&
+-          (Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demand])) > 1e-9
++          (Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demandFromMother])) > 1e-9
+         );
+         const qualifies = positiveNonMh04.length > 0 && positiveNonMh04.every(i => {
+-          const demand = Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demand]);
++          const demandL = Number(demandByRow?.[i]) || parseNumber(rows[i][OUT.demandFromMother]);
+           const fulfilled = Number(fulfilledByRow?.[i] || 0);
+-          return fulfilled >= demand - 1e-9;
++          return fulfilled >= demandL - 1e-9;
+         });
+         for (const i of indices) rows[i][OUT.flagY] = qualifies ? "Y" : "";
+       }
+@@ -4307,6 +4506,7 @@
+         // Rule D: within each mother, consume remaining mother stock by the
+         // original ZRMM0028 child order. H is the mother-unit balance before
+         // the current child row, after mother demand and prior child rows.
++        // v3.4.4 hybrid: when L==0 and M>0, do not cover M from mother pool.
+         for (const context of motherContexts) {
+           const motherKey = poolKey(context.mother, context.seg);
+           let motherPool = Math.max(0, remainingCoverMother.get(motherKey) || 0);
+@@ -4319,10 +4519,17 @@
+               continue;
+             }
+             item.motherStockAvailable = motherPool;
+-            const demandTotal = Math.max(0, item.demandFromMother + item.demandDirect);
+-            const motherCoverChild = Math.min(demandTotal, motherPool * ratio);
++            const demandL = Math.max(0, item.demandFromMother);
++            const demandM = Math.max(0, item.demandDirect);
++            const demandTotal = demandL + demandM;
++            let motherCoverChild = 0;
++            if (demandL > 1e-9) {
++              // Still has outside expansion: cover N=L+M from mother residual (current Rule D).
++              motherCoverChild = Math.min(demandTotal, motherPool * ratio);
++              motherPool = Math.max(0, motherPool - motherCoverChild / ratio);
++            }
++            // L==0 && M>0: leave motherPool unchanged (M does not consume H).
+             item.motherCoverChild = motherCoverChild;
+-            motherPool = Math.max(0, motherPool - motherCoverChild / ratio);
+           }
+           remainingCoverMother.set(motherKey, motherPool);
+         }
+@@ -4368,11 +4575,14 @@
+       const demandByRow = [];
+       let shortage = 0;
+       for (const item of expanded) {
+-        const demandTotal = item.demandFromMother + item.demandDirect;
+-        const motherCoverChild = item.mother
++        const demandL = Math.max(0, item.demandFromMother);
++        const demandM = Math.max(0, item.demandDirect);
++        const demandTotal = demandL + demandM;
++        const pureDirect = demandL <= 1e-9 && demandM > 1e-9;
++        const motherCoverChild = item.mother && !pureDirect
+           ? Math.min(Math.max(0, demandTotal), Math.max(0, Number(item.motherCoverChild) || 0))
+           : 0;
+-        const childNeedNet = Math.max(0, demandTotal - motherCoverChild);
++        const childNeedNet = pureDirect ? 0 : Math.max(0, demandTotal - motherCoverChild);
+         const key = poolKey(item.child, item.segment);
+         const mb0 = stockMb52.get(key) || 0;
+         const poolBefore = remainingPool.has(key) ? remainingPool.get(key) : Math.max(0, mb0);
+@@ -4380,12 +4590,14 @@
+         const motherMbNum = item.mother ? (stockMb52.get(motherKey) || 0) : 0;
+         const motherOutNum = item.mother ? (outsideByMother.get(motherKey) || 0) : 0;
+         const provide = Math.min(childNeedNet, Math.max(0, poolBefore));
+-        const poolAfter = poolBefore - provide;
+-        const fulfilled = motherCoverChild + provide;
+-        remainingPool.set(key, poolAfter);
+-        if (fulfilled < demandTotal - 1e-9) shortage += 1;
+-        fulfilledByRow.push(fulfilled);
+-        demandByRow.push(demandTotal);
++        const directStockDeduct = pureDirect ? demandM : 0;
++        const poolAfter = poolBefore - provide - directStockDeduct;
++        const fulfilledL = Math.min(demandL, motherCoverChild + provide);
++        remainingPool.set(key, Math.max(0, poolAfter));
++        if (!pureDirect && fulfilledL < demandL - 1e-9) shortage += 1;
++        // Y compares fulfilled against L only (demandByRow stores L).
++        fulfilledByRow.push(fulfilledL);
++        demandByRow.push(demandL);
+         const outRow = [
+           item.cutting,
+           item.so,
+@@ -4514,6 +4726,7 @@
+       elements.exportCsv.disabled = state.resultRows.length === 0;
+       elements.exportXlsx.disabled = state.resultRows.length === 0;
+       elements.copyTable.disabled = state.resultRows.length === 0;
++      setExportButtonsEnabled(state.resultRows.length > 0);
+       setMessage(elements.resultMessage, formatBuiltMessage(
+         state.allResultRows.length,
+         state.resultRows.length,
+@@ -4598,6 +4811,7 @@
+         elements.exportCsv.disabled = state.resultRows.length === 0;
+         elements.exportXlsx.disabled = state.resultRows.length === 0;
+         elements.copyTable.disabled = state.resultRows.length === 0;
++        setExportButtonsEnabled(state.resultRows.length > 0);
+         setMessage(elements.resultMessage, formatBuiltMessage(
+           result.rows.length,
+           state.resultRows.length,
+@@ -4659,6 +4873,50 @@
+         .replace(/"/g, "&quot;");
+     }
+ 
++    function setExportButtonsEnabled(enabled) {
++      const on = Boolean(enabled);
++      for (const key of ["exportCsv", "exportXlsx", "copyTable", "exportCsvTop", "exportXlsxTop", "copyTableTop"]) {
++        if (elements[key]) elements[key].disabled = !on;
++      }
++    }
++
++    function columnLetters19() {
++      return Array.from({ length: 19 }, (_, i) => String.fromCharCode(65 + i));
++    }
++
++    function formulaNoteRows() {
++      const letters = columnLetters19();
++      const headers = outputHeadersForLang(state.lang);
++      const notes = t("formulaNotes") || {};
++      return letters.map((letter, i) => ({
++        letter,
++        name: headers[i] || "",
++        rule: notes[letter] || ""
++      }));
++    }
++
++    function renderFormulaPanel() {
++      if (elements.formulaHybridSummary) {
++        elements.formulaHybridSummary.textContent = t("formulaHybridSummary");
++      }
++      if (!elements.formulaPanelBody) return;
++      const rows = formulaNoteRows();
++      elements.formulaPanelBody.innerHTML = rows.map(row =>
++        `<tr><td>${escapeHtml(row.letter)}</td><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.rule)}</td></tr>`
++      ).join("");
++    }
++
++    function exportPreambleMatrix() {
++      const letters = columnLetters19();
++      const headers = state.resultHeaders.length
++        ? state.resultHeaders
++        : outputHeadersForLang(state.lang);
++      const notes = t("formulaNotes") || {};
++      const formulaRow = letters.map(letter => notes[letter] || "");
++      const summaryRow = letters.map((_, i) => (i === 0 ? t("formulaHybridSummary") : ""));
++      return [summaryRow, letters, headers, formulaRow];
++    }
++
+     function csvEscape(value) {
+       let text = String(value ?? "");
+       if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+@@ -4666,7 +4924,8 @@
+     }
+ 
+     function resultToCsv() {
+-      return [state.resultHeaders, ...state.resultRows].map(row => row.map(csvEscape).join(",")).join("\r\n");
++      const preamble = exportPreambleMatrix();
++      return [...preamble, ...state.resultRows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+     }
+ 
+     function downloadCsv() {
+@@ -4905,7 +5164,8 @@
+       if (!state.resultRows.length) return;
+       try {
+ 
+-        const bytes = buildXlsxBytes(state.resultHeaders, state.resultRows);
++        const sheetRows = [...exportPreambleMatrix(), ...state.resultRows];
++        const bytes = buildXlsxBytes(sheetRows[0], sheetRows.slice(1));
+         const blob = new Blob([bytes], {
+           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+         });
+@@ -4925,7 +5185,7 @@
+ 
+     async function copyTable() {
+       if (!state.resultRows.length) return;
+-      const lines = [state.resultHeaders.join("\t")];
++      const lines = exportPreambleMatrix().map(row => row.join("\t"));
+       for (const row of state.resultRows) lines.push(row.join("\t"));
+       const text = lines.join("\n");
+       try {
+@@ -5021,6 +5281,18 @@
+     elements.exportCsv.addEventListener("click", downloadCsv);
+     elements.exportXlsx.addEventListener("click", downloadXlsx);
+     elements.copyTable.addEventListener("click", copyTable);
++    if (elements.exportCsvTop) elements.exportCsvTop.addEventListener("click", downloadCsv);
++    if (elements.exportXlsxTop) elements.exportXlsxTop.addEventListener("click", downloadXlsx);
++    if (elements.copyTableTop) elements.copyTableTop.addEventListener("click", copyTable);
++    if (elements.toggleFormulaPanel && elements.formulaPanel) {
++      elements.toggleFormulaPanel.addEventListener("click", () => {
++        const open = elements.formulaPanel.hasAttribute("hidden");
++        if (open) elements.formulaPanel.removeAttribute("hidden");
++        else elements.formulaPanel.setAttribute("hidden", "");
++        elements.toggleFormulaPanel.setAttribute("aria-expanded", open ? "true" : "false");
++      });
++      elements.toggleFormulaPanel.setAttribute("aria-expanded", "true");
++    }
+     elements.errorModalClose.addEventListener("click", hideErrorModal);
+     if (elements.errorModalX) elements.errorModalX.addEventListener("click", hideErrorModal);
+     bindPrefixSuggest(elements.filterSo, elements.soSuggest, "so");
+@@ -5092,8 +5364,11 @@
+     }
+     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+     applyTheme(savedTheme === "soft" ? "soft" : "mill");
++    const versionLabel = `v${APP_VERSION}`;
+     const versionBadge = document.getElementById("appVersionBadge");
+-    if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
++    if (versionBadge) versionBadge.textContent = versionLabel;
++    const headerVersionBadge = document.getElementById("headerVersionBadge");
++    if (headerVersionBadge) headerVersionBadge.textContent = versionLabel;
+ 
+     elements.scheduleData.value = sampleSchedule;
+     elements.cooisData.value = sampleCoois;
+diff --git a/config/conversion-rules.v1.json b/config/conversion-rules.v1.json
+index 9f114e7..2fbd290 100644
+--- a/config/conversion-rules.v1.json
++++ b/config/conversion-rules.v1.json
+@@ -1,6 +1,6 @@
+ {
+   "schemaVersion": 1,
+-  "appVersion": "3.4.3",
++  "appVersion": "3.4.4",
+   "conversionRules": [
+     { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 },
+     { "motherUnit": "YD", "childUnit": "M", "ratio": 0.9144 }
+diff --git a/docs/03-collaboration-governance.md b/docs/03-collaboration-governance.md
+index 897a318..a6274bc 100644
+--- a/docs/03-collaboration-governance.md
++++ b/docs/03-collaboration-governance.md
+@@ -51,7 +51,7 @@
+ ## 3. σû«Σ╕ÇΣ║ïσ»ªΣ╛åµ║É
+ 
+ - `README.md`∩╝Üσ░êµíêσàÑσÅúΦêçτïÇµàïπÇé
+-- `docs/01-current-system-spec.md`∩╝Üτ¢«σëìσà¼ΘûïΦíîτé║σÑæτ┤äπÇé
++- `docs/07-allocation-v3-spec.md`∩╝Üτ¢«σëìΘàìτÖ╝σ╝òµôÄσà¼ΘûïΦíîτé║σÑæτ┤äπÇé
+ - `docs/02-code-review-and-roadmap.md`∩╝Üτ╝║ΘÖ╖πÇüΘó¿ΘÜ¬Φêçσä¬σàêΘáåσ║ÅπÇé
+ - `docs/04-test-and-acceptance.md`∩╝ÜΘ⌐ùµö╢µíêΣ╛ïΦêçΦ¡ëµôÜΦªüµ▒éπÇé
+ - `.ai/handoffs/<task-id>/decisions.md`∩╝Üσ╖▓µá╕σçåΦêçσ╛àµ▒║Σ║ïΘáàπÇé
+@@ -62,7 +62,7 @@
+ ## 3. Sources of truth
+ 
+ - `README.md`: Project entry point and status.
+-- `docs/01-current-system-spec.md`: Current public behavior contract.
++- `docs/07-allocation-v3-spec.md`: Current allocation-engine public behavior contract.
+ - `docs/02-code-review-and-roadmap.md`: Findings, risks, and priorities.
+ - `docs/04-test-and-acceptance.md`: Acceptance cases and evidence requirements.
+ - `.ai/handoffs/<task-id>/decisions.md`: Approved and unresolved decisions.
+diff --git a/docs/07-allocation-v3-spec.md b/docs/07-allocation-v3-spec.md
+index cc151da..b861361 100644
+--- a/docs/07-allocation-v3-spec.md
++++ b/docs/07-allocation-v3-spec.md
+@@ -1,12 +1,12 @@
+-# 07 ΓÇö RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄΦªÅµá╝ v3.4.3 / RAW MAT Allocation Engine Specification v3.4.3
++# 07 ΓÇö RAW MAT σ║½σ¡ÿΘàìτÖ╝σ╝òµôÄΦªÅµá╝ v3.4.4 / RAW MAT Allocation Engine Specification v3.4.4
+ 
+-**τëêµ£¼ / Version:** 3.4.3<br>
+-**τïÇµàï / Status:** σ╖▓τó║Φ¬ì∩╝êσÉ½µ¡╕σ▒¼Σ╕ìµÿÄτó║Φ¬ìσ╛îµ»öΣ╛ïµïåσêåπÇüσ╗áσñû G σÉîσû«Σ╜ìσä¬σàêπÇüτ╖¼τö╕Φ¬₧ UI σ╛⌐σÄƒ∩╝î2026-07-30∩╝ë/ Confirmed (includes ambiguous confirm + Open Qty split, same-unit-first outside G, and Myanmar UI restore, 2026-07-30)<br>
++**τëêµ£¼ / Version:** 3.4.4<br>
++**τïÇµàï / Status:** σ╖▓τó║Φ¬ì∩╝êσÉ½τ¢┤µÄÑΘ£Çµ▒éµ╖╖σÉêΦªÅσëçΦêçτ╡Éµ₧£σìÇσà¼σ╝ÅΦ¬¬µÿÄ∩╝î2026-08-03∩╝ë/ Confirmed (includes hybrid direct-demand rule and result formula notes, 2026-08-03)<br>
+ **Σ╕╗τ¿ïσ╝Å / Application:** `allocation-web.html`<br>
+ **Θ⌐ùΦ¡ëσÖ¿ / Verifier:** `.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py`
+ 
+-µ£¼µûçΣ╗╢µÿ» v3.4.3 τÜäσà¼ΘûïΦíîτé║σÑæτ┤äπÇéµ¼äΣ╜ìΣ╗ÑΦï▒µûçΦí¿Θá¡Φºúµ₧É∩╝îΣ╕ìΣ╗Ñ Excel µ¼äΣ╜ìσ¡ùµ»ìσ»½µ¡╗πÇéτ¿ïσ╝Åσ«îσà¿σ£¿µ£¼µ⌐ƒτÇÅΦª╜σÖ¿σƒ╖Φíî∩╝¢τ£ƒσ»ªµÑ¡σïÖµ¬öµíêΣ╕ìσ╛ùµÅÉΣ║ñ Git µêûΦ╖¿ Agent σé│ΘÇüπÇé<br>
+-This document is the public behavior contract for v3.4.3. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
++µ£¼µûçΣ╗╢µÿ» v3.4.4 τÜäσà¼ΘûïΦíîτé║σÑæτ┤äπÇéµ¼äΣ╜ìΣ╗ÑΦï▒µûçΦí¿Θá¡Φºúµ₧É∩╝îΣ╕ìΣ╗Ñ Excel µ¼äΣ╜ìσ¡ùµ»ìσ»½µ¡╗πÇéτ¿ïσ╝Åσ«îσà¿σ£¿µ£¼µ⌐ƒτÇÅΦª╜σÖ¿σƒ╖Φíî∩╝¢τ£ƒσ»ªµÑ¡σïÖµ¬öµíêΣ╕ìσ╛ùµÅÉΣ║ñ Git µêûΦ╖¿ Agent σé│ΘÇüπÇé<br>
++This document is the public behavior contract for v3.4.4. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
+ 
+ ## 1. Φ╝╕σàÑΦêçµ¼äΣ╜ìσÑæτ┤ä / Inputs and column contract
+ 
+@@ -107,17 +107,27 @@ motherPoolAfterRow = motherPoolBeforeRow - motherCoverChild / conversionRatio
+ 
+ ## 4. Rule DπÇüτ¢┤µÄÑσ¡ÉµûÖΘ£Çµ▒éΦêçµ¡╕σ▒¼ / Rule D, direct child demand, and ownership
+ 
+-Rule A τ╢¡µîüσÅûµ╢ê∩╝¢Rule D Φç¬ v3.3 µüóσ╛⌐πÇéCOOIS τÜäτ¢┤µÄÑσ¡ÉµûÖΘ£Çµ▒éµ░╕Θüáσ«îµò┤Σ┐¥τòÖσ£¿ `demand direct` Φêç `demand qty`∩╝îσàêτö▒µ»ìµûÖΘ£Çµ▒éµëúΘÖñσ╛îτÜäµ»ìµûÖΘñÿΘçÅΦªåΦôï∩╝îµ£¬ΦªåΦôïΘçÅµëìσ╛₧Φ⌐▓σ¡ÉµûÖ MB52 ΘàìτÖ╝πÇéQ σÅ¬Θí»τñ║σ»ªΘÜ¢σ¡ÉµûÖ MB52 Θáÿτö¿ΘçÅπÇé<br>
+-Rule A remains removed; Rule D is restored in v3.3. Direct COOIS child demand remains fully visible in `demand direct` and `demand qty`, is first covered by the mother balance after mother demand, and only the uncovered amount uses child MB52. Q shows only actual child-MB52 usage.
++Rule A τ╢¡µîüσÅûµ╢ê∩╝¢Rule D Φç¬ v3.3 µüóσ╛⌐∩╝îΣ╕ªµû╝ v3.4.4 µÄí**µ╖╖σÉêΦªÅσëç∩╝êΘÇÉσ¡ÉµûÖσêù∩╝ë**∩╝Ü<br>
++Rule A remains removed; Rule D is restored from v3.3 and uses a **per-child hybrid** from v3.4.4:
+ 
+-σñÜσÇïτ¢┤µÄÑσ¡ÉµûÖσà▒τö¿σÉîΣ╕Çµ»ìµûÖΘñÿΘçÅµÖé∩╝îΣ╛¥ ZRMM0028 σ¡ÉµûÖΘªûµ¼íσç║τÅ╛σêùσ║ÅΘÇÉσêùµëúµ╕¢πÇéµ»ìµûÖµ▒áΦ╖¿ SO σ╗╢τ║î∩╝îΣ╕öσÉîµÖéµë┐µÄÑµ»ìµûÖΘ£Çµ▒éΦêç Rule D ΦªåΦôïΘçÅπÇé<br>
+-When multiple direct children share a mother balance, consume it by first ZRMM0028 child occurrence. The mother pool persists across SOs and is reduced by both mother demand and Rule D coverage.
++```text
++ΦïÑ L σ¡Éµ¥ÉµûÖΘ£Çµ▒é == 0 Σ╕ö M σ¡ÉµûÖτ¢┤µÄÑΘ£Çµ▒é > 0∩╝Ü
++  µ»ìµ▒á∩╝ÅH Σ╕ìµè╡ M∩╝¢Q = 0∩╝¢R = P ΓêÆ M
++ΦïÑ L > 0∩╝Ü
++  τ╢¡µîüτÅ╛Φíî Rule D∩╝Üµ»ìµ▒áσÅ»Φôï N=L+M∩╝¢Σ╕ìΦ╢│ΘÇ▓ Q∩╝¢R = P ΓêÆ Q
++```
++
++COOIS τÜäτ¢┤µÄÑσ¡ÉµûÖΘ£Çµ▒éµ░╕Θüáσ«îµò┤Σ┐¥τòÖσ£¿ `demand direct` Φêç `demand qty`∩╝êΘí»τñ║∩╝ëπÇéσá▒Φí¿Σ╕╗Φªüτ╡ªµëÿσñûσÉêΦ▓╝Σ╛¢µçëσòå∩╝îµòàτ┤öτ¢┤µÄÑΘ£Çµ▒é∩╝êL=0∩╝ëΣ╕ìτÖ╝σñû∩╝êQ=0∩╝ë∩╝îσÅ¬σ╛₧σ¡ÉµûÖσ║½σ¡ÿΘñÿΘçÅ R µëúµ╕¢πÇé<br>
++Direct COOIS child demand remains fully visible in `demand direct` and `demand qty`. Because the report targets outside lamination suppliers, pure-direct rows (L=0) do not issue to outside (Q=0) and only reduce child remaining stock R.
+ 
+-ΦïÑσÉîΣ╕Ç SO + Segment τÜäτ¢┤µÄÑσ¡ÉµûÖσÉîµÖéσÅ»µ¡╕σàÑσà⌐σÇïΣ╗ÑΣ╕èµ»ìµûÖ∩╝îσàêσêùσç║σà¿Θâ¿Φí¥τ¬ü∩╝êSO∩╝ÅSegment∩╝Åσ¡ÉµûÖ∩╝ÅσÉäµ»ìµûÖ Open Qty∩╝ë∩╝îσ╜êτ¬ùΦ½ïΣ╜┐τö¿ΦÇàτó║Φ¬ì∩╝¢**µ£¬τó║Φ¬ìΣ╕ìσ╛ùΦç¬σïòµïåσêå**πÇéΣ╜┐τö¿ΦÇàσÅûµ╢ê ΓåÆ µò┤µë╣σü£µ¡óπÇüΣ╕ìτöóτ╡Éµ₧£πÇéΣ╜┐τö¿ΦÇàτó║Φ¬ì ΓåÆ Σ╛¥σÉäµ»ìµûÖσ£¿Φ⌐▓ SO∩╝ïSegment τÜä Open Qty µ»öΣ╛ïµïåσàÑσÉäµ»ìµûÖ `demandDirect`∩╝êµ¼èΘçìσà¿τé║ 0 σëçσ¥çσêå∩╝¢µ£Çσ╛îΣ╕Çµ»ìσÉâΘñÿµò╕∩╝ë∩╝îσèáτ╕╜σ┐àΘáêτ¡ëµû╝σÄƒτ¢┤µÄÑΘûïΘçÅ∩╝îτªüµ¡óΘçìΦñçσèáτ╕╜πÇéτ┤öτ¢┤µÄÑΘ£Çµ▒éΣ╕öµ▓Æµ£ëµ»ìµûÖΦÇà∩╝îσà¿Θâ¿τö▒σ¡ÉµûÖ MB52 ΘàìτÖ╝πÇé<br>
+-If direct demand in the same SO + Segment could belong to more than one mother, list every conflict (SO / Segment / child / each mother Open Qty) and prompt for confirmation; **never split automatically without confirmation**. Cancel stops the run with no output. Confirm splits that Open Qty across the candidate mothers by mother Open Qty share on that SO + Segment (equal share if all weights are 0; last mother receives the remainder). The parts must sum to the original direct Open Qty; never double-count. A direct-only demand with no mother uses child MB52 in full.
++σñÜσÇïτ¢┤µÄÑσ¡ÉµûÖσà▒τö¿σÉîΣ╕Çµ»ìµûÖΘñÿΘçÅµÖé∩╝îΣ╛¥ ZRMM0028 σ¡ÉµûÖΘªûµ¼íσç║τÅ╛σêùσ║ÅΘÇÉσêùΦÖòτÉåπÇéµ»ìµûÖµ▒áΦ╖¿ SO σ╗╢τ║î∩╝¢σâàµ»ìµûÖ Open ΦêçπÇîL>0 µÖéτÜä Rule D ΦªåΦôïπÇìµ£âµëúµ»ìµ▒á∩╝îτ┤ö M Σ╕ìµëúµ»ìµ▒áπÇé<br>
++When multiple children share a mother balance, process by first ZRMM0028 child occurrence. The mother pool persists across SOs and is reduced by mother Open and Rule D coverage only when L>0; pure-M rows do not consume the mother pool.
+ 
+-Θî¿Θ╗₧ `10189518 / MN090134761 / MA020147549`∩╝ÜF=0πÇüG=1.996708πÇüµ»ìµûÖΘ£Çµ▒é=1.5πÇüH=0.496708πÇüN=0.02πÇüQ=0πÇüR=43.046∩╝¢G Φêç H Σ╕ìσ╛ùτ¢╕σèáπÇé<br>
+-Anchor `10189518 / MN090134761 / MA020147549`: F=0, G=1.996708, mother demand=1.5, H=0.496708, N=0.02, Q=0, and R=43.046; G and H must not be added.
++ΦïÑσÉîΣ╕Ç SO + Segment τÜäτ¢┤µÄÑσ¡ÉµûÖσÉîµÖéσÅ»µ¡╕σàÑσà⌐σÇïΣ╗ÑΣ╕èµ»ìµûÖ∩╝îσàêσêùσç║σà¿Θâ¿Φí¥τ¬ü∩╝êSO∩╝ÅSegment∩╝Åσ¡ÉµûÖ∩╝ÅσÉäµ»ìµûÖ Open Qty∩╝ë∩╝îσ╜êτ¬ùΦ½ïΣ╜┐τö¿ΦÇàτó║Φ¬ì∩╝¢**µ£¬τó║Φ¬ìΣ╕ìσ╛ùΦç¬σïòµïåσêå**πÇéΣ╜┐τö¿ΦÇàσÅûµ╢ê ΓåÆ µò┤µë╣σü£µ¡óπÇüΣ╕ìτöóτ╡Éµ₧£πÇéΣ╜┐τö¿ΦÇàτó║Φ¬ì ΓåÆ Σ╛¥σÉäµ»ìµûÖσ£¿Φ⌐▓ SO∩╝ïSegment τÜä Open Qty µ»öΣ╛ïµïåσàÑσÉäµ»ìµûÖ `demandDirect`∩╝êµ¼èΘçìσà¿τé║ 0 σëçσ¥çσêå∩╝¢µ£Çσ╛îΣ╕Çµ»ìσÉâΘñÿµò╕∩╝ë∩╝îσèáτ╕╜σ┐àΘáêτ¡ëµû╝σÄƒτ¢┤µÄÑΘûïΘçÅ∩╝îτªüµ¡óΘçìΦñçσèáτ╕╜πÇéτ┤öτ¢┤µÄÑΘ£Çµ▒é∩╝êσÉ½τäíµ»ìµûÖσêù∩╝ëΘü⌐τö¿µ╖╖σÉêΦªÅσëç∩╝ÜQ=0∩╝îR=PΓêÆMπÇé<br>
++If direct demand in the same SO + Segment could belong to more than one mother, list every conflict (SO / Segment / child / each mother Open Qty) and prompt for confirmation; **never split automatically without confirmation**. Cancel stops the run with no output. Confirm splits that Open Qty across the candidate mothers by mother Open Qty share on that SO + Segment (equal share if all weights are 0; last mother receives the remainder). The parts must sum to the original direct Open Qty; never double-count. Pure-direct demand (including mother-blank rows) follows the hybrid rule: Q=0 and R=PΓêÆM.
++
++Θî¿Θ╗₧Φ¬₧µäÅ∩╝êL=0 τ┤ö M∩╝ë∩╝ÜQ=0∩╝¢R Σ╛¥ `PΓêÆM` µëúµ╕¢∩╝¢Y σ¢áτäí L>0 τòÖτÖ╜πÇéG Φêç H Σ╕ìσ╛ùτ¢╕σèáπÇé<br>
++Pure-M anchor semantics (L=0): Q=0; R deducts via `PΓêÆM`; Y stays blank when no L>0. G and H must not be added.
+ 
+ ## 5. µÅ¢τ«ùΦêçσü£µ¡óµó¥Σ╗╢ / Conversion and stop conditions
+ 
+@@ -132,7 +142,7 @@ Shared JSON format:
+ ```json
+ {
+   "schemaVersion": 1,
+-  "appVersion": "3.4.3",
++  "appVersion": "3.4.4",
+   "conversionRules": [
+     { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 }
+   ],
+@@ -168,8 +178,8 @@ fulfilled = motherCoverChild + providedQty
+ shortage = fulfilled < demandQty
+ ```
+ 
+-`child stock` σ¢║σ«ÜΘí»τñ║σÄƒσºï MB52 τ╕╜ΘçÅ∩╝¢σÅ¬µ£ë `stock available` Φêç `remaining stock after this row` ΘÜ¿ Q Θü₧µ╕¢πÇéH Σ╜┐τö¿µ»ìµûÖ OUn∩╝îN/Q Σ╜┐τö¿σ¡ÉµûÖσû«Σ╜ì∩╝îΣ╕ìσÉîσû«Σ╜ìΣ╕ìσÅ»τ¢┤µÄÑτ¢╕µ╕¢πÇé<br>
+-`child stock` always displays the original MB52 total; only `stock available` and `remaining stock after this row` decrease by Q. H uses mother OUn, while N/Q use the child unit; values in different units must not be subtracted directly.
++`child stock` σ¢║σ«ÜΘí»τñ║σÄƒσºï MB52 τ╕╜ΘçÅ∩╝¢`stock available` Φêç `remaining stock after this row` ΘÜ¿ Q Θü₧µ╕¢∩╝îΣ╕öτò╢ L=0 µÖéσåìµëú MπÇéH Σ╜┐τö¿µ»ìµûÖ OUn∩╝îN/Q Σ╜┐τö¿σ¡ÉµûÖσû«Σ╜ì∩╝îΣ╕ìσÉîσû«Σ╜ìΣ╕ìσÅ»τ¢┤µÄÑτ¢╕µ╕¢πÇé<br>
++`child stock` always displays the original MB52 total; `stock available` and `remaining stock after this row` decrease by Q, and also by M when L=0. H uses mother OUn, while N/Q use the child unit; values in different units must not be subtracted directly.
+ 
+ ## 7. σÉêΦ▓╝σéÖµûÖΘ╜èσÑù Y / Lamination Kit Ready Y
+ 
+@@ -177,14 +187,14 @@ shortage = fulfilled < demandQty
+ A `(SO + mother + Segment)` group is marked `Y` only when all conditions are met:
+ 
+ - µ£ëµ»ìµûÖπÇé/ A mother exists.
+-- Φç│σ░æΣ╕Çτ¡åΘ¥₧ MH04 Σ╕öΘ£Çµ▒éσñºµû╝ 0πÇé/ At least one non-MH04 row has positive demand.
+-- µëÇµ£ëµ¡úΘ£Çµ▒éτÜäΘ¥₧ MH04 σêùτÜå `motherCoverChild + provided qty >= demand qty`πÇé/ Every positive non-MH04 row is fulfilled by `motherCoverChild + provided qty`.
++- Φç│σ░æΣ╕Çτ¡åΘ¥₧ MH04 Σ╕ö **`L σ¡Éµ¥ÉµûÖΘ£Çµ▒é` > 0**πÇé/ At least one non-MH04 row has **L > 0**.
++- µëÇµ£ëµ¡ñΘí₧σêùτÜå `motherCoverL + provided qty >= L`∩╝êΣ╕ìτ£ï M∩╝ÅN∩╝ëπÇé/ Every such row satisfies `motherCoverL + provided qty >= L` (ignore M/N).
+ 
+-Y σêñσ«ÜΣ╜┐τö¿σàºΘâ¿σÄƒσºïµò╕σÇ╝∩╝êσÉîΣ╕ÇΦ╝¬Φ¿êτ«ùτÜä `fulfilled` Φêç `demand_total`∩╝ë∩╝îΣ╕ìΣ╗Ñµá╝σ╝Åσîûσ╛îτÜäσ░Åµò╕σ¡ùΣ╕▓σüÜµ»öΦ╝â∩╝¢σ¢áµ¡ñσÅ»Θü┐σàì 6 Σ╜ìσ░Åµò╕σ¢¢µì¿Σ║öσàÑΘÇáµêÉτÜäΘéèτòîΦ¬ñσêñπÇé<br>
+-Y decision compares internal raw numbers from the same allocation pass (`fulfilled` vs `demand_total`), not formatted decimal strings, to avoid boundary misclassification caused by rounding to 6 decimals.
++Y σêñσ«ÜΣ╜┐τö¿σàºΘâ¿σÄƒσºïµò╕σÇ╝∩╝êσÉîΣ╕ÇΦ╝¬Φ¿êτ«ùτÜä `fulfilled_L` Φêç `demand_L`∩╝ë∩╝îΣ╕ìΣ╗Ñµá╝σ╝Åσîûσ╛îτÜäσ░Åµò╕σ¡ùΣ╕▓σüÜµ»öΦ╝âπÇé<br>
++Y decision compares internal raw numbers (`fulfilled_L` vs `demand_L`), not formatted decimal strings.
+ 
+-Θ¢╢Θ£Çµ▒éτ╛ñτ╡äπÇüτ┤öτ¢┤µÄÑΘ£Çµ▒éπÇüσâà MH04 τ╛ñτ╡äΣ╕ìµ¿Ö YπÇéMH04 σêùΣ╗ìΦ╝╕σç║ΦêçΘàìτÖ╝∩╝îΣ╜åΣ╕ìσÅâΦêç Y σêñσ«ÜπÇé<br>
+-Zero-demand groups, direct-only rows, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the Y decision.
++Θ¢╢ L τ╛ñτ╡äπÇüτ┤öτ¢┤µÄÑΘ£Çµ▒éπÇüσâà MH04 τ╛ñτ╡äΣ╕ìµ¿Ö YπÇéMH04 σêùΣ╗ìΦ╝╕σç║∩╝îΣ╜åΣ╕ìσÅâΦêç Y σêñσ«ÜπÇé<br>
++Zero-L groups, pure-direct rows, and MH04-only groups remain blank. MH04 rows are still exported but do not participate in the Y decision.
+ 
+ ## 8. σà¼ΘûïΦ╝╕σç║ 19 µ¼ä / Public 19-column output
+ 
+@@ -270,3 +280,10 @@ python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py `
+ - σ╗áσñû G µö╣τé║µ»ÅσÇï `(µ»ìµûÖ, Segment)` σÅ¬σÅûΣ╕Çτ¡åσ¡ÉµûÖ∩╝Üµ£ëσÉîσû«Σ╜ìσëçσ╛₧σÉîσû«Σ╜ìσÇÖΘü╕µôçΣ╕Ç∩╝¢τäíσÉîσû«Σ╜ìσëçσ╛₧σà¿Θâ¿σÇÖΘü╕µôçΣ╕ÇΣ╕ªµ¿Öτ┤àπÇé/ Outside G now picks one child per `(mother, Segment)`: prefer one same-unit candidate; if none, pick any candidate and mark red.
+ - µôçΣ╕ÇΘáåσ║Å∩╝Ü0028 Θªûµ¼íσç║τÅ╛σêùσ║Å∩╝îσà╢µ¼í child idπÇéΣ╕ìσèáτ╕╜σñÜσÇïσ¡ÉµûÖπÇüΣ╕ìµÅ¢τ«ùπÇé/ Selection order: first ZRMM source order, then child id. Do not sum multiple children; do not convert.
+ - `APP_VERSION` / conversion config `appVersion` ΓåÆ `3.4.3`πÇé/ App and conversion config version ΓåÆ `3.4.3`.
++
++## 16. v3.4.3 ΓåÆ v3.4.4 σ╖«τò░ / Hybrid direct demand + formula UI
++
++- µ╖╖σÉêΦªÅσëç∩╝êΘÇÉσ¡ÉµûÖσêù∩╝ë∩╝Ü`L=0` Σ╕ö `M>0` µÖéµ»ìµ▒áΣ╕ìµè╡ MπÇü`Q=0`πÇü`R=PΓêÆM`∩╝¢`L>0` µÖéτ╢¡µîü Rule D Φôï `N=L+M`πÇé/ Per-child hybrid: when L=0 and M>0, mother pool ignores M, Q=0, R=PΓêÆM; when L>0 keep Rule D on N=L+M.
++- Y σÅ¬µ¬óµƒÑΘ¥₧ MH04 Σ╕ö `L>0` τÜäσêùµÿ»σÉª `µ»ìΦôïL+Q ΓëÑ L`πÇé/ Y checks only non-MH04 rows with L>0 for motherCoverL+Q ΓëÑ L.
++- Step3 τ╡Éµ₧£Φí¿Σ╕èµû╣µÅÉΣ╛¢σà¼σ╝ÅΦ¬¬µÿÄ∩╝êσÅ»µæ║τûè∩╝ëΦêçσî»σç║ Excel∩╝ÅCSV∩╝ÅΦñçΦú╜∩╝¢σî»σç║µ¬öΘáéΘâ¿σÉ½µ╖╖σÉêΦªÅσëçµæÿΦªüσêù∩╝îσåìµÄÑΣ╗úΦÖƒ∩╝ÅσÉìτ¿▒∩╝Åσà¼σ╝ÅσêùπÇé/ Step3 places formula notes (collapsible) and export actions above the table; Excel/CSV/Copy include a hybrid-rule summary row, then letter/name/formula preamble rows.
++- `APP_VERSION` / conversion config `appVersion` ΓåÆ `3.4.4`πÇé/ App and conversion config version ΓåÆ `3.4.4`.

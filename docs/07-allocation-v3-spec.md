@@ -1,12 +1,12 @@
-# 07 — RAW MAT 庫存配發引擎規格 v3.4.3 / RAW MAT Allocation Engine Specification v3.4.3
+# 07 — RAW MAT 庫存配發引擎規格 v3.4.4 / RAW MAT Allocation Engine Specification v3.4.4
 
-**版本 / Version:** 3.4.3<br>
-**狀態 / Status:** 已確認（含歸屬不明確認後比例拆分、廠外 G 同單位優先、緬甸語 UI 復原，2026-07-30）/ Confirmed (includes ambiguous confirm + Open Qty split, same-unit-first outside G, and Myanmar UI restore, 2026-07-30)<br>
+**版本 / Version:** 3.4.4<br>
+**狀態 / Status:** 已確認（含直接需求混合規則與結果區公式說明，2026-08-03）/ Confirmed (includes hybrid direct-demand rule and result formula notes, 2026-08-03)<br>
 **主程式 / Application:** `allocation-web.html`<br>
 **驗證器 / Verifier:** `.ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py`
 
-本文件是 v3.4.3 的公開行為契約。欄位以英文表頭解析，不以 Excel 欄位字母寫死。程式完全在本機瀏覽器執行；真實業務檔案不得提交 Git 或跨 Agent 傳送。<br>
-This document is the public behavior contract for v3.4.3. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
+本文件是 v3.4.4 的公開行為契約。欄位以英文表頭解析，不以 Excel 欄位字母寫死。程式完全在本機瀏覽器執行；真實業務檔案不得提交 Git 或跨 Agent 傳送。<br>
+This document is the public behavior contract for v3.4.4. Columns are resolved by English header names rather than fixed Excel letters. Processing remains local in the browser; real business files must not be committed to Git or transferred across agents.
 
 ## 1. 輸入與欄位契約 / Inputs and column contract
 
@@ -107,17 +107,27 @@ motherPoolAfterRow = motherPoolBeforeRow - motherCoverChild / conversionRatio
 
 ## 4. Rule D、直接子料需求與歸屬 / Rule D, direct child demand, and ownership
 
-Rule A 維持取消；Rule D 自 v3.3 恢復。COOIS 的直接子料需求永遠完整保留在 `demand direct` 與 `demand qty`，先由母料需求扣除後的母料餘量覆蓋，未覆蓋量才從該子料 MB52 配發。Q 只顯示實際子料 MB52 領用量。<br>
-Rule A remains removed; Rule D is restored in v3.3. Direct COOIS child demand remains fully visible in `demand direct` and `demand qty`, is first covered by the mother balance after mother demand, and only the uncovered amount uses child MB52. Q shows only actual child-MB52 usage.
+Rule A 維持取消；Rule D 自 v3.3 恢復，並於 v3.4.4 採**混合規則（逐子料列）**：<br>
+Rule A remains removed; Rule D is restored from v3.3 and uses a **per-child hybrid** from v3.4.4:
 
-多個直接子料共用同一母料餘量時，依 ZRMM0028 子料首次出現列序逐列扣減。母料池跨 SO 延續，且同時承接母料需求與 Rule D 覆蓋量。<br>
-When multiple direct children share a mother balance, consume it by first ZRMM0028 child occurrence. The mother pool persists across SOs and is reduced by both mother demand and Rule D coverage.
+```text
+若 L 子材料需求 == 0 且 M 子料直接需求 > 0：
+  母池／H 不抵 M；Q = 0；R = P − M
+若 L > 0：
+  維持現行 Rule D：母池可蓋 N=L+M；不足進 Q；R = P − Q
+```
 
-若同一 SO + Segment 的直接子料同時可歸入兩個以上母料，先列出全部衝突（SO／Segment／子料／各母料 Open Qty），彈窗請使用者確認；**未確認不得自動拆分**。使用者取消 → 整批停止、不產結果。使用者確認 → 依各母料在該 SO＋Segment 的 Open Qty 比例拆入各母料 `demandDirect`（權重全為 0 則均分；最後一母吃餘數），加總必須等於原直接開量，禁止重複加總。純直接需求且沒有母料者，全部由子料 MB52 配發。<br>
-If direct demand in the same SO + Segment could belong to more than one mother, list every conflict (SO / Segment / child / each mother Open Qty) and prompt for confirmation; **never split automatically without confirmation**. Cancel stops the run with no output. Confirm splits that Open Qty across the candidate mothers by mother Open Qty share on that SO + Segment (equal share if all weights are 0; last mother receives the remainder). The parts must sum to the original direct Open Qty; never double-count. A direct-only demand with no mother uses child MB52 in full.
+COOIS 的直接子料需求永遠完整保留在 `demand direct` 與 `demand qty`（顯示）。報表主要給托外合貼供應商，故純直接需求（L=0）不發外（Q=0），只從子料庫存餘量 R 扣減。<br>
+Direct COOIS child demand remains fully visible in `demand direct` and `demand qty`. Because the report targets outside lamination suppliers, pure-direct rows (L=0) do not issue to outside (Q=0) and only reduce child remaining stock R.
 
-錨點 `10189518 / MN090134761 / MA020147549`：F=0、G=1.996708、母料需求=1.5、H=0.496708、N=0.02、Q=0、R=43.046；G 與 H 不得相加。<br>
-Anchor `10189518 / MN090134761 / MA020147549`: F=0, G=1.996708, mother demand=1.5, H=0.496708, N=0.02, Q=0, and R=43.046; G and H must not be added.
+多個直接子料共用同一母料餘量時，依 ZRMM0028 子料首次出現列序逐列處理。母料池跨 SO 延續；僅母料 Open 與「L>0 時的 Rule D 覆蓋」會扣母池，純 M 不扣母池。<br>
+When multiple children share a mother balance, process by first ZRMM0028 child occurrence. The mother pool persists across SOs and is reduced by mother Open and Rule D coverage only when L>0; pure-M rows do not consume the mother pool.
+
+若同一 SO + Segment 的直接子料同時可歸入兩個以上母料，先列出全部衝突（SO／Segment／子料／各母料 Open Qty），彈窗請使用者確認；**未確認不得自動拆分**。使用者取消 → 整批停止、不產結果。使用者確認 → 依各母料在該 SO＋Segment 的 Open Qty 比例拆入各母料 `demandDirect`（權重全為 0 則均分；最後一母吃餘數），加總必須等於原直接開量，禁止重複加總。純直接需求（含無母料列）適用混合規則：Q=0，R=P−M。<br>
+If direct demand in the same SO + Segment could belong to more than one mother, list every conflict (SO / Segment / child / each mother Open Qty) and prompt for confirmation; **never split automatically without confirmation**. Cancel stops the run with no output. Confirm splits that Open Qty across the candidate mothers by mother Open Qty share on that SO + Segment (equal share if all weights are 0; last mother receives the remainder). The parts must sum to the original direct Open Qty; never double-count. Pure-direct demand (including mother-blank rows) follows the hybrid rule: Q=0 and R=P−M.
+
+錨點語意（L=0 純 M）：Q=0；R 依 `P−M` 扣減；Y 因無 L>0 留白。G 與 H 不得相加。<br>
+Pure-M anchor semantics (L=0): Q=0; R deducts via `P−M`; Y stays blank when no L>0. G and H must not be added.
 
 ## 5. 換算與停止條件 / Conversion and stop conditions
 
@@ -132,7 +142,7 @@ Shared JSON format:
 ```json
 {
   "schemaVersion": 1,
-  "appVersion": "3.4.3",
+  "appVersion": "3.4.4",
   "conversionRules": [
     { "motherUnit": "M", "childUnit": "YD", "ratio": 1.0936 }
   ],
@@ -168,8 +178,8 @@ fulfilled = motherCoverChild + providedQty
 shortage = fulfilled < demandQty
 ```
 
-`child stock` 固定顯示原始 MB52 總量；只有 `stock available` 與 `remaining stock after this row` 隨 Q 遞減。H 使用母料 OUn，N/Q 使用子料單位，不同單位不可直接相減。<br>
-`child stock` always displays the original MB52 total; only `stock available` and `remaining stock after this row` decrease by Q. H uses mother OUn, while N/Q use the child unit; values in different units must not be subtracted directly.
+`child stock` 固定顯示原始 MB52 總量；`stock available` 與 `remaining stock after this row` 隨 Q 遞減，且當 L=0 時再扣 M。H 使用母料 OUn，N/Q 使用子料單位，不同單位不可直接相減。<br>
+`child stock` always displays the original MB52 total; `stock available` and `remaining stock after this row` decrease by Q, and also by M when L=0. H uses mother OUn, while N/Q use the child unit; values in different units must not be subtracted directly.
 
 ## 7. 合貼備料齊套 Y / Lamination Kit Ready Y
 
@@ -177,14 +187,14 @@ shortage = fulfilled < demandQty
 A `(SO + mother + Segment)` group is marked `Y` only when all conditions are met:
 
 - 有母料。/ A mother exists.
-- 至少一筆非 MH04 且需求大於 0。/ At least one non-MH04 row has positive demand.
-- 所有正需求的非 MH04 列皆 `motherCoverChild + provided qty >= demand qty`。/ Every positive non-MH04 row is fulfilled by `motherCoverChild + provided qty`.
+- 至少一筆非 MH04 且 **`L 子材料需求` > 0**。/ At least one non-MH04 row has **L > 0**.
+- 所有此類列皆 `motherCoverL + provided qty >= L`（不看 M／N）。/ Every such row satisfies `motherCoverL + provided qty >= L` (ignore M/N).
 
-Y 判定使用內部原始數值（同一輪計算的 `fulfilled` 與 `demand_total`），不以格式化後的小數字串做比較；因此可避免 6 位小數四捨五入造成的邊界誤判。<br>
-Y decision compares internal raw numbers from the same allocation pass (`fulfilled` vs `demand_total`), not formatted decimal strings, to avoid boundary misclassification caused by rounding to 6 decimals.
+Y 判定使用內部原始數值（同一輪計算的 `fulfilled_L` 與 `demand_L`），不以格式化後的小數字串做比較。<br>
+Y decision compares internal raw numbers (`fulfilled_L` vs `demand_L`), not formatted decimal strings.
 
-零需求群組、純直接需求、僅 MH04 群組不標 Y。MH04 列仍輸出與配發，但不參與 Y 判定。<br>
-Zero-demand groups, direct-only rows, and MH04-only groups remain blank. MH04 rows are still exported and allocated but do not participate in the Y decision.
+零 L 群組、純直接需求、僅 MH04 群組不標 Y。MH04 列仍輸出，但不參與 Y 判定。<br>
+Zero-L groups, pure-direct rows, and MH04-only groups remain blank. MH04 rows are still exported but do not participate in the Y decision.
 
 ## 8. 公開輸出 19 欄 / Public 19-column output
 
@@ -270,3 +280,10 @@ python .ai/handoffs/20260722-raw-mat-allocation-v3/verify_allocation_v3.py `
 - 廠外 G 改為每個 `(母料, Segment)` 只取一筆子料：有同單位則從同單位候選擇一；無同單位則從全部候選擇一並標紅。/ Outside G now picks one child per `(mother, Segment)`: prefer one same-unit candidate; if none, pick any candidate and mark red.
 - 擇一順序：0028 首次出現列序，其次 child id。不加總多個子料、不換算。/ Selection order: first ZRMM source order, then child id. Do not sum multiple children; do not convert.
 - `APP_VERSION` / conversion config `appVersion` → `3.4.3`。/ App and conversion config version → `3.4.3`.
+
+## 16. v3.4.3 → v3.4.4 差異 / Hybrid direct demand + formula UI
+
+- 混合規則（逐子料列）：`L=0` 且 `M>0` 時母池不抵 M、`Q=0`、`R=P−M`；`L>0` 時維持 Rule D 蓋 `N=L+M`。/ Per-child hybrid: when L=0 and M>0, mother pool ignores M, Q=0, R=P−M; when L>0 keep Rule D on N=L+M.
+- Y 只檢查非 MH04 且 `L>0` 的列是否 `母蓋L+Q ≥ L`。/ Y checks only non-MH04 rows with L>0 for motherCoverL+Q ≥ L.
+- Step3 結果表上方提供公式說明（可摺疊）與匯出 Excel／CSV／複製；匯出檔頂部含混合規則摘要列，再接代號／名稱／公式列。/ Step3 places formula notes (collapsible) and export actions above the table; Excel/CSV/Copy include a hybrid-rule summary row, then letter/name/formula preamble rows.
+- `APP_VERSION` / conversion config `appVersion` → `3.4.4`。/ App and conversion config version → `3.4.4`.
